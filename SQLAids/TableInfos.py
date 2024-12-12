@@ -810,7 +810,82 @@ DOVS_PREMISE_DIM_TI = TableInfo(
 )
 
 #****************************************************************************************************
-# 
+# EEMSP
 #****************************************************************************************************
+EEMSP_ME_TI = TableInfo(
+    schema_name='meter_events', 
+    table_name='eems_transformer_nameplate', 
+    conn_fcn=Utilities_sql.get_athena_prod_aws_connection, 
+    columns_full = [
+        'aep_opco', 
+        'aws_update_dttm', 
+        'circuit_nb', 
+        'circuit_nm', 
+        'company_nb', 
+        'company_nm', 
+        'coolant', 
+        'district_nb', 
+        'district_nm', 
+        'eqseq_id', 
+        'eqtype_ds', 
+        'eqtype_id', 
+        'equip_id', 
+        'gis_circuit_nb', 
+        'info', 
+        'install_dt', 
+        'kind_cd', 
+        'kind_nm', 
+        'kva_size', 
+        'last_trans_desc', 
+        'latest_status', 
+        'location_id', 
+        'location_nb', 
+        'mfgr_nm', 
+        'oper_company_nb', 
+        'phase_cnt', 
+        'prim_voltage', 
+        'protection', 
+        'pru_number', 
+        'region_nb', 
+        'region_nm', 
+        'removal_dt', 
+        'rownumber', 
+        'sec_voltage', 
+        'serial_nb', 
+        'special_char', 
+        'state', 
+        'station_nb', 
+        'station_nm', 
+        'subarea_nb', 
+        'subarea_nm', 
+        'taps', 
+        'transaction_id', 
+        'xcoord_nb', 
+        'xftype', 
+        'ycoord_nb'
+    ], 
+
+    std_columns_of_interest = [
+        'location_nb', 
+        'mfgr_nm', 
+        'install_dt', 
+        'removal_dt', 
+        'last_trans_desc', 
+        'eqtype_id', 
+        'coolant', 
+        'info', 
+        'kva_size',
+        'phase_cnt', 
+        'prim_voltage', 
+        'protection', 
+        'pru_number', 
+        'sec_voltage', 
+        'special_char', 
+        'taps', 
+        'xftype', 
+        'latest_status', 
+        'serial_nb'
+    ]
+)
 
 

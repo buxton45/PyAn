@@ -59,9 +59,15 @@ def determine_aep_user_id(users_dir=r'C:\Users'):
             return user_id           
         
 def generate_initial_config_file(
-    aep_user_id=None, 
-    pwd_file_path=None, 
-    local_data_dir=None
+    aep_user_id                  = None, 
+    pwd_file_path                = None, 
+    local_data_dir               = None, 
+    create_local_data_dir_if_dne = True, 
+    athena_prod_dsn              = 'Athena Prod', 
+    athena_dev_dsn               = 'Athena Dev', 
+    athena_qa_dsn                = 'Athena QA', 
+    utldb01p_dsn                 = 'UTLDB01P', 
+    eemsp_dsn                    = 'EEMSP', 
 ):
     r"""
     Generate the initial configuration file, containing the locations of the various directories, as well
@@ -95,25 +101,53 @@ def generate_initial_config_file(
     config['analysis_dir'] = str(pathlib.Path(__file__).parent.resolve())
     config['utilities_dir'] = os.path.join(config['analysis_dir'], 'Utilities')
     config['sql_aids_dir'] = os.path.join(config['analysis_dir'], 'SQLAids')
-    #-----
+    #-------------------------
     if local_data_dir is None:
-        config['local_data_dir'] = local_data_dir
+        print('Warning: No local_data_dir set.\nI suggest setting aside a local data directory, but one is not strictly necessary\n-----')
+        print('To Continue without local_data_dir, enter 0')
+        print('To create and/or set local_data_dir to default value, enter default.')
+        print(f"\tdefault location = {os.path.join(Path(config['analysis_dir']).parent.resolve(), 'LocalData')}")
+        print('To create and/or set local_data_dir to custom location, enter desired path (must be complete path!)')
+        #-----
+        response = input().strip()
+        #-----
+        if response=='0':
+            config['local_data_dir'] = None #i.e., =local_data_dir, but this is more explicit
+        elif response=='default':
+            # By default, place the local_data_dir (named 'LocalData') directory at the same level (not inside of!) the analysis_dir
+            config['local_data_dir'] = os.path.join(Path(config['analysis_dir']).parent.resolve(), 'LocalData')
+        else:
+            config['local_data_dir'] = response
     else:
-        config['local_data_dir'] = os.path.join(config['analysis_dir'], local_data_dir)
+        config['local_data_dir'] = local_data_dir
     #-----
+    if(
+        create_local_data_dir_if_dne and 
+        not os.path.exists(config['local_data_dir'])
+    ):
+        os.makedirs(config['local_data_dir'])
+    #-------------------------
     if pwd_file_path is None:
         config['pwd_file_path'] = os.path.join(config['analysis_dir'], 'pwd_file.txt')
     else:
         config['pwd_file_path'] = pwd_file_path
-    #-----
+    #-------------------------
     if aep_user_id is None:
         aep_user_id = determine_aep_user_id()
     config['aep_user_id'] = aep_user_id
+    #-------------------------
+    config['athena_prod_dsn'] = athena_prod_dsn
+    config['athena_dev_dsn']  = athena_dev_dsn
+    config['athena_qa_dsn']   = athena_qa_dsn
+    config['utldb01p_dsn']    = utldb01p_dsn
+    config['eemsp_dsn']       = eemsp_dsn
     #-------------------------
     config['config_verified'] = False
     #-------------------------
     with open(config_path, 'w') as file:
         yaml.dump(config, file)
+    #-------------------------
+    check_config()
         
 def get_config_entry(field):
     config_path = os.path.join(pathlib.Path(__file__).parent.resolve(), r'config.yaml')
@@ -172,3 +206,34 @@ def get_pwd_file_path():
     
 def get_aep_user_id():
     return get_config_entry('aep_user_id')
+    
+#--------------------------------------------------------------------
+def get_dsn(db_name):
+    r"""
+    """
+    #-------------------------
+    acceptable_names = [
+        'athena_prod', 
+        'athena_dev', 
+        'athena_qa', 
+        'utldb01p', 
+        'eemsp'
+    ]
+    assert(db_name in acceptable_names)
+    #-------------------------
+    return get_config_entry(db_name+'_dsn')
+    
+def get_athena_prod_dsn():
+    return get_dsn(db_name = 'athena_prod')
+
+def get_athena_dev_dsn():
+    return get_dsn(db_name = 'athena_dev')
+
+def get_athena_qa_dsn():
+    return get_dsn(db_name = 'athena_qa')
+
+def get_utldb01p_dsn():
+    return get_dsn(db_name = 'utldb01p')
+
+def get_eemsp_dsn():
+    return get_dsn(db_name = 'eemsp')

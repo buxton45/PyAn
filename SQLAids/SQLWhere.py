@@ -86,6 +86,24 @@ class CombinedSQLWhereElements:
                 )
         return_str += '\n)'
         return return_str
+        
+    def __eq__(self, other):
+        if isinstance(other, CombinedSQLWhereElements):
+            if(
+                self.join_operator == other.join_operator and
+                set(self.elements) == set(other.elements)
+            ):
+                return True
+            else:
+                return False
+        else:
+            return NotImplemented
+
+    def __hash__(self):
+        return hash((
+            self.join_operator, 
+            tuple(self.elements)
+        ))
 
     def approx_eq(
         self, 
@@ -132,9 +150,17 @@ class SQLWhere(SQLElementsCollection):
         #       be used for whatever
         self.addtnl_info = dict()
         
-    def add_where_statement(self, field_desc, comparison_operator='', value='', needs_quotes=True, 
-                            table_alias_prefix=None, is_timestamp=False, 
-                            idx=None, run_check=False):
+    def add_where_statement(
+            self, 
+            field_desc          , 
+            comparison_operator = '', 
+            value               = '', 
+            needs_quotes        = True, 
+            table_alias_prefix  = None, 
+            is_timestamp        = False, 
+            idx                 = None, 
+            run_check           = False
+        ):
         if isinstance(field_desc, SQLWhereElement):
             element = field_desc
         else:
@@ -144,8 +170,12 @@ class SQLWhere(SQLElementsCollection):
                                       is_timestamp=is_timestamp)
         self.insert_single_element_to_collection_at_idx(element=element, idx=idx, run_check=run_check)
         
-    def add_where_statements(self, field_descs, 
-                             idxs=None, run_check=False):
+    def add_where_statements(
+            self, 
+            field_descs , 
+            idxs        = None, 
+            run_check   = False
+        ):
         # field_descs should be a list with elements of type SQLWhereElement or dict.
         # See SQLElementsCollection.insert_to_collection_at_idx for more information
         assert(isinstance(field_descs, list) or isinstance(field_descs, tuple))
@@ -159,14 +189,16 @@ class SQLWhere(SQLElementsCollection):
                                          global_table_alias_prefix=None, 
                                          idxs=idxs, run_check=run_check)
                                          
-    def add_where_statement_equality_or_in(sql_where, 
-                                           field_desc, 
-                                           value, 
-                                           needs_quotes=True, 
-                                           table_alias_prefix=None, 
-                                           idx=None, 
-                                           run_check=False, 
-                                           allowed_types_single=[str, int]):
+    def add_where_statement_equality_or_in(
+            sql_where            , 
+            field_desc           , 
+            value                , 
+            needs_quotes         = True, 
+            table_alias_prefix   = None, 
+            idx                  = None, 
+            run_check            = False, 
+            allowed_types_single = [str, int]
+        ):
         is_input_list = Utilities_sql.is_object_one_of_types(value, [list, tuple, np.ndarray])
         if is_input_list and len(value)==1:
             is_input_list=False
@@ -293,27 +325,105 @@ class SQLWhere(SQLElementsCollection):
         return return_where_elm    
     
     #------------------------------------------------------------------------------------------------
-    def combine_where_elements(self, idxs_to_combine, join_operator, close_gaps_in_keys=True):
-        # join_operator is should be a string for joining the elements
-        #   e.g. 'AND' or 'OR'
-        # Setting close_gaps_in_keys=False would be useful if e.g. one wants to first combine
-        #   elements 2 and 3, then combine that result with 5.  One could either do
-        #     i.  self.combine_where_elements([2,3], join_operator='AND', close_gaps_in_keys=False)
-        #         self.combine_where_elements([2,5], join_operator='OR', close_gaps_in_keys=True)
-        #
-        #     ii. self.combine_where_elements([2,3], join_operator='AND', close_gaps_in_keys=True)
-        #         self.combine_where_elements([2,4], join_operator='OR', close_gaps_in_keys=True)
-        #----------
-        combined_elementes = CombinedSQLWhereElements(collection_dict=self.collection_dict, 
-                                                      idxs_to_combine=idxs_to_combine, 
-                                                      join_operator=join_operator)
+    def combine_where_elements_OLD(
+        self, 
+        idxs_to_combine, 
+        join_operator, 
+        close_gaps_in_keys=True, 
+        return_idx=False
+    ):
+        r"""
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        NEW VERSION CREATED 20240201.  This old version should be deleted
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        join_operator is should be a string for joining the elements
+          e.g. 'AND' or 'OR'
+        Setting close_gaps_in_keys=False would be useful if e.g. one wants to first combine
+          elements 2 and 3, then combine that result with 5.  One could either do
+            i.  self.combine_where_elements([2,3], join_operator='AND', close_gaps_in_keys=False)
+                self.combine_where_elements([2,5], join_operator='OR', close_gaps_in_keys=True)
+
+            ii. self.combine_where_elements([2,3], join_operator='AND', close_gaps_in_keys=True)
+                self.combine_where_elements([2,4], join_operator='OR', close_gaps_in_keys=True)
+        """
+        #-------------------------
+        combined_elements = CombinedSQLWhereElements(
+            collection_dict=self.collection_dict, 
+            idxs_to_combine=idxs_to_combine, 
+            join_operator=join_operator
+        )
         idx_to_replace = min(idxs_to_combine)
         idxs_to_delete = [x for x in idxs_to_combine if x!=idx_to_replace]
-        self.collection_dict[idx_to_replace] = combined_elementes
+        self.collection_dict[idx_to_replace] = combined_elements
         for idx in idxs_to_delete:
             del self.collection_dict[idx]
         if close_gaps_in_keys:
             SQLElementsCollection.close_gaps_in_dict_keys(self.collection_dict)
+        #-------------------------
+        if return_idx:
+            # dict inversion possible thanks to __hash__ definintion in CombinedSQLWhereElements
+            comb_idx = Utilities_sql.invert_dict(self.collection_dict)[combined_elements]
+            return comb_idx
+            
+    def combine_where_elements(
+        self, 
+        idxs_to_combine, 
+        join_operator, 
+        close_gaps_in_keys=True, 
+        return_idx=False
+    ):
+        r"""
+        Combine multiple where elements using join_operator.
+        If any of the elements to be combined are equal, duplicates are removed.
+            This is possible thanks to the __hash__ definintions in SQLElement and CombinedSQLWhereElements
+
+        join_operator:
+            should be a string for joining the elements
+            e.g. 'AND' or 'OR'
+
+        close_gaps_in_keys:
+            Setting close_gaps_in_keys=False would be useful if e.g. one wants to first combine
+              elements 2 and 3, then combine that result with 5.  One could either do
+                i.  self.combine_where_elements([2,3], join_operator='AND', close_gaps_in_keys=False)
+                    self.combine_where_elements([2,5], join_operator='OR', close_gaps_in_keys=True)
+
+                ii. self.combine_where_elements([2,3], join_operator='AND', close_gaps_in_keys=True)
+                    self.combine_where_elements([2,4], join_operator='OR', close_gaps_in_keys=True)    
+        """
+        #-------------------------
+        els_to_combine = [self.collection_dict[idx] for idx in idxs_to_combine]
+        # Sanity check
+        assert(Utilities_sql.are_all_list_elements_one_of_types(lst=els_to_combine, types=[SQLWhereElement, CombinedSQLWhereElements]))
+        #-------------------------
+        # Make sure they are no repeat entries through the set operation below.
+        # NOTE: The set operation may change the order of els_to_combine, but this shouldn't matter, as any decent query optimizer
+        #       will rearrange the WHERE clause anyway.
+        els_to_combine = list(set(els_to_combine))
+        #-------------------------
+        assert(len(els_to_combine)>0)
+        if len(els_to_combine)==1:
+            combined_elements = els_to_combine[0]
+        else:
+            # Build CombinedSQLWhereElements, which accepts a dict and keys to grab from dict as inputs
+            combined_elements = CombinedSQLWhereElements(
+                collection_dict = {i:x for i,x in enumerate(els_to_combine)}, 
+                idxs_to_combine = list(range(len(els_to_combine))), 
+                join_operator   = join_operator
+            )
+        #-------------------------
+        # Find the element to replace with combined_elements and those to remove completely
+        idx_to_replace = min(idxs_to_combine)
+        idxs_to_delete = [x for x in idxs_to_combine if x!=idx_to_replace]
+        self.collection_dict[idx_to_replace] = combined_elements
+        for idx in idxs_to_delete:
+            del self.collection_dict[idx]
+        if close_gaps_in_keys:
+            SQLElementsCollection.close_gaps_in_dict_keys(self.collection_dict)
+        #-------------------------
+        if return_idx:
+            # dict inversion possible thanks to __hash__ definintion in CombinedSQLWhereElements
+            comb_idx = Utilities_sql.invert_dict(self.collection_dict)[combined_elements]
+            return comb_idx
             
     def combine_last_n_where_elements(self, last_n, join_operator, close_gaps_in_keys=True):
         # Combine the last n where elements
@@ -326,6 +436,129 @@ class SQLWhere(SQLElementsCollection):
                                     join_operator=join_operator, 
                                     close_gaps_in_keys=close_gaps_in_keys)
                                     
+    #------------------------------------------------------------------------------------------------
+    def combine_where_elements_smart(
+        self, 
+        idxs_to_combine, 
+        join_operator, 
+        close_gaps_in_keys=True, 
+        return_idx=False
+    ):
+        r"""
+        If the elements to combine are all simple SQLWhereElement objects, then this will behave exactly as SQLWhere.combine_where_elements.
+        If any of the elements to combine are of type CombinedSQLWhereElements, the the behavior MAY be different.
+        If join_operator is consistent with the elements of type CombinedSQLWhereElements, then all will be joined together in a single 
+          CombinedSQLWhereElements element, removing any duplicates shared.
+        If one (or more) of the elements of type CombinedSQLWhereElements has a join_operator which does not equal that supplied to this function, then
+          this will again behave exactly as SQLWhere.combine_where_elements, i.e., the elements to combine will be simply combined using the
+          join_operator input.
+        ----------
+        This may be confusing, so hopefully the following examples will illustrate the points.
+        -----
+        Assume the elements to combine (i.e., [collection_dict[idx] for idx in idxs_to_combine]) are, conceptually:
+            SQLWhereElement: 'Where a=1'
+            CombinedSQLWhereElements: '(Where a=1 AND b=2)'
+            CombinedSQLWhereElements: '(Where c=3 AND d=4)'
+        Assume join_operator = 'AND'
+        ==> Behavior unique from SQLWhere.combine_where_elements!
+        ==> Output: CombinedSQLWhereElements: '(Where a=1 AND b=2 AND c=3 AND d=4)'
+
+        -----
+        Assume the elements to combine (i.e., [collection_dict[idx] for idx in idxs_to_combine]) are, conceptually:
+            SQLWhereElement: 'Where a=1'
+            CombinedSQLWhereElements: '(Where a=1 AND b=2)'
+            CombinedSQLWhereElements: '(Where c=3 OR d=4)'
+        Assume join_operator = 'AND'
+        ==> Behaves just as SQLWhere.combine_where_elements!
+        ==> Output: CombinedSQLWhereElements: (
+                                               'Where a=1' AND
+                                               (a=1 AND b=2) AND 
+                                               (c=3 OR d=4)
+                                              )
+
+        -----
+        Assume the elements to combine (i.e., [collection_dict[idx] for idx in idxs_to_combine]) are, conceptually:
+            SQLWhereElement: 'Where a=1'
+            CombinedSQLWhereElements: '(Where a=1 AND b=2)'
+            CombinedSQLWhereElements: '(Where c=3 OR d=4)'
+        Assume join_operator = 'OR'
+        ==> Behaves just as SQLWhere.combine_where_elements!
+        ==> Output: CombinedSQLWhereElements: (
+                                               'Where a=1' OR
+                                               (a=1 AND b=2) OR 
+                                               (c=3 OR d=4)
+                                              )
+
+        """
+        #-------------------------
+        els_to_combine = [self.collection_dict[idx] for idx in idxs_to_combine]
+        # Sanity check
+        assert(Utilities_sql.are_all_list_elements_one_of_types(lst=els_to_combine, types=[SQLWhereElement, CombinedSQLWhereElements]))
+        #-------------------------
+        # If the elements to combine are all simple SQLWhereElement objects, 
+        #   then behave exactly as SQLWhere.combine_where_elements.
+        if all([isinstance(x, SQLWhereElement) for x in els_to_combine]):
+            comb_idx = self.combine_where_elements(
+                idxs_to_combine    = idxs_to_combine, 
+                join_operator      = join_operator, 
+                close_gaps_in_keys = close_gaps_in_keys, 
+                return_idx         = True
+            )
+        else:
+            # If one (or more) of the elements of type CombinedSQLWhereElements has a join_operator which does not equal 
+            #   that supplied to this function, then this will again behave exactly as SQLWhere.combine_where_elements
+            join_operators = []
+            for el_i in els_to_combine:
+                if isinstance(el_i, CombinedSQLWhereElements):
+                    join_operators.append(el_i.join_operator)
+            join_operators = list(set(join_operators))
+            assert(len(join_operators)>0)
+            #-----
+            # If join_operators has more than one element, it is impossible for all the be consistent.
+            # The only way for all the be consistent is is len(join_operators)==1 and join_operators[0]==join_operators
+            if len(join_operators)>1 or join_operators[0]!=join_operator:
+                # No common join operator for all, so return SQLWhere.combine_where_elements
+                comb_idx = self.combine_where_elements(
+                    idxs_to_combine    = idxs_to_combine, 
+                    join_operator      = join_operator, 
+                    close_gaps_in_keys = close_gaps_in_keys, 
+                    return_idx         = True
+                )
+            else:
+                els_to_combine_fnl = []
+                for el_i in els_to_combine:
+                    if isinstance(el_i, SQLWhereElement):
+                        els_to_combine_fnl.append(el_i)
+                    else:
+                        assert(isinstance(el_i, CombinedSQLWhereElements)) #unnecessary
+                        els_to_combine_fnl.extend(el_i.elements)
+                # Make sure they are no repeat entries through the set operation below.
+                # NOTE: This is possible thanks to the definition of __hash__ in SQLElement
+                els_to_combine_fnl = list(set(els_to_combine_fnl))
+
+                # Build CombinedSQLWhereElements, which accepts a dict and keys to grab from dict as inputs
+                combined_elements = CombinedSQLWhereElements(
+                    collection_dict = {i:x for i,x in enumerate(els_to_combine_fnl)}, 
+                    idxs_to_combine = list(range(len(els_to_combine_fnl))), 
+                    join_operator   = join_operator
+                )
+                #-------------------------
+                # Find the element to replace with combined_elements and those to remove completely
+                idx_to_replace = min(idxs_to_combine)
+                idxs_to_delete = [x for x in idxs_to_combine if x!=idx_to_replace]
+                self.collection_dict[idx_to_replace] = combined_elements
+                for idx in idxs_to_delete:
+                    del self.collection_dict[idx]
+                if close_gaps_in_keys:
+                    SQLElementsCollection.close_gaps_in_dict_keys(self.collection_dict)
+                #-------------------------
+                # dict inversion possible thanks to __hash__ definintion in SQLElement and CombinedSQLWhereElements
+                comb_idx = Utilities_sql.invert_dict(self.collection_dict)[combined_elements]
+                #-------------------------
+        if return_idx:
+            return comb_idx    
+    
+    
     #------------------------------------------------------------------------------------------------
     def change_comparison_operator_of_element_at_idx(self, idx, new_comparison_operator):
         self.collection_dict[idx].comparison_operator = new_comparison_operator

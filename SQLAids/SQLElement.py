@@ -57,16 +57,59 @@ class SQLElement:
             """
         ))
         
+    # def __eq__(self, other):
+        # if(
+            # self.field_desc==other.field_desc and
+            # self.alias==other.alias and
+            # self.table_alias_prefix==other.table_alias_prefix and
+            # self.comparison_operator==other.comparison_operator and
+            # self.value==other.value
+        # ):
+            # return True
+        # return False
+        
+    # def __hash__(self):
+        # #
+        # # By default, all instances of custom classes are hashable, 
+        # # and therefore can be used as dictionary keys. 
+        # # However, when __eq__() method is reimplemented, instances
+        # # are no longer hashable.  This can be fixed by providing a
+        # # __hash__() special method.
+            # return hash(id(self))
+            
+    def __key(self):
+        # NOTE: self.value can sometimes be a list, which is not hashable (I think this is due to
+        #       the fact that lists are mutable).
+        # ==> if self.value is a list, return tuple(self.list) instead
+        value = self.value
+        if isinstance(value, list):
+            value = tuple(value)
+        return (
+            self.field_desc, 
+            self.alias, 
+            self.table_alias_prefix, 
+            self.comparison_operator, 
+            value
+        )
+
     def __eq__(self, other):
-        if(
-            self.field_desc==other.field_desc and
-            self.alias==other.alias and
-            self.table_alias_prefix==other.table_alias_prefix and
-            self.comparison_operator==other.comparison_operator and
-            self.value==other.value
-        ):
-            return True
-        return False
+        if isinstance(other, SQLElement):
+            return self.__key() == other.__key()
+        else:
+            return NotImplemented
+
+    def __hash__(self):
+        # By default, all instances of custom classes are hashable, 
+        # and therefore can be used as dictionary keys. 
+        # However, when __eq__() method is reimplemented, instances
+        # are no longer hashable.  This can be fixed by providing a
+        # __hash__() special method.
+        #
+        # Instead of being unique like previously (i.e., return hash(id(self))), I want
+        #   the hash between two equal SQLElement objects to be equal.
+        # This property will allow me to use set operations on collections of SQLElement objects
+        #return hash(id(self))
+        return hash(self.__key())
         
     def approx_eq(self, other, 
                   comp_alias=False, 
@@ -113,14 +156,6 @@ class SQLElement:
         #---------------
         return True
         
-    def __hash__(self):
-        #
-        # By default, all instances of custom classes are hashable, 
-        # and therefore can be used as dictionary keys. 
-        # However, when __eq__() method is reimplemented, instances
-        # are no longer hashable.  This can be fixed by providing a
-        # __hash__() special method.
-            return hash(id(self))
         
     def get_dict(self):
         return {

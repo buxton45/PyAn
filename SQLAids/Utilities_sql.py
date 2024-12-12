@@ -222,3 +222,21 @@ def prepend_tabs_to_each_line(input_statement, n_tabs_to_prepend=1):
         # Need to also prepend first line...
         input_statement = n_tabs_to_prepend*'\t' + input_statement
     return input_statement
+    
+    
+# IMPORTANT!!!!!: invert_dict below matches that in Utilities
+#                 It was reproduced here so SQLAids can be a standalone package.
+#                 However, this may need to be revisited in the future.  
+#--------------------------------------------------------------------
+def invert_dict(dct):
+    r"""
+    Swap the keys and values in dct.
+    This only works if there is a 1-1 mapping of keys to values (i.e., cannot be duplicate values!)
+    """
+    #-------------------------
+    if len(dct.values())!=len(set(dct.values())):
+        print("In invert_dict, inversion impossible as there is not a 1-1 mapping of keys to values (i.e., duplicate values exist!)")
+        assert(0)
+    #-------------------------
+    inv_dct = {v:k for k,v in dct.items()}
+    return inv_dct

@@ -1,5 +1,13 @@
 #!/usr/bin/env python
 
+"""
+General utilities
+"""
+
+__author__ = "Jesse Buxton"
+__email__  = "buxton.45.jb@gmail.com"
+__status__ = "Personal"
+
 import os
 import sys
 import glob
@@ -28,10 +36,14 @@ import string
 import copy
 import typing
 from natsort import natsorted, ns
+import datetime
+import time
+from numbers import Number
 
 from functools import reduce
 import operator
 import bisect
+import itertools
 
 import Utilities_config
 
@@ -43,6 +55,9 @@ from importlib import reload
 #   2. reload module
 #   3. from module import class
 
+#--------------------------------------------------------------------
+def is_numeric(a):
+    return isinstance(a, Number)
 #--------------------------------------------------------------------
 def get_analysis_dir():
     return Utilities_config.get_analysis_dir()
@@ -107,7 +122,21 @@ def get_athena_prod_aws_connection(aep_user_id=None):
         db_user = aep_user_id
     #-------------------------
     db_user = f'{db_user}@CORP.AEPSC.COM'
-    dsn = 'Athena Prod'
+    dsn = Utilities_config.get_athena_prod_dsn()
+    pwd_aws = get_pwd()
+    conn_str = 'DSN=' + dsn + ';Uid=' + db_user + ';PWD=' + pwd_aws + ';'
+    conn_aws = pyodbc.connect(conn_str, autocommit=True)
+    return conn_aws
+    
+def get_athena_prod_aws_connection2(aep_user_id=None):
+    #-------------------------
+    if aep_user_id is None:
+        db_user = Utilities_config.get_aep_user_id()
+    else:
+        db_user = aep_user_id
+    #-------------------------
+    db_user = f'{db_user}@CORP.AEPSC.COM'
+    dsn = 'SomeName'
     pwd_aws = get_pwd()
     conn_str = 'DSN=' + dsn + ';Uid=' + db_user + ';PWD=' + pwd_aws + ';'
     conn_aws = pyodbc.connect(conn_str, autocommit=True)
@@ -121,7 +150,7 @@ def get_athena_dev_aws_connection(aep_user_id=None):
         db_user = aep_user_id
     #-------------------------
     db_user = f'{db_user}@CORP.AEPSC.COM'
-    dsn = 'Athena Dev'
+    dsn = Utilities_config.get_athena_dev_dsn()
     pwd_aws = get_pwd()
     conn_str = 'DSN=' + dsn + ';Uid=' + db_user + ';PWD=' + pwd_aws + ';'
     conn_aws = pyodbc.connect(conn_str, autocommit=True)
@@ -135,7 +164,7 @@ def get_athena_qa_aws_connection(aep_user_id=None):
         db_user = aep_user_id
     #-------------------------
     db_user = f'{db_user}@CORP.AEPSC.COM'
-    dsn = 'Athena QA'
+    dsn = Utilities_config.get_athena_qa_dsn()
     pwd_aws = get_pwd()
     conn_str = 'DSN=' + dsn + ';Uid=' + db_user + ';PWD=' + pwd_aws + ';'
     conn_aws = pyodbc.connect(conn_str, autocommit=True)
@@ -149,7 +178,9 @@ def get_utldb01p_oracle_connection(aep_user_id=None):
         db_user = aep_user_id
     #-------------------------
     pwd_oracle = get_pwd('Oracle')
-    conn_outages = pyodbc.connect('Driver={Oracle in InstantClient_12_64};DBQ= aep01dbadm01/UTLDB01P;Uid=' + db_user + ';Pwd=' + pwd_oracle)
+    # dsn = Utilities_config.get_utldb01p_dsn()
+    # conn_outages = pyodbc.connect(f'Driver={{Oracle in InstantClient_12_64}};DBQ= aep01dbadm01/{dsn};Uid=' + db_user + ';Pwd=' + pwd_oracle)
+    conn_outages = pyodbc.connect(f'DSN=UTLDB01P;Uid={db_user};Pwd={pwd_oracle}')
     return conn_outages
     
 def get_eemsp_oracle_connection(aep_user_id=None):
@@ -160,8 +191,21 @@ def get_eemsp_oracle_connection(aep_user_id=None):
         db_user = aep_user_id
     #-------------------------
     pwd_oracle = get_pwd('Oracle')
-    conn_outages = pyodbc.connect('Driver={Oracle in InstantClient_12_64};DBQ= EEMSP;Uid=' + db_user + ';Pwd=' + pwd_oracle)
+    dsn = Utilities_config.get_eemsp_dsn()
+    conn_outages = pyodbc.connect(f'Driver={{Oracle in InstantClient_12_64}};DBQ= {dsn};Uid=' + db_user + ';Pwd=' + pwd_oracle)
     return conn_outages
+
+def get_eddsp_oracle_connection(aep_user_id=None):
+    #-------------------------
+    if aep_user_id is None:
+        db_user = Utilities_config.get_aep_user_id()
+    else:
+        db_user = aep_user_id
+    #-------------------------
+    pwd_oracle = get_pwd('Oracle')
+    conn_eddsp = pyodbc.connect(f'DSN=EDDSP;Uid={db_user};Pwd={pwd_oracle}')
+    return conn_eddsp
+
 #--------------------------------------------------------------------
 def is_table_info_df_row_empty(table_info_df, empty_row_defn, idx):
     #NOTE: This will not work if an empty value = e.g., np.nan
@@ -328,11 +372,52 @@ def are_all_lists_eq(list_of_lists):
     return True    
 
 #--------------------------------------------------------------------
+def melt_list_of_lists(lol):
+    r"""
+    """
+    #-------------------------
+    # Make sure lol is, in fact, a list of lists (or a list of tuples)
+    assert(isinstance(lol, list))
+    assert(are_all_list_elements_one_of_types(lol, [list, tuple]))
+    #-------------------------
+    melted = list(itertools.chain.from_iterable(lol))
+    return melted
+
+def melt_list_of_lists_2(lol):
+    r"""
+    This allows non-list/tuple members of lol.
+    Any element of lol which is not a list/tuple will be converted to a single element list
+    """
+    #-------------------------
+    # Make sure lol is, in fact, a list 
+    assert(isinstance(lol, list))
+    #-----
+    lol = [x if is_object_one_of_types(x, [list,tuple]) else [x] for x in lol]
+    return melt_list_of_lists(lol)
+    
+#--------------------------------------------------------------------
+def is_list_nested(
+    lst, 
+    enforce_if_one_all=True
+):
+    r"""
+    enforce_if_one_all:
+        If one element of lst is a list, all must be
+    """
+    #-------------------------
+    is_nested = False
+    if any(is_object_one_of_types(x, [list, tuple]) for x in lst):
+        is_nested = True
+        if enforce_if_one_all:
+            assert(all(is_object_one_of_types(x, [list, tuple]) for x in lst))
+    return is_nested
+
+#--------------------------------------------------------------------
 def supplement_dict_with_default_values(
-    to_supplmnt_dict, 
-    default_values_dict, 
-    extend_any_lists=False, 
-    inplace=False
+    to_supplmnt_dict    , 
+    default_values_dict , 
+    extend_any_lists    = False, 
+    inplace             = False
 ):
     r"""
     Adds key/values from default_values_dict to to_supplmnt_dict.
@@ -344,7 +429,7 @@ def supplement_dict_with_default_values(
           UNLESS extend_any_lists==True and to_supplmnt_dict[key] and/or default_values_dict[key] is a list,
             in which case the two lists are combined
     NOTE: New functionality allows for joining of (single level) nested dicts when extend_any_lists==True.
-          (There is probably a clevel recursive way to allow nested dicts of any level, but this suits my needs for now)
+          (There is probably a clever recursive way to allow nested dicts of any level, but this suits my needs for now)
           In such a case, to_supplmnt_dict[key] and default_values_dict[key] must both be dict objects, otherwise
             no joining will occur.
           The two nested dicts with be joined as (default_values_dict[key] | to_supplmnt_dict[key]), meaning that if there
@@ -830,7 +915,11 @@ def find_idxs_in_list_with_regex(lst, regex_pattern, ignore_case=False):
     #-------------------------
     return found_idxs
 
-def find_in_list_with_regex(lst, regex_pattern, ignore_case=False):
+def find_in_list_with_regex(
+        lst           , 
+        regex_pattern , 
+        ignore_case   = False
+    ):
     r"""
     Search all elements of lst for regex_pattern, return found.
     regex_pattern:
@@ -857,6 +946,7 @@ def remove_multiple_items_from_list_by_idx(list_1, idxs_1):
     
 def remove_tagged_from_list(lst, tags_to_ignore):
     # Only return elements where none of the tags_to_ignore are found
+    # Case insensitive!
     # 20210914: 
     #  Added functionality where if a tag within tags_to_ignore ends with '_EXACTMATCH'
     #  then only elements exactly matching that tag will be removed (instead of the normal case where
@@ -890,6 +980,7 @@ def remove_tagged_from_list(lst, tags_to_ignore):
     
 def remove_tagged_from_list_of_paths(list_of_paths, tags_to_ignore, base_dir=None):
     # This is similar to remove_tagged_from_list
+    # Case insensitive!
     # However, if base_dir is not None, this will only search for the tags in in the text of
     #   the path after base_dir
     # E.g. when looking for all NIST XMLs on BACO, I typically ignore anything with "Image"
@@ -918,7 +1009,9 @@ def find_tagged_idxs_in_list(lst, tags):
     r"""
     Similar to remove_tagged_from_list, but instead of removing the elements containing one of the tags,
     this will return the idxs of those elements within the list.
-    
+    -----
+    Case insensitive!
+    -----
     See remove_tagged_from_list for description of full functionality (e.g., possibility of using _EXACTMATCH)
     
     The method here is somewhat lazy, in that is used the reduced list returned by remove_tagged_from_list
@@ -940,7 +1033,9 @@ def find_untagged_idxs_in_list(lst, tags):
     r"""
     Similar to remove_tagged_from_list, but instead of returning of list of elements which did not contain
     any of the tags, this will return the idxs of those elements within the list.
-    
+    -----
+    Case insensitive!
+    -----
     See remove_tagged_from_list for description of full functionality (e.g., possibility of using _EXACTMATCH)
     
     The method here is somewhat lazy, in that is used the reduced list returned by remove_tagged_from_list
@@ -1194,6 +1289,58 @@ def get_files_split_locations(
     
     
 #--------------------------------------------------------------------
+def get_overlap_interval(
+    intrvl_1, 
+    intrvl_2
+):
+    r"""
+    Find the overlap of intervals intrvl_1 and intrvl_2.
+    If no overlap exists, return None.
+    Otherwise, a list of length 2 containing the endpoints of the overlap region will be returned
+    """
+    #-------------------------
+    assert(len(intrvl_1)==len(intrvl_2)==2)
+    #-------------------------
+    if not pd.Interval(*intrvl_1).overlaps(pd.Interval(*intrvl_2)):
+        return None
+    #-------------------------
+    # Overlap region will range from max of mins to min of maxs
+    ovrlp = [np.max([intrvl_1[0], intrvl_2[0]]), np.min([intrvl_1[1], intrvl_2[1]])]
+    return ovrlp
+
+def get_overlap_interval_len(
+    intrvl_1, 
+    intrvl_2, 
+    norm_by=None
+):
+    r"""
+    Return the length of the overlap of intervals intrvl_1 and intrvl_2.
+    If desired, this can be normalized by either the length of intrvl_1 or that of intrvl_2
+      by setting norm_by equal to 1 or 2, respectively
+    """
+    #-------------------------
+    acceptable_norm_by = [None, 1, '1', 2, '2']
+    assert(norm_by in acceptable_norm_by)
+    #-------------------------
+    ovrlp = get_overlap_interval(
+        intrvl_1 = intrvl_1, 
+        intrvl_2 = intrvl_2
+    )
+    #-------------------------
+    if ovrlp is None:
+        return 0
+    #-------------------------
+    ovrlp_len = ovrlp[1]-ovrlp[0]
+    if norm_by is None:
+        return ovrlp_len
+    elif norm_by==1 or norm_by=='1':
+        return ovrlp_len/(intrvl_1[1]-intrvl_1[0])
+    elif norm_by==2 or norm_by=='2':
+        return ovrlp_len/(intrvl_2[1]-intrvl_2[0])
+    else:
+        assert(0)
+
+#--------------------------------------------------------------------
 def get_overlap_intervals(ranges):
     r"""
     Returns a consolidated list of unique ranges from an input of overlapping ranges.
@@ -1204,6 +1351,9 @@ def get_overlap_intervals(ranges):
         if ranges = [(1,4),(1,9),(3,7),(100,200)]
          overlaps = [(1, 9), (100, 200)]
     """
+    #-------------------------
+    if len(ranges)==0:
+        return ranges
     #-------------------------
     # First, make sure the second element in each tuple should be greater than the first 
     # This also creates a copy so the original list is not altered
@@ -1325,6 +1475,258 @@ def get_fuzzy_overlap(lst, fuzziness):
             intervals[-1] = [intervals[-1][0], current_end]
     #-------------------------
     return intervals
+    
+#--------------------------------------------------------------------
+def remove_overlap_from_interval(
+    intrvl_1, 
+    intrvl_2, 
+    closed = False
+):
+    r"""
+    Removes from intrvl_1 any overlap with intrvl_2
+    If the intervals overlap, remove the overlap region from intrvl_1 and return.
+    If the intervals do not overlap, return intrvl_1.
+    NOTE: If intrvl_1 completely engulfs intrvl_2, this procedure will result in intrvl_1 being split into two intervals
+          As such, to be uniform, this function will always return a list of pd.Interval objects (or, an empty list)
+    NOTE: Although the default value of closed is False, in many cases the users will want to set this equal to True or
+            to a custom quantum value (see description below)
+          It is set to False by default because I want the user to read this documentation, and understand the implications of
+            setting closed=True before doing so.
+          
+    intrvl_1/_2:
+        The interval, which must be either a list of length 2 or a pd.Interval object.
+          
+    closed:
+        Indicates whether or not the endpoints are closed.
+            open (a,b): Open interval uses parentheses. This means that the range contains all real numbers x that is 
+                        precisely between the numbers a and b, i.e., the set of a < x < b.
+            closed [a,b]: For closed ranges, square brackets indicate that the endpoints lie within the range. 
+                          Therefore, closed intervals can be annotated as a set of a ≤ x ≤ b.
+        NOTE: For current, simple, functionality, both endpoints of both intervals must have uniform type, i.e., all must
+              be open or all must be closed.
+        Acceptable values:
+            False/None:
+                The intervals are open at both endpoints.
+                This essentially means the data are continuous.         
+            True: 
+                Sets the quantum value (see description below) to 1
+            Quantum value:
+                Where quatum defined as in physics as the minimum amount of a physical entity.
+                In this case, this represents the discrete width of a single entry in the intervals.
+                E.g., if intervals contain integers, the quantum is 1.
+                E.g., if intervals contain days, the quantum is 1 day
+        Behavior by simple examples:
+            In the following, assume intrvl_1=[0, 10] and intrvl_2=[4, 6]
+            closed = False/None:
+                return_intrvls = [[0,4], [6,10]]
+            closed = True:
+                return_intrvls = [[0,3], [7,10]]
+            closed = 2
+                return_intrvls = [[0,2], [8,10]]
+    """
+    #---------------------------------------------------------------------------
+    assert(is_object_one_of_types(intrvl_1, [list, pd.Interval]))
+    assert(is_object_one_of_types(intrvl_2, [list, pd.Interval]))
+    #-----
+    if isinstance(intrvl_1, pd.Interval):
+        intrvl_1 = [intrvl_1.left, intrvl_1.right]
+    if isinstance(intrvl_2, pd.Interval):
+        intrvl_2 = [intrvl_2.left, intrvl_2.right]
+    #-----
+    assert(len(intrvl_1)==len(intrvl_2)==2)
+    #-------------------------
+    if closed==True:
+        closed = 1
+    #-------------------------
+    # Get value of closed to feed into pd.Interval
+    if not closed:
+        pd_closed = 'neither'
+    else:
+        pd_closed = 'both'
+    #-------------------------
+    if not pd.Interval(*intrvl_1, closed=pd_closed).overlaps(pd.Interval(*intrvl_2, closed=pd_closed)):
+        return [pd.Interval(*intrvl_1, closed=pd_closed)]
+    #-------------------------
+    if intrvl_1 == intrvl_2:
+        return []
+    #-------------------------
+    # Overlap region will range from max of mins to min of maxs
+    ovrlp = [np.max([intrvl_1[0], intrvl_2[0]]), np.min([intrvl_1[1], intrvl_2[1]])]
+    #---------------------------------------------------------------------------
+    # Four situations can result
+    # 1. intrvl_2 completely engulfs intrvl_1, resulting in ovrlp being equal to intrvl_1
+    #      ==> Return empty
+    # 2. intrvl_1 completely engulfs intrvl_2, resulting in ovrlp being equal to intrvl_2
+    #      ==> Return two intervals, [intrvl_1[0], ovrlp[0]] and [ovrlp[1], intrvl_1[1]]
+    # 3. Ending of intrvl_1 overlaps with beginning of intrvl_2, resulting in ovrlp[0]==intrvl_2[0] and ovrlp[1]==intrvl_1[1]
+    #      ==> Return [intrvl_1[0], ovrlp[0]]
+    # 4. Beginning of intrvl_1 overlaps with ending of intrvl_2, resulting in ovrlp[0]==intrvl_1[0] and ovrlp[1]==intrvl_2[1]
+    #      ==> Return [ovrlp[1], intrvl_1[1]]
+    #-------------------------
+    return_intrvls = None
+    #-----
+    # 1. intrvl_2 completely engulfs intrvl_1 ==> Return empty
+    if ovrlp==intrvl_1:
+        return_intrvls = []
+    #-------------------------
+    # 2. intrvl_1 completely engulfs intrvl_2 ==> Return two intervals, [intrvl_1[0], ovrlp[0]] and [ovrlp[1], intrvl_1[1]]
+    #    EXCEPT if intrvl_1[0]==intrvl_2[0] or intrvl_1[1]==intrvl_2[1], in which case only one interval is needed to be returned
+    #      intrvl_1[0]==intrvl_2[0] ==> return [ovrlp[1], intrvl_1[1]]
+    #      intrvl_1[1]==intrvl_2[1] ==> return [intrvl_1[0], ovrlp[0]]
+    elif ovrlp==intrvl_2:
+        if not closed:
+            if intrvl_1[0]==intrvl_2[0]:
+                return_intrvls = [pd.Interval(ovrlp[1],    intrvl_1[1], closed=pd_closed)]
+            elif intrvl_1[1]==intrvl_2[1]:
+                return_intrvls = [pd.Interval(intrvl_1[0], ovrlp[0],    closed=pd_closed)]
+            else:
+                return_intrvls = [
+                    pd.Interval(intrvl_1[0], ovrlp[0],    closed=pd_closed), 
+                    pd.Interval(ovrlp[1],    intrvl_1[1], closed=pd_closed)
+                ]
+        else:
+            if intrvl_1[0]==intrvl_2[0]:
+                return_intrvls = [pd.Interval(ovrlp[1]+closed, intrvl_1[1],     closed=pd_closed)]
+            elif intrvl_1[1]==intrvl_2[1]:
+                return_intrvls = [pd.Interval(intrvl_1[0],     ovrlp[0]-closed, closed=pd_closed)]
+            else:
+                return_intrvls = [
+                    pd.Interval(intrvl_1[0],     ovrlp[0]-closed, closed=pd_closed), 
+                    pd.Interval(ovrlp[1]+closed, intrvl_1[1],     closed=pd_closed)
+                ]
+    #-------------------------
+    # 3. Ending of intrvl_1 overlaps with beginning of intrvl_2 ==> Return [intrvl_1[0], ovrlp[0]]
+    elif intrvl_1[0] < intrvl_2[0]:
+        assert(ovrlp[0]==intrvl_2[0])
+        assert(ovrlp[1]==intrvl_1[1])
+        if not closed:
+            return_intrvls = [pd.Interval(intrvl_1[0], ovrlp[0], closed=pd_closed)]
+        else:
+            return_intrvls = [pd.Interval(intrvl_1[0], ovrlp[0]-closed, closed=pd_closed)]
+    #-------------------------
+    # 4. Beginning of intrvl_1 overlaps with ending of intrvl_2 ==> Return [ovrlp[1], intrvl_1[1]]
+    elif intrvl_1[0] > intrvl_2[0]:
+        assert(ovrlp[0]==intrvl_1[0])
+        assert(ovrlp[1]==intrvl_2[1])
+        if not closed:
+            return_intrvls = [pd.Interval(ovrlp[1], intrvl_1[1], closed=pd_closed)]
+        else:
+            return_intrvls = [pd.Interval(ovrlp[1]+closed, intrvl_1[1], closed=pd_closed)]
+    #-------------------------
+    else:
+        assert(0)
+    #---------------------------------------------------------------------------
+    # Sanity
+    if len(return_intrvls)>0:
+        for intrvl_i in return_intrvls:
+            assert(intrvl_i.left <= intrvl_i.right)
+    #---------------------------------------------------------------------------
+    return return_intrvls
+    
+    
+def remove_overlaps_from_interval(
+    intrvl_1, 
+    intrvls_2, 
+    closed = False
+):
+    r"""
+    Removes from intrvl_1 any overlaps with the intervals contained in intrvls_2.
+    See remove_overlap_from_interval for more information.
+    NOTE: If intrvl_1 completely engulfs any of intrvls_2, this procedure will result in intrvl_1 being split into two intervals
+          As such, to be uniform, this function will always return a list of pd.Interval objects (or, an empty list)
+    NOTE: Although the default value of closed is False, in many cases the users will want to set this equal to True or
+            to a custom quantum value (see description below)
+          It is set to False by default because I want the user to read this documentation, and understand the implications of
+            setting closed=True before doing so.
+    
+    intrvl_1:
+        The interval, which must be either a list of length 2 or a pd.Interval object.
+        
+    intrvls_2:
+        A list of intervals, i.e., it must be a list where each element is either a list
+        of length 2 or a pd.Interval object.
+    """
+    #---------------------------------------------------------------------------
+    # Make sure intrvls_2 is a list.
+    # NOTE: intrvl_1 and the elements of intrvls_2 will be checked for proper type in remove_overlap_from_interval
+    assert(isinstance(intrvls_2, list))
+    if len(intrvls_2)==0:
+        return [intrvl_1]
+    #-------------------------
+    # Since remove_overlap_from_interval returns a list of pd.Interval objects (can see reason why in documentation for function)
+    #   must convert intrvl_1 to list for simpler code below
+    # Note: deepcopy probably not needed below, but, safety first kids!
+    return_intrvls = [copy.deepcopy(intrvl_1)]
+    #-------------------------
+    for intrvl_2_i in intrvls_2:
+        return_intrvls_i = []
+        for return_intrvl_j in return_intrvls:
+            return_intrvls_i.extend(
+                remove_overlap_from_interval(
+                    intrvl_1 = return_intrvl_j, 
+                    intrvl_2 = intrvl_2_i, 
+                    closed   = closed
+                )
+            )
+        return_intrvls = return_intrvls_i
+    #-------------------------
+    return return_intrvls
+    
+def remove_overlaps_from_date_interval(
+    intrvl_1, 
+    intrvls_2, 
+    closed = True
+):
+    r"""
+    Only numeric, Timestamp and Timedelta endpoints are allowed when constructing an Interval.
+    ==> Need for remove_overlaps_from_date_interval (instead of simply using remove_overlaps_from_interval)
+    
+    NOTE: If intrvl_1 completely engulfs any of intrvls_2, this procedure will result in intrvl_1 being split into two intervals
+          As such, to be uniform, this function will always return a list of pd.Interval objects (or, an empty list)
+    
+    closed:
+        Must be boolean.
+        See remove_overlap_from_interval documentation for refresher on open/closed sets
+    """
+    #-------------------------
+    assert(isinstance(closed, bool))
+    if closed:
+        closed = pd.Timedelta('1D')
+    #-------------------------
+    assert(isinstance(intrvls_2, list))
+    if len(intrvls_2)==0:
+        return [intrvl_1]
+    #-------------------------
+    assert(is_object_one_of_types(intrvl_1, [list, tuple]))
+    assert(len(intrvl_1)==2)
+    #-----
+    for intrvl_2_i in intrvls_2:
+        assert(is_object_one_of_types(intrvl_2_i, [list, tuple]))
+        assert(len(intrvl_2_i)==2)
+    #-------------------------
+    # Make sure the base elements of intrvl_1 and intrvls_2 are datetime.date objects
+    assert(
+        are_all_list_elements_of_type(
+            lst = melt_list_of_lists([intrvl_1]+intrvls_2), 
+            typ = datetime.date
+        )
+    )
+    
+    #-------------------------
+    # Only numeric, Timestamp and Timedelta endpoints are allowed when constructing an Interval.
+    #   ==> All elements need converted from datetime.date to Timestamp
+    #     intrvl_1  ==> [pd.to_datetime(x) for x in intrvl_1]
+    #     intrvls_2 ==> [[pd.to_datetime(x[0]), pd.to_datetime(x[1])] for x in intrvls_2]
+    return_intrvls = remove_overlaps_from_interval(
+        intrvl_1  = [pd.to_datetime(x) for x in intrvl_1], 
+        intrvls_2 = [[pd.to_datetime(x[0]), pd.to_datetime(x[1])] for x in intrvls_2], 
+        closed    = closed
+    )
+
+    #-------------------------
+    # Convert elements back to datetime.date objects
+    return_intrvls = [[x.left.date(), x.right.date()] for x in return_intrvls]
+    return return_intrvls
     
 #--------------------------------------------------------------------
 def get_kit_id(path, gold_standard='S002'):
@@ -1467,6 +1869,74 @@ def clear_all_dir_contents(dir_path):
     # NOTE: DELETES FILES AND SUB-DIRECTORIES!
     delete_dir(dir_path)
     os.mkdir(dir_path)
+
+#--------------------------------------------------------------------
+def make_tmp_save_dir(
+    base_dir_path,
+    tmp_dir_name, 
+    return_path   = False
+):
+    r"""
+    base_dir_path must already exist!
+    os.path.join(base_dir_path, tmp_dir_name) must not exist (or, must be empty if it does exist)!
+
+    tmp_dir_name:
+        May be a string or a list of strings
+    """
+    #--------------------------------------------------
+    assert(is_object_one_of_types(tmp_dir_name, [str, list]))
+    if isinstance(tmp_dir_name, list):
+        tmp_dir_paths = []
+        for tmp_dir_name_i in tmp_dir_name:
+            tmp_dir_path_i = make_tmp_save_dir(
+                base_dir_path = base_dir_path, 
+                tmp_dir_name  = tmp_dir_name_i, 
+                return_path   = True
+            )
+            tmp_dir_paths.append(tmp_dir_path_i)
+        if return_path:
+            return tmp_dir_paths
+        else:
+            return
+    #--------------------------------------------------
+    assert(isinstance(tmp_dir_name, str))
+    assert(os.path.isdir(base_dir_path))
+    #-----
+    tmp_dir_path = os.path.join(base_dir_path, tmp_dir_name)
+    #-----
+    if os.path.exists(tmp_dir_path):
+        assert(is_dir_empty(tmp_dir_path))
+    else:
+        os.makedirs(tmp_dir_path)
+    #-----
+    if return_path:
+        return tmp_dir_path
+
+
+def del_tmp_save_dir(
+    base_dir_path,
+    tmp_dir_name
+):
+    r"""
+    os.path.join(base_dir_path, tmp_dir_name) must exist!
+
+    tmp_dir_name:
+        May be a string or a list of strings
+    """
+    #--------------------------------------------------
+    assert(is_object_one_of_types(tmp_dir_name, [str, list]))
+    if isinstance(tmp_dir_name, list):
+        for tmp_dir_name_i in tmp_dir_name:
+            del_tmp_save_dir(
+                base_dir_path = base_dir_path, 
+                tmp_dir_name  = tmp_dir_name_i
+            )
+        return
+    #--------------------------------------------------
+    assert(isinstance(tmp_dir_name, str))
+    tmp_dir_path = os.path.join(base_dir_path, tmp_dir_name)
+    assert(os.path.isdir(tmp_dir_path))
+    delete_dir(tmp_dir_path)
 
 #--------------------------------------------------------------------
 def do_paths_share_ancestor(path_1, path_2, ancestor_level=1, use_max_in_comparison=False):
@@ -1669,8 +2139,96 @@ def append_to_path(save_path, appendix, ext_to_find='.pdf', append_to_end_if_ext
         #---------------------
         return_save_path = save_path.replace(ext_to_find, f'{appendix}{ext_to_find}')
         return return_save_path
+        
+        
 #--------------------------------------------------------------------
-
+def determine_wait_time(
+    run_times_dict, 
+    max_calls_per_sec, 
+    lookback_period_sec
+):
+    r"""
+    Built specifically for use in Utilities.run_tryexceptwhile_process
+    """
+    #-------------------------
+    calls_ts = pd.Series(run_times_dict)
+    calls_ts = calls_ts-calls_ts.max()
+    #-------------------------
+    calls_subset = calls_ts[calls_ts>-lookback_period_sec]
+    if calls_subset.shape[0]<=1:
+        return 0
+    #-------------------------
+    # The average number of seconds between calls is given by: calls_subset.diff().mean()
+    # The corresponding frequency is simply the inverse
+    calls_freq = 1.0/calls_subset.diff().mean()
+    #-------------------------
+    print(calls_freq)
+    print(max_calls_per_sec)
+    print()
+    if calls_freq < max_calls_per_sec:
+        return 0
+    else:
+        # The number of entries in the .diff() DF is 1 less than calls_subset, due to NaN first entry
+        # Thus, although n_0+1 is desired in the numerator of the first time, it is n_0+1 FOR THE DIFF DF
+        #   which is simply calls_subset.shape[0] (NOT calls_subset.shape[0]+1)
+        d_ip1 = (calls_subset.shape[0])/max_calls_per_sec - calls_subset.diff().sum()
+        # d_ip1 is the needed (approximate) wait time for the next call if the desired max_calls_per_sec is to be recovered
+        return d_ip1
+        
+        
+def run_tryexceptwhile_process(
+    func,
+    func_args_dict, 
+    max_calls_per_min   = 1, 
+    lookback_period_min = 15, 
+    max_calls_absolute  = 1000, 
+    verbose             = True
+):
+    r"""
+    Intended for DAQ processes which take significant amounts of time, and might randomly die part way through.
+    The function dying is not an issue with the underlying code, but typically an issue with connecting to the database
+      or something else on the server side.
+    To prevent myself from having to continually check and relaunch processes, I used to run the try/except block within a 
+      while loop without any sort of check.
+    There was an issue in one instance, and I was locked out by Cyber Security.
+    To try to prevent this from happening again, this function was built, which intends to keep the code from contacting
+      the database server in rapid succession, and therefore hopefully keeping me from being flagged by Cyber again.
+    """
+    #-------------------------
+    max_calls_per_sec   = max_calls_per_min/60
+    lookback_period_sec = lookback_period_min*60
+    #-------------------------
+    counter = 0
+    time_0 = time.time()
+    run_times = dict()
+    while counter < max_calls_absolute:
+        try:
+            assert(counter not in run_times.keys())
+            #-------------------------
+            wait_time_i = determine_wait_time(
+                run_times_dict      = run_times, 
+                max_calls_per_sec   = max_calls_per_sec,  
+                lookback_period_sec = lookback_period_sec
+            )
+            #-----
+            if verbose:
+                print(f'counter = {counter}\n\twait_time_i={wait_time_i}\n\n')
+            #-----
+            time.sleep(wait_time_i)
+            #-------------------------
+            _ = func(**func_args_dict)
+            #-------------------------
+            # Stop the loop if the function completes sucessfully
+            # Before this function was developed, and this code lived in notebooks, I used a break statement here.
+            # Now, instead, I return True
+            return True
+        except Exception as e:
+            print("Function errored out!", e)
+            print("Retrying ... ")
+        counter += 1
+    return False
+        
+#--------------------------------------------------------------------
 def find_spca_contributors_csv(spca_xml, phantom_type, 
                                find_top_5=False, max_levels_to_search = 5, nr_attribute=None, assert_found=True):
     # If find_top_5==False, find FullContributors...csv
@@ -1739,3 +2297,204 @@ def find_spca_contributors_csv(spca_xml, phantom_type,
         assert(0)
     else:
         return None
+    
+
+
+
+    #----------------------------------------------------------------------------------------------------------------------------------------
+    def offset_int_tagged_files_in_dir(
+        files_dir, 
+        file_name_regex, 
+        offset_int            = None, 
+        new_0_int             = None, 
+        new_dir               = None, 
+        file_name_glob        = None, 
+        copy_and_rename       = False, 
+        return_rename_summary = False
+    ):
+        r"""
+        Offset all of the files in files_dir by offset_int.
+        The directory files_dir is expected to contain files of the form [file_idx_0, file_idx_1, ..., file_idx_n] where
+            idx_0, idx_1, ..., idx_n are integers.
+        The files can either be renamed using the offset_int argument OR the new_0_int argument, BUT NOT BOTH.
+            For the case of offset_int:
+                The files in this directory will be renamed [file_{idx_0+offset_int}, file_{idx_1+offset_int}, ..., file_{idx_n+offset_int}]
+            For the case of new_0_int:
+                The files in this directory will be renamed [file_{new_0_int}, file_{new_0_int+1}, ..., file_{new_0_int+n_files-1}]
+        The files can simply be moved/renamed (copy_and_rename==False), or copied to the new directory (copy_and_rename==True and 
+            new_dir not None)
+        -------------------------
+        files_dir:
+            The directory housing the files to be renamed
+            
+        file_name_regex:
+            A regex patten used to both identify the files to be renamed and to find the integer tag for each file.
+            NOTE: file_name_regex MUST have some sort of digit capture (e.g., contain '(\d*)')
+                  e.g., for the case of end events, one would use file_name_regex = r'end_events_(\d*).csv'
+                  
+        offset_int/new_0_int:
+            These direct how the files will be renamed.  
+            ONLY ONE OF THESE SHOULD BE USED ==> one should always be set to None and the other should be set to some int value
+            offset_int:
+                Take the identifier/tag ints, and simply shift them by offset_int.
+            new_0_int:
+                Start the identifier tags at new_0_int, and label from new_0_int to new_0_int + len(files in files_dir)-1
+                
+        new_dir:
+            The directory to which the renamed files will be saved.
+            Default value is None, which means the files will be saved in the input files_dir
+                  
+        file_name_glob:
+            Used in Utilities.find_all_paths to help find the paths to be renamed.  By default this is set to None, which is then
+                changed to = '*', meaning the glob portion doesn't trim down the list of files at all, but returns all contained
+                in the directory.  Therefore, file_name_regex does all of the work, which is fine and really as designed
+                
+        copy_and_rename:
+            Directs whether to call rename or copy.
+            copy_and_rename=False:
+                Default behavior, which means the files will be renamed and replaced.
+            copy_and_rename=False:
+                The files will be copied and renamed, with the originals kept intact.  This is only possible if new_dir is not None
+                and new_dir != files_dir
+            
+        """
+        #-------------------------
+        # Exclusive or for offset_int and new_0_int (meaning, one but not both must not be None)
+        assert(    offset_int is not None or new_0_int is not None)
+        assert(not(offset_int is not None and new_0_int is not None))
+        #-------------------------
+        assert(os.path.isdir(files_dir))
+        if file_name_glob is None:
+            file_name_glob = '*'
+        if new_dir is None:
+            new_dir = files_dir
+        #-------------------------
+        if new_dir==files_dir:
+            copy_and_rename = False
+        #-------------------------
+        if not os.path.exists(new_dir):
+            os.makedirs(new_dir)
+        #-------------------------
+        paths = find_all_paths(
+            base_dir      = files_dir, 
+            glob_pattern  = file_name_glob, 
+            regex_pattern = file_name_regex
+        )
+        #-------------------------
+        paths_w_tags = []
+        for path in paths:
+            tag = re.findall(file_name_regex, path)
+            print(path)
+            print(file_name_regex)
+            print(tag)
+            print()
+            # Should have only been one tag found per path
+            if len(tag)>1:
+                print(tag)
+            assert(len(tag)==1)
+            tag = int(tag[0])
+            paths_w_tags.append((path, tag))
+        # NOTE: Want to sort in reverse so that highest is first.  This is so there are no naming issues when the rename occurs.  
+        #       E.g., imaging there are 10 members in paths, tagged 0 through nine, and they are to be offset by 1
+        #         If we started with the lowest tag, file_0, shifting it by 1 would make it file_1, which already exists!
+        #         If, instead, we start with the highest tag, file_9, it shifts by 1 to file_10, which is not an issue.
+        paths_w_tags = natsorted(paths_w_tags, key=lambda x: x[1], reverse=True)
+        #-------------------------
+        rename_summary = {}
+        for i,path_w_tag_i in enumerate(paths_w_tags):
+            path_i      = path_w_tag_i[0]
+            tag_i       = path_w_tag_i[1]
+            file_name_i = os.path.basename(path_i)
+            #-----
+            assert(str(tag_i) in file_name_i)
+            if offset_int is not None:
+                repl_int_i = str(tag_i+offset_int)
+            elif new_0_int is not None:
+                # Remember, sorted in descending order
+                repl_int_i = str(len(paths_w_tags)+new_0_int-(i+1))
+            else:
+                assert(0)
+            new_file_name_i = file_name_i.replace(str(tag_i), str(repl_int_i))
+            #-----
+            assert(new_file_name_i not in os.listdir(new_dir))
+            new_path_i = os.path.join(new_dir, new_file_name_i)
+            #-----
+            assert(path_i not in rename_summary.keys())
+            rename_summary[path_i] = new_path_i
+            #-----
+            if copy_and_rename:
+                shutil.copy(src=path_i, dst=new_path_i)
+            else:
+                os.rename(path_i, new_path_i)
+        #-------------------------
+        if return_rename_summary:
+            return rename_summary
+        
+        
+    #---------------------------------------------------------------------------    
+    def offset_int_tagged_files_w_summaries_in_dir(
+        files_dir, 
+        file_name_regex, 
+        offset_in               = None, 
+        new_0_int               = None, 
+        new_dir                 = None, 
+        file_name_glob          = None, 
+        #-----
+        summary_files_dir       = None,
+        summary_file_name_regex = None,
+        summary_file_name_glob  = None, 
+        summary_new_dir         = None, 
+        #-----
+        copy_and_rename         = False, 
+        return_rename_summary   = False
+    ):
+        r"""
+        """
+        #-------------------------
+        if summary_files_dir is None:
+            summary_files_dir          = os.path.join(files_dir, 'summary_files')
+        if summary_file_name_regex is None:
+            summary_file_name_regex    = file_name_regex.replace('_(\d*).csv', '_([0-9]*)_summary.json')
+        if summary_file_name_glob is None:
+            if file_name_glob is None:
+                summary_file_name_glob = '*'
+            else:
+                summary_file_name_glob = file_name_glob.replace('_*.csv', '*_summary.json')
+        if summary_new_dir is None:
+            if new_dir is None:
+                summary_new_dir = os.path.join(files_dir, 'summary_files')
+            else:
+                summary_new_dir = os.path.join(new_dir, 'summary_files')
+        #-------------------------
+        files_rename_summary = offset_int_tagged_files_in_dir(
+            files_dir             = files_dir, 
+            file_name_regex       = file_name_regex, 
+            offset_int            = offset_int, 
+            new_0_int             = new_0_int, 
+            new_dir               = new_dir, 
+            file_name_glob        = file_name_glob, 
+            copy_and_rename       = copy_and_rename, 
+            return_rename_summary = True
+        )
+        #-------------------------
+        summaries_rename_summary = offset_int_tagged_files_in_dir(
+            files_dir             = summary_files_dir, 
+            file_name_regex       = summary_file_name_regex, 
+            offset_int            = offset_int, 
+            new_0_int             = new_0_int, 
+            new_dir               = summary_new_dir, 
+            file_name_glob        = summary_file_name_glob, 
+            copy_and_rename       = copy_and_rename, 
+            return_rename_summary = True
+        )
+        #-------------------------
+        assert(len(files_rename_summary)==len(summaries_rename_summary))
+        if return_rename_summary:
+            return (files_rename_summary, summaries_rename_summary)
+
+
+
+
+
+
+    #----------------------------------------------------------------------------------------------------------------------------------------

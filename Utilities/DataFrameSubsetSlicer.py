@@ -91,8 +91,17 @@ class DataFrameSubsetSingleSlicer:
             'comparison_operator' : self.comparison_operator
         }
         return output_dict
+        
             
     def get_slicing_booleans(self, df):
+        #-------------------------
+        # Now possible to slice using index values instead of columns!
+        # Methods are slightly different there, and handled via DataFrameSubsetSingleSlicer.get_slicing_booleans_for_idx_slicer
+        # See Utilities_df.get_idfs_loc for acceptable inputs when using index instead of column
+        if self.column not in df.columns:
+            slicing_booleans = self.get_slicing_booleans_for_idx_slicer(df=df)
+            return slicing_booleans
+        #-------------------------
         possible_comparison_operators = ['==', '!=', '>', '<', '>=', '<=', 'isin', 'notin']
         assert(self.comparison_operator in possible_comparison_operators)
         #-------------------------
@@ -114,6 +123,76 @@ class DataFrameSubsetSingleSlicer:
             return ~df[self.column].isin(self.value)
         else:
             assert(0)
+            
+    def get_slicing_booleans_for_idx_slicer(
+        self, 
+        df
+    ):
+        r"""
+        Fun complications when slicing using index (or level of an index) instead of a column!
+        NOTE: The operations here should restore df to its original form.
+              I chose to not simply call df=df.copy() at the beginning of the function in a hopes of saving memory
+                for cases when df is large (but this is always an option is things don't look right)
+               
+        """
+        #--------------------------------------------------
+        idfr_loc = Utilities_df.get_idfr_loc(
+            df   = df, 
+            idfr = self.column
+        )
+        #-------------------------
+        # Should only find ourselves here if we are slicing with the index
+        # In which case, idfr_loc[1] will be True
+        assert(idfr_loc[1]==True)
+        #--------------------------------------------------
+        # Since column is in the index (as weird as that may sound...), .reset_index() will need to be called.
+        # After slicing operation is done, I want to return DF to its original form, with original names.
+        # For this to work, all index levels must have names.
+        # Those without names will be given names, but the original values will be recorded so they can be recovered later
+        #-------------------------
+        # Record original names, to be recovered at end
+        org_idx_names = df.index.names
+        #-------------------------
+        # Name any un-named
+        random_nm = Utilities.generate_random_string()
+        new_idx_names = [name_i if name_i else f'{random_nm}_{i}' for i,name_i in enumerate(df.index.names)]
+        df.index.names = new_idx_names
+        idfr_lvl_name = df.index.names[idfr_loc[0]]
+        #-------------------------
+        # Call reset_index, so now the desired values to slice on are contained in a column instead of the index.
+        # idfr_lvl_name is the aforementioned column.
+        df = df.reset_index()
+        #-------------------------
+        # Make sure only a single column is returned by df[idfr_lvl_name]
+        # This may sound trivial, but if df has MutliIndex columns, then such an operation could
+        #   actually return multiple columns!
+        assert(isinstance(df[idfr_lvl_name], pd.Series))
+        #-------------------------
+        # Now, one can simply use the standard DFSingleSlicer.get_slicing_booleans method to slice
+        # Note, however, that self.column must first be changed (save org in case needed later)
+        org_column = self.column
+        self.column = idfr_lvl_name
+        slicing_booleans = self.get_slicing_booleans(df=df)
+        #-------------------------
+        # However, to be useful, the slicing boolean needs to share the same index as the original df!
+        #-----
+        # Make sure df and slicing_booleans both have the same index, which should be integers from 0 to n-1
+        assert(all(slicing_booleans.index==df.index))
+        assert(all(df.index==list(range(len(df)))))
+        #-----
+        # Restore df
+        df = df.set_index(new_idx_names)
+        assert(len(df.index.names)==len(org_idx_names))
+        df.index.names = org_idx_names
+        #-----
+        # I suppose restore self.column as well
+        self.column = org_column
+        #-----
+        # Set index of slicing_booleans equal to that of df
+        slicing_booleans.index = df.index
+        #-------------------------
+        return slicing_booleans
+            
             
     def set_simple_column_value(self, df, column, value):
         r"""

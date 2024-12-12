@@ -3,9 +3,14 @@
 """
 Utilities specifically for DataFrames
 """
+
+__author__ = "Jesse Buxton"
+__email__  = "buxton.45.jb@gmail.com"
+__status__ = "Personal"
+
 # List of functions:
 
-#---------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------
 import os
 import sys
 import glob
@@ -21,9 +26,11 @@ import statistics
 from natsort import natsorted, ns, natsort_keygen
 from enum import IntEnum
 import datetime
+from sklearn.model_selection import GroupShuffleSplit
+from ast import literal_eval
 
 import Utilities
-#---------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------
 class DFConstructType(IntEnum):
     kReadCsv = 0
     kRunSqlQuery = 1
@@ -31,29 +38,56 @@ class DFConstructType(IntEnum):
     kUnset = 3
 
 
-#---------------------------------------------------------------------
-def get_numeric_columns(df):
+#----------------------------------------------------------------------------------------------------
+def get_numeric_columns(
+        df
+    ):
     is_numeric_col = [is_numeric_dtype(df[col]) for col in df.columns]
-    numeric_cols = df.columns[is_numeric_col].tolist()
+    numeric_cols   = df.columns[is_numeric_col].tolist()
+    #-----
     return numeric_cols
 
-def append_to_column_names(df, append):
+#--------------------------------------------------
+def append_to_column_names(
+        df, 
+        append
+    ):
     df.columns = [str(col)+f'_{append}' for col in df.columns]
+    #-----
     return df
 
-def prepend_to_column_names(df, prepend):
+#--------------------------------------------------
+def prepend_to_column_names(
+        df, 
+        prepend
+    ):
     df.columns = [f'{prepend}_'+str(col) for col in df.columns]
+    #-----
     return df
 
-def append_to_series_indices(series, append):
+#--------------------------------------------------
+def append_to_series_indices(
+        series, 
+        append
+    ):
     series.index = [str(idx)+f'_{append}' for idx in series.index]
+    #-----
     return series
 
-def prepend_to_series_indices(series, prepend):
+#--------------------------------------------------
+def prepend_to_series_indices(
+        series, 
+        prepend
+    ):
     series.index = [f'{prepend}_'+str(idx) for idx in series.index]
+    #-----
     return series
-#---------------------------------------------------------------------    
-def get_shared_columns(dfs, maintain_df0_order=True):
+
+#----------------------------------------------------------------------------------------------------
+def get_shared_columns(
+        dfs                , 
+        maintain_df0_order = True
+    ):
     r"""
     The method here, using intersect1d, will typically sort the results
     If this is not desired, and the original order maintained, set 
@@ -71,36 +105,70 @@ def get_shared_columns(dfs, maintain_df0_order=True):
         assert(len(cols_shared_ordered)==len(cols_shared))
         return cols_shared_ordered
     return cols_shared
-#---------------------------------------------------------------------
-def move_cols_to_either_end(df, cols_to_move, to_front=True):
-    # Moves the columns in cols_to_move to the front or back of the df
-    # The order of the other columns is maintained
-    #   if to_front==True -----> moved to front of df
-    #   if to_front==False ----> moved to back of df
-    # NOTE: cols_to_move should be a list.
-    #       However, feeding in e.g. df2.columns should work as well
-    #       due to the lines below
+
+#----------------------------------------------------------------------------------------------------
+def move_cols_to_either_end(
+        df           , 
+        cols_to_move , 
+        to_front     = True
+    ):
+    r"""
+    Moves the columns in cols_to_move to the front or back of the df
+    The order of the other columns is maintained
+      if to_front==True -----> moved to front of df
+      if to_front==False ----> moved to back of df
+    NOTE: cols_to_move should be a list.
+          However, feeding in e.g. df2.columns should work as well
+          due to the lines below
+    """
+    #--------------------------------------------------
     if isinstance(cols_to_move, pd.core.indexes.base.Index):
         cols_to_move = cols_to_move.tolist()
+    #-----
     assert(x in df.columns for x in cols_to_move)
+    #-----
     remaining_cols = [x for x in df.columns if x not in cols_to_move]
+    #-------------------------
     if to_front:
         return df[cols_to_move + remaining_cols]
     else:
         return df[remaining_cols + cols_to_move]
         
-def move_cols_to_front(df, cols_to_move):
-    return move_cols_to_either_end(df, cols_to_move, True)
-    
-def move_cols_to_back(df, cols_to_move):
-    return move_cols_to_either_end(df, cols_to_move, False)
+#--------------------------------------------------
+def move_cols_to_front(
+        df, 
+        cols_to_move
+    ):
+    return move_cols_to_either_end(
+        df           = df, 
+        cols_to_move = cols_to_move, 
+        to_front     = True
+    )
 
-def make_all_column_names_lowercase(df):
+#--------------------------------------------------
+def move_cols_to_back(
+        df, 
+        cols_to_move
+    ):
+    return move_cols_to_either_end(
+        df           = df, 
+        cols_to_move = cols_to_move, 
+        to_front     = False
+    )
+
+#--------------------------------------------------
+def make_all_column_names_lowercase(
+        df
+    ):
     rename_dict = {x:x.lower() for x in df.columns}
-    df = df.rename(columns=rename_dict)
+    df          = df.rename(columns=rename_dict)
     return df
-    
-def make_all_column_names_uppercase(df, cols_to_exclude=None):
+
+#--------------------------------------------------
+def make_all_column_names_uppercase(
+        df, 
+        cols_to_exclude = None
+    ):
     rename_dict = {x:x.upper() for x in df.columns}
     if cols_to_exclude is not None:
         assert(isinstance(cols_to_exclude, list))
@@ -108,8 +176,14 @@ def make_all_column_names_uppercase(df, cols_to_exclude=None):
             del rename_dict[exclude_i]
     df = df.rename(columns=rename_dict)
     return df
-    
-def drop_col_case_insensitive(df, col, inplace=True):
+
+#--------------------------------------------------
+def drop_col_case_insensitive(
+        df        , 
+        col       , 
+        inplace   = True, 
+        drop_dups = True
+    ):
     r"""
     In a case-insensitive manner, look for col in df.  If found, drop.
     """
@@ -119,10 +193,12 @@ def drop_col_case_insensitive(df, col, inplace=True):
     #-------------------------
     if col.lower() in [x.lower() for x in df.columns]:
         tmp_idx = [x.lower() for x in df.columns].index(col.lower())
-        col = df.columns.tolist()[tmp_idx]
-        df = df.drop(columns=[col]).drop_duplicates()
+        col     = df.columns.tolist()[tmp_idx]
+        if drop_dups:
+            df = df.drop(columns=[col]).drop_duplicates()
     return df
-#---------------------------------------------------------------------
+
+#----------------------------------------------------------------------------------------------------
 def first_valid_index_for_col(
     df, 
     col, 
@@ -141,13 +217,15 @@ def first_valid_index_for_col(
         return df[col].first_valid_index()
         
 
+#----------------------------------------------------------------------------------------------------
 def make_df_col_dtypes_equal(
-    df_1, 
-    col_1, 
-    df_2, 
-    col_2, 
-    allow_reverse_set=False, 
-    assert_success=True
+    df_1              , 
+    col_1             , 
+    df_2              , 
+    col_2             , 
+    allow_reverse_set = False, 
+    assert_success    = True, 
+    inplace           = False
 ):
     r"""
     Try to make df_2[col_2].dtype equal df_1[col_1].dtype.
@@ -156,97 +234,127 @@ def make_df_col_dtypes_equal(
       the dtype of df_1 to match that of df_2
       
     col_1, col_2 can be single columns, or a list of columns
+    
+    inplace:
+        Default to False because we typically do not want this operation done in place.
+        If done in place and if operation fails (i.e., final assertion fails), then df_1, df_2 would still
+          be altered outside of the function, which is not desired.
     """
-    #-------------------------
-    # DO NOT WANT THIS DONE INPLACE!
-    #   Becuase, if operation fails (i.e., final assertion fails), then df_1, df_2 would still
-    #   be altered outside of the function, which is not desired.
-    # Therefore, force inplace=False by first making copies!
-    df_1 = df_1.copy()
-    df_2 = df_2.copy()
-    #----------------------------------------------------------------------------------------------------
+    #--------------------------------------------------
+    # First, check to make sure anything actually needs done.  If not, simply return DFs
+    if isinstance(col_1, list) or isinstance(col_2, list):
+        assert(isinstance(col_1, list) and isinstance(col_2, list))
+        assert(len(col_1) == len(col_2))
+        if df_1[col_1].dtypes.tolist() == df_2[col_2].dtypes.tolist():
+            return df_1, df_2
+    else:
+        if df_1[col_1].dtype == df_2[col_2].dtype:
+            return df_1, df_2
+    
+    #--------------------------------------------------
+    if not inplace:
+        df_1 = df_1.copy()
+        df_2 = df_2.copy()
+    #--------------------------------------------------
     if isinstance(col_1, list) or isinstance(col_2, list):
         assert(isinstance(col_1, list) and isinstance(col_2, list))
         assert(len(col_1)==len(col_2))
+        # NOTE: inplace already taken care of above, so set to True in all iterations below
         for i_col in range(len(col_1)):
             df_1, df_2 = make_df_col_dtypes_equal(
-                df_1=df_1, 
-                col_1=col_1[i_col], 
-                df_2=df_2, 
-                col_2=col_2[i_col], 
-                allow_reverse_set=allow_reverse_set, 
-                assert_success=assert_success
+                df_1              = df_1, 
+                col_1             = col_1[i_col], 
+                df_2              = df_2, 
+                col_2             = col_2[i_col], 
+                allow_reverse_set = allow_reverse_set, 
+                assert_success    = assert_success, 
+                inplace           = True
             )
         return df_1, df_2
-    #----------------------------------------------------------------------------------------------------
+    #--------------------------------------------------
     assert(col_1 in df_1.columns.tolist())
     assert(col_2 in df_2.columns.tolist())
     #-------------------------
     dtype_1 = df_1[col_1].dtype
     dtype_2 = df_2[col_2].dtype
     #-------------------------
-    frst_valid_iloc_1 = first_valid_index_for_col(
-        df          = df_1, 
-        col         = col_1, 
-        return_iloc = True
-    )
-    #-----
-    frst_valid_iloc_2 = first_valid_index_for_col(
-        df          = df_2, 
-        col         = col_2, 
-        return_iloc = True
-    )
-    #-------------------------
-    # If dtypes are the same, then simply return
-    # This is slightly more involved, as both could be of type object but not equal (e.g.,
-    #   one could be a list and the other a string)
-    if is_object_dtype(dtype_1) and is_object_dtype(dtype_2):
-        if type(df_1.iloc[frst_valid_iloc_1][col_1])==type(df_2.iloc[frst_valid_iloc_2][col_2]):
-            return df_1, df_2
-    else:
-        if dtype_1 == dtype_2:
-            return df_1, df_2
-    #-------------------------
-    # If the dtype is object, it is uncertain exactly how it should be treated, UNLESS
-    #   it is a string or a list
-    if is_object_dtype(dtype_1):
-        if isinstance(df_1.iloc[frst_valid_iloc_1][col_1], str):
-            dtype_1 = str
-        elif isinstance(df_1.iloc[frst_valid_iloc_1][col_1], list):
-            dtype_1 = list
-            df_2[col_2] = df_2[col_2].apply(lambda x: [x])
-            return df_1, df_2
-        else:
-            print(f'col_1={col_1} in df_1 is object type, but not string or list')
-            print('NOT SURE HOW TO HANDLE!!!!!')
-            if assert_success:
-                assert(0)
-            else:
+    if df_1.shape[0]>0 and df_2.shape[0]>0:
+        frst_valid_iloc_1 = first_valid_index_for_col(
+            df          = df_1, 
+            col         = col_1, 
+            return_iloc = True
+        )
+        if frst_valid_iloc_1 is None:
+            frst_valid_iloc_1 = 0
+        #-----
+        frst_valid_iloc_2 = first_valid_index_for_col(
+            df          = df_2, 
+            col         = col_2, 
+            return_iloc = True
+        )
+        if frst_valid_iloc_2 is None:
+            frst_valid_iloc_2 = 0
+        #-------------------------
+        # If dtypes are the same, then simply return
+        # This is slightly more involved, as both could be of type object but not equal (e.g.,
+        #   one could be a list and the other a string)
+        if is_object_dtype(dtype_1) and is_object_dtype(dtype_2):
+            if type(df_1.iloc[frst_valid_iloc_1][col_1])==type(df_2.iloc[frst_valid_iloc_2][col_2]):
                 return df_1, df_2
+        else:
+            if dtype_1 == dtype_2:
+                return df_1, df_2
+        #-------------------------
+        # If the dtype is object, it is uncertain exactly how it should be treated, UNLESS
+        #   it is a string or a list
+        if is_object_dtype(dtype_1):
+            if df_1.iloc[frst_valid_iloc_1][col_1] is None:
+                assert(df_2.iloc[frst_valid_iloc_2][col_2] is not None)
+                df_1 = convert_col_type(
+                    df                = df_1, 
+                    column            = col_1, 
+                    to_type           = dtype_2, 
+                    to_numeric_errors = 'coerce', 
+                    inplace           = False
+                )                
+            elif isinstance(df_1.iloc[frst_valid_iloc_1][col_1], str):
+                dtype_1 = str
+            elif isinstance(df_1.iloc[frst_valid_iloc_1][col_1], list):
+                dtype_1 = list
+                df_2[col_2] = df_2[col_2].apply(lambda x: [x])
+                return df_1, df_2
+            else:
+                print(f'col_1={col_1} in df_1 is object type, but not string or list')
+                print('NOT SURE HOW TO HANDLE!!!!!')
+                if assert_success:
+                    assert(0)
+                else:
+                    return df_1, df_2
     #-------------------------
     # At this point, if dtype_1 was an object, it must be a string
     # If it was a list, it would have been handled in elif, and if it was anything else
     #   it would have been handled in else
+    # One other (much less common) possibility: df_1 and/or df_2 are empty
     #-----
     try:
         df_2 = convert_col_type(
-            df=df_2, 
-            column=col_2, 
-            to_type=dtype_1, 
-            to_numeric_errors='coerce', 
-            inplace=False
+            df                = df_2, 
+            column            = col_2, 
+            to_type           = dtype_1, 
+            to_numeric_errors = 'coerce', 
+            inplace           = False
         )
     except:
         if allow_reverse_set:
             try:
                 # NOTE: Import allow_reverse_set=False below to avoid infinite loop!
                 df_2, df_1 = make_df_col_dtypes_equal(
-                    df_1=df_2, 
-                    col_1=col_2, 
-                    df_2=df_1, 
-                    col_2=col_1, 
-                    allow_reverse_set=False, 
-                    assert_success=assert_success
+                    df_1              = df_2, 
+                    col_1             = col_2, 
+                    df_2              = df_1, 
+                    col_2             = col_1, 
+                    allow_reverse_set = False, 
+                    assert_success    = assert_success
                 )
             except:
                 # if assert_success below will handle failure
@@ -259,9 +367,18 @@ def make_df_col_dtypes_equal(
         assert(df_1[col_1].dtype == df_2[col_2].dtype)
     #-------------------------
     return df_1, df_2
+    
 
-#---------------------------------------------------------------------
-def convert_col_type_with_to_numeric(df, column, to_type, errors='coerce', inplace=True):
+#----------------------------------------------------------------------------------------------------
+# !!!!!!!!!!!!!! Probably want to look into pd.convert_dtypes for use in (or possibly to replace) the following functions!
+#----------------------------------------------------------------------------------------------------
+def convert_col_type_with_to_numeric(
+        df      , 
+        column  , 
+        to_type , 
+        errors  = 'coerce', 
+        inplace = True
+    ):
     r"""
     Documentation
     """
@@ -276,7 +393,14 @@ def convert_col_type_with_to_numeric(df, column, to_type, errors='coerce', inpla
     #-------------------------
     return df
 
-def convert_col_type_with_astype(df, column, to_type, inplace=True):
+#--------------------------------------------------
+def convert_col_type_with_astype(
+    df      , 
+    column  , 
+    to_type , 
+    inplace = True
+):
+    #-------------------------
     r"""
     Sometimes, conversions are annoying, and an intermediate conversion is needed
       e.g., when I used to convert 'OUTG_REC_NB' with similar methods from string to int (I use
@@ -293,10 +417,10 @@ def convert_col_type_with_astype(df, column, to_type, inplace=True):
     if Utilities.is_object_one_of_types(to_type, [list, tuple]):
         for tp_i in to_type:
             df = convert_col_type_with_astype(
-                df=df, 
-                column=column, 
-                to_type=tp_i, 
-                inplace=True # inplace already handled for entire df at top
+                df      = df, 
+                column  = column, 
+                to_type = tp_i, 
+                inplace = True # inplace already handled for entire df at top
             )
         return df
     #-------------------------
@@ -305,7 +429,15 @@ def convert_col_type_with_astype(df, column, to_type, inplace=True):
     #-------------------------
     return df
 
-def convert_col_type_w_pd_to_datetime(df, column, inplace=True):
+#--------------------------------------------------
+def convert_col_type_w_pd_to_datetime(
+    df          , 
+    column      , 
+    format      = None, 
+    output_strf = None, 
+    inplace     = True
+):
+    #-------------------------
     r"""
     Only converts a single column at a time.  For multiple columns, see convert_col_types.
     """
@@ -313,14 +445,25 @@ def convert_col_type_w_pd_to_datetime(df, column, inplace=True):
     if not inplace:
         df = df.copy()
     #-------------------------
-    df[column] = pd.to_datetime(df[column])
+    df[column] = pd.to_datetime(
+        df[column], 
+        format = format
+    )
+    #-------------------------
+    if output_strf is not None:
+        df[column] = df[column].dt.strftime(output_strf)
     #-------------------------
     return df
 
-def change_empty_entries_in_col_and_convert_to_type(df, column, 
-                                                    empty_entry='', replace_with=np.nan, 
-                                                    col_to_type=float, 
-                                                    inplace=True):
+#--------------------------------------------------
+def change_empty_entries_in_col_and_convert_to_type(
+        df           , 
+        column       , 
+        empty_entry  = '', 
+        replace_with = np.nan, 
+        col_to_type  = float, 
+        inplace      = True
+    ):
     r"""
     NOTE: The method convert_col_type_with_to_numeric now handles the original intention of this function.
           However, this function is kept as it still may be useful in the future.
@@ -352,7 +495,14 @@ def change_empty_entries_in_col_and_convert_to_type(df, column,
     #-------------------------
     return df
 
-def convert_col_type(df, column, to_type, to_numeric_errors='coerce', inplace=True):
+#--------------------------------------------------
+def convert_col_type(
+        df                ,  
+        column            , 
+        to_type           , 
+        to_numeric_errors = 'coerce', 
+        inplace           = True
+    ):
     r"""
     Convert the type of column in df to to_type
     If:
@@ -398,9 +548,11 @@ def convert_col_type(df, column, to_type, to_numeric_errors='coerce', inplace=Tr
         )
     elif to_type is datetime.datetime or is_datetime64_dtype(to_type):
         df = convert_col_type_w_pd_to_datetime(
-            df=df, 
-            column=column, 
-            inplace=True
+            df          = df, 
+            column      = column, 
+            format      = None, 
+            output_strf = None, 
+            inplace     = True 
         )
     elif isinstance(to_type, dict):
         df = change_empty_entries_in_col_and_convert_to_type(
@@ -418,6 +570,7 @@ def convert_col_type(df, column, to_type, to_numeric_errors='coerce', inplace=Tr
     #-------------------------
     return df
 
+#--------------------------------------------------
 def convert_col_types(df, cols_and_types_dict, to_numeric_errors='coerce', inplace=True):
     r"""
     Documentation
@@ -441,9 +594,49 @@ def convert_col_types(df, cols_and_types_dict, to_numeric_errors='coerce', inpla
         )
     return df
 
-#---------------------------------------------------------------------
 
-#---------------------------------------------------------------------
+#--------------------------------------------------
+def ensure_dt_cols(
+    df      ,
+    dt_cols 
+):
+    r"""
+    Checks if dt_cols are datetime objects, and, if not, converts them
+
+    df:
+        pd.DataFrame or dict with pd.DataFrame values
+    dt_cols:
+        list of columns to check/convert
+    """
+    #--------------------------------------------------
+    assert(isinstance(dt_cols, list))
+    assert(Utilities.is_object_one_of_types(df, [pd.DataFrame, dict]))
+    #--------------------------------------------------
+    if isinstance(df, dict):
+        for key_i in df.keys():
+            df[key_i] = ensure_dt_cols(
+                df      = df[key_i], 
+                dt_cols = dt_cols
+            )
+        return df
+    #--------------------------------------------------
+    assert(isinstance(df, pd.DataFrame))
+    assert(set(dt_cols).difference(set(df.columns.tolist()))==set())
+    for col_i in dt_cols:
+        if not is_datetime64_dtype(df[col_i]):
+            df = convert_col_type_w_pd_to_datetime(
+                df          = df, 
+                column      = col_i, 
+                format      = None, 
+                output_strf = None, 
+                inplace     = True
+            )
+        assert(is_datetime64_dtype(df[col_i]))
+    #--------------------------------------------------
+    return df
+
+#----------------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------
 def prepend_level_to_MultiIndex(df, level_val, level_name=None, axis=0):
     r"""
     Prepend a level to a MultiIndex; i.e., add a new lowest level.
@@ -458,10 +651,12 @@ def prepend_level_to_MultiIndex(df, level_val, level_name=None, axis=0):
     df = pd.concat({level_val: df}, names=[level_name], axis=axis)
     return df
 
+#--------------------------------------------------
 def prepend_levels_to_MultiIndex(
     df, 
     n_levels_to_add, 
-    dummy_col_levels_prefix='dummy'
+    dummy_col_levels_prefix='dummy', 
+    axis=1
 ):
     r"""
     """
@@ -473,11 +668,12 @@ def prepend_levels_to_MultiIndex(
             df=df, 
             level_val=i_level_val, 
             level_name=None, 
-            axis=1
+            axis=axis
         )
     #-------------------------
     return df
 
+#--------------------------------------------------
 def flatten_multiindex_index(df, inplace=True):
     # This basically just calls reset_index on all levels of df except for the 0th level
     # The motivation for this development was for use after creating an aggregate df with 
@@ -500,6 +696,7 @@ def flatten_multiindex_index(df, inplace=True):
         df = df.reset_index(level=list(range(1, n_levels)))   
     return df
 
+#--------------------------------------------------
 def get_flattened_multiindex_columns(df_columns, join_str = ' ', reverse_order=True, to_ignore=['first']):
     # The level=0 value is always kept, as this is typically e.g. the measurement
     # For all other levels, if any element in to_ignore is found, that level is ignored
@@ -526,7 +723,7 @@ def get_flattened_multiindex_columns(df_columns, join_str = ' ', reverse_order=T
         rename_dict[orig_col] = new_col
     return rename_dict
 
-
+#--------------------------------------------------
 def flatten_multiindex_columns(df, join_str = ' ', reverse_order=True, to_ignore=['first'], inplace=True):
     # The level=0 value is always kept, as this is typically e.g. the measurement
     # For all other levels, if any element in to_ignore is found, that level is ignored
@@ -555,7 +752,7 @@ def flatten_multiindex_columns(df, join_str = ' ', reverse_order=True, to_ignore
         df = df.rename(columns=rename_dict)
     return df
 
-
+#--------------------------------------------------
 def flatten_multiindex(df, flatten_index=False, flatten_columns=False, inplace=True, 
                        index_args={}, column_args={}):
     # column_args can be any arguments in flatten_multiindex_columns except for df and inplace (as those are handled explicitly)
@@ -570,9 +767,62 @@ def flatten_multiindex(df, flatten_index=False, flatten_columns=False, inplace=T
     if flatten_columns:
         df = flatten_multiindex_columns(df, inplace=inplace, **column_args)
     return df
+
+#----------------------------------------------------------------------------------------------------
+def change_idx_names_andor_order(
+    df, 
+    rename_idxs_dict=None, 
+    final_idx_order=None, 
+    inplace=True
+):
+    r"""
+    rename_idxs_dict:
+        If supplied, this must be a dictionary mapping the original index names to the new names.
+          i.e., the key values must equal the df.index.names
+    final_idx_order:
+        If supplied, the output DF will have it's index re-ordered to match final_idx_order
+        **** IMPORTANT *** If some of the df.index.names are not contained in final_idx_order, THE CORRESPONDING LEVELS WILL BE DROPPED FROM THE RETURNED DF
+        If rename_idxs_dict is supplied:
+            ==> final_idx_order and rename_idxs_dict.values() must contain the same elements (not necessarily in the same order though)
+        If rename_idxs_dict is not supplied:
+            ==> final_idx_order and df.index.names loaded in function must contain the same elements (not necessarily in the same order though)
+    """
+    #--------------------------------------------------
+    if rename_idxs_dict is None and final_idx_order is None:
+        return df
+    #--------------------------------------------------
+    # This method really requires the index levels to be uniquely named
+    assert(all([x is not None for x in df.index.names]))
+    assert(len(set(df.index.names))==df.index.nlevels)
+    #--------------------------------------------------
+    if not inplace:
+        df = df.copy()
+    #--------------------------------------------------
+    if rename_idxs_dict is not None:
+        assert(isinstance(rename_idxs_dict, dict))
+        #-------------------------
+        # Any df.index.names not included in rename_idxs_dict are injected as rename_idxs_dict[x] = x (i.e., they will be left unchanged)
+        if set(df.index.names).difference(set(rename_idxs_dict.keys()))!=set():
+            rename_idxs_dict = rename_idxs_dict | {x:x for x in df.index.names if x not in rename_idxs_dict.keys()}
+        #-------------------------
+        assert(set(df.index.names).difference(set(rename_idxs_dict.keys()))==set())
+        df.index.names = [rename_idxs_dict[x] for x in df.index.names]
+    #--------------------------------------------------
+    if final_idx_order is not None:
+        assert(isinstance(final_idx_order, list))
+        #-------------------------
+        idx_levels_to_drop = list(set(df.index.names).difference(set(final_idx_order)))
+        if len(idx_levels_to_drop) > 0:
+            for idx_level_i in idx_levels_to_drop:
+                df = df.droplevel(level=idx_level_i, axis=0)
+        #-------------------------
+        assert(set(df.index.names).symmetric_difference(set(final_idx_order))==set())
+        df = df.reorder_levels(order=final_idx_order, axis=0)
+    #--------------------------------------------------
+    return df
     
   
-#---------------------------------------------------------------------  
+#----------------------------------------------------------------------------------------------------
 def find_idxs_in_highest_order_of_columns(df, col, exact_match=True, assert_single=False):
     r"""
     Find where col occurs in highest order of MultiIndex columns
@@ -589,6 +839,7 @@ def find_idxs_in_highest_order_of_columns(df, col, exact_match=True, assert_sing
     else:
         return tagged_idxs
     
+#--------------------------------------------------
 def find_single_col_in_multiindex_cols(df, col):
     r"""
     Find where col occurs in highest order of MultiIndex columns, assert only one instance
@@ -621,6 +872,7 @@ def find_single_col_in_multiindex_cols(df, col):
     return_col = df.columns.tolist()[col_idx]
     return return_col
     
+#--------------------------------------------------
 def find_col_idxs_with_regex(
     df, 
     regex_pattern, 
@@ -640,6 +892,7 @@ def find_col_idxs_with_regex(
     )
     return found_idxs
 
+#--------------------------------------------------
 def find_cols_with_regex(
     df, 
     regex_pattern, 
@@ -659,8 +912,182 @@ def find_cols_with_regex(
     )
     return df.columns[found_idxs].tolist()
     
+
+#--------------------------------------------------
+def find_idxs_in_lowest_order_of_columns(
+    df, 
+    regex_pattern, 
+    ignore_case=False
+):
+    r"""
+    Find columns with regex_pattern in lowest order of MultiIndex columns
+    This will work with normal columns as well
+
+    Returns a list of found indices (list of integers) and the column level where the regex_pattern was matched.
+      i.e., returns (found_idxs, i_lvl) = (list, int)
+    If regex_pattern not matched, empty list and -1 returned
+    """
+    #-------------------------
+    for i_lvl in range(df.columns.nlevels):
+        level_vals = df.columns.get_level_values(i_lvl).tolist()
+        found_idxs = Utilities.find_idxs_in_list_with_regex(
+            lst           = level_vals, 
+            regex_pattern = regex_pattern, 
+            ignore_case   = ignore_case
+        )
+        if len(found_idxs)>0:
+            break
+    #-------------------------
+    if len(found_idxs)==0:
+        return found_idxs, -1
+    else:
+        return found_idxs, i_lvl
+        
+
+#--------------------------------------------------        
+def build_column_name_of_n_levels(
+    nlevels, 
+    level_0_val         = None,
+    level_nm1_val       = None, 
+    dummy_lvl_base_name = 'dummy_lvl_', 
+    level_vals_dict     = None
+):
+    r"""
+    This essentially just returns a tuple of length nlevels which can be used to name a MultiIndex column.
+    By default, each column level (i.e., each element of the tuple) will be named f'{dummy_lvl_base_name}_{0}' to
+      f'{dummy_lvl_base_name}_{nlevels}'.
+    If level_0_val/level_nm1_val/level_vals_dict are supplied, the names are changed accordingly (see more info below).
+
+    level_0_val:
+        The name to use for the 0th level value.
+        Overrides any value supplied in level_vals_dict
+    level_nm1_val:
+        The name to use for the last level's value (the n minus 1, or nm1, value).
+        Overrides any value supplied in level_vals_dict
+    level_vals_dict:
+        A dictionary object supplying names to be used for the various levels.
+        The dictionary must have keys of integer value between 0 and nlevels-1
+        If level_0_val or level_nm1_val are supplied, those override the values supplied by level_vals_dict
     
-#--------------------------------------------------------------------- 
+    """
+    #--------------------------------------------------
+    if level_vals_dict is not None:
+        assert(isinstance(level_vals_dict, dict))
+    else:
+        level_vals_dict = {}
+    #-------------------------
+    if dummy_lvl_base_name is None:
+        dummy_lvl_base_name = ''
+    #--------------------------------------------------
+    return_names_dict = {}
+    #-----
+    for i_lvl in range(nlevels):
+        assert(i_lvl not in return_names_dict.keys())
+        return_names_dict[i_lvl] = level_vals_dict.get(
+            i_lvl, 
+            f'{dummy_lvl_base_name}{i_lvl}'
+        )
+    #--------------------------------------------------
+    if level_0_val is not None:
+        return_names_dict[0] = level_0_val
+    if level_nm1_val is not None and nlevels>1:
+        return_names_dict[len(return_names_dict)-1] = level_nm1_val
+    #--------------------------------------------------
+    # Could simply use return_names_dict.values(), but this makes 100% sure the order is correct
+    assert(len(return_names_dict)==nlevels)
+    return_col = []
+    for i_lvl in range(nlevels):
+        return_col.append(return_names_dict[i_lvl])
+    #--------------------------------------------------
+    if len(return_col)==1:
+        return return_col[0]
+    else:
+        return tuple(return_col)
+
+#--------------------------------------------------
+def build_column_for_df(
+    df, 
+    input_col             = None, 
+    level_0_val           = None,
+    level_nm1_val         = None, 
+    dummy_lvl_base_name   = 'dummy_lvl_', 
+    level_vals_dict       = None,
+    insert_input_at_front = True
+):
+    r"""
+    Build a column name with the correct number of levels for df (e.g., when df has MultiIndex columns).
+    If input_col is supplied, this method essentially modifies it to have the appropriate number of levels for df.
+    This utilizes Utilities_df.build_column_name_of_n_levels (see documentation for more info).
+    
+    input_col:
+        If supplied, must be a string or a tuple, and will be used to build the final output column
+    """
+    #--------------------------------------------------
+    nlevels = df.columns.nlevels
+    col_name_0 = build_column_name_of_n_levels(
+        nlevels             = nlevels, 
+        level_0_val         = level_0_val,
+        level_nm1_val       = level_nm1_val, 
+        dummy_lvl_base_name = dummy_lvl_base_name, 
+        level_vals_dict     = level_vals_dict
+    )
+    #--------------------------------------------------
+    if input_col is None:
+        return col_name_0
+    #--------------------------------------------------
+    assert(Utilities.is_object_one_of_types(input_col, [str, tuple]))
+    if nlevels==1:
+        if isinstance(input_col, str):
+            return input_col
+        else:
+            assert(isinstance(input_col, tuple))
+            return input_col[0]
+    else:
+        # Need to adjust col_name_0, so must be list instead of tuple!
+        col_name_0 = list(col_name_0)
+        if isinstance(input_col, str):
+            if insert_input_at_front:
+                col_name_0[0] = input_col
+            else:
+                col_name_0[-1] = input_col
+        else:
+            assert(len(input_col) <= nlevels)
+            if insert_input_at_front:
+                col_name_0 = list(input_col) + col_name_0[len(input_col):]
+            else:
+                col_name_0 = col_name_0[:-len(input_col)] + list(input_col)
+        #-------------------------
+        # Convert back to tuple
+        col_name_0 = tuple(col_name_0)
+        #-------------------------
+        return col_name_0
+    
+#----------------------------------------------------------------------------------------------------
+def name_all_index_levels(
+    df
+):
+    r"""
+    Returns (df, idx_names_new, idx_names_org) where
+        df:
+            The input df with all index levels named
+        idx_names_new:
+            The new index level names (consisting of any already present in df and those needed (re-)named)
+        idx_names_org:
+            The original index level names
+    """
+    #--------------------------------------------------
+    idx_names_org = list(df.index.names)
+    idx_names_new = [
+        x if (x is not None and x not in df.columns.tolist()) else Utilities.generate_random_string(str_len=10, letters='letters_only') 
+        for x in df.index.names
+    ]
+    #-------------------------
+    df.index.names = idx_names_new
+    #-------------------------
+    return (df, idx_names_new, idx_names_org)
+    
+    
+#----------------------------------------------------------------------------------------------------
 def get_idfr_loc(
     df, 
     idfr
@@ -714,12 +1141,58 @@ def get_idfr_loc(
     #-------------------------
     assert(idfr_idx_lvl < df.index.nlevels)
     return (idfr_idx_lvl, True) 
+
+#--------------------------------------------------    
+def get_vals_from_df(df, idfr, unique=False):
+    r"""
+    Extract the values from a df.
+      
+    Return Value:
+        If outg_rec_nbs are stored in a column of df, the returned object will be a pd.Series
+        If outg_rec_nbs are stored in the index, the returned object will be a pd index.
+        If one wants the returned object to be a list, use get_outg_rec_nbs_list_from_df
+
+    idfr:
+        This directs from where the outg_rec_nbs will be retrieved.
+        This should be a string, list, or tuple.
+        If the outg_rec_nbs are located in a column, idfr should simply be the column
+            - Single index columns --> simple string
+            - MultiIndex columns   --> appropriate tuple to identify column
+        If the outg_rec_nbs are located in the index:
+            - Single level index --> simple string 'index' or 'index_0'
+            - MultiIndex index:  --> 
+                - string f'index_{level}', where level is the index level containing the outg_rec_nbs
+                - tuple of length 2, with 0th element ='index' and 1st element = idx_level_name where
+                    idx_level_name is the name of the index level containing the outg_rec_nbs 
+    """
+    #-------------------------
+    assert(Utilities.is_object_one_of_types(idfr, [str, list, tuple]))
+    # NOTE: pd doesn't like checking for idfr in df.columns if idfr is a list.  It is fine checking when
+    #       it is a tuple, as tuples can represent columns.  Therefore, if idfr is a list, convert to tuple
+    #       as this will fix the issue below and have no effect elsewhere.
+    if isinstance(idfr, list):
+        idfr = tuple(idfr)
+    if idfr in df.columns:
+        if unique:
+            return df[idfr].unique().tolist()
+        else:
+            return df[idfr]
+    #-------------------------
+    idfr_idx_lvl = get_idfr_loc(df=df, idfr=idfr)
+    assert(idfr_idx_lvl[1])
+    idfr_idx_lvl = idfr_idx_lvl[0]
+    if unique:
+        return df.index.get_level_values(idfr_idx_lvl).unique().tolist()
+    else:
+        return df.index.get_level_values(idfr_idx_lvl)
     
-    
+
+#--------------------------------------------------    
 def prep_df_for_merge(
     df, 
     merge_on, 
-    inplace=False
+    inplace=False, 
+    return_reset_idx_called=False
 ):
     r"""
     Helper function for new version of merge_rcpx_with_eemsp.
@@ -752,6 +1225,7 @@ def prep_df_for_merge(
     # If an index level does not have a name, it will be named f'idx_{level}'
     # Before calling reset_index, if any of the index level names is already found in the columns (probably shouldn't 
     #   happen, but can) all of the index names will be given an random suffix
+    reset_idx_called = False
     if merge_needs_idx:
         # Name any unnamed
         df.index.names = [name_i if name_i else f'idx_{i}' for i,name_i in enumerate(df.index.names)]
@@ -769,6 +1243,7 @@ def prep_df_for_merge(
         #-------------------------
         # As promised, reset the index
         df = df.reset_index()
+        reset_idx_called = True
     else:
         merge_on = [x[0] for x in merge_on_locs]
 
@@ -783,14 +1258,442 @@ def prep_df_for_merge(
     assert(all([x in df.columns.tolist() for x in merge_on]))
     
     #-------------------------
-    return df, merge_on
+    if return_reset_idx_called:
+        return df, merge_on, reset_idx_called
+    else:
+        return df, merge_on
+
+#--------------------------------------------------
+def is_df_index_simple(
+    df, 
+    assert_normal=False
+):
+    r"""
+    A simple index is single-leveled with values between 0 and df.shape[0]-1 AND no repeat indices
+    If assert_normal==True, then index must be 0, 1, 2, 3, ..., df.shape[0]-2, df.shape[0]-1 or else False will be returned
+    """
+    #-------------------------
+    if df.index.nlevels>1:
+        return False
+    #-------------------------
+    if set(df.index).symmetric_difference(set(range(df.shape[0]))) != set():
+        return False
+    #-------------------------
+    if(
+        assert_normal and 
+        not pd.Index(range(df.shape[0])).equals(df.index)
+    ):
+        return False
+    #-------------------------
+    return True
+
+#--------------------------------------------------    
+def merge_dfs(
+    df_1, 
+    df_2, 
+    merge_on_1, 
+    merge_on_2, 
+    how='inner', 
+    final_index=None, 
+    dummy_col_levels_prefix = 'dummy_lvl'
+):
+    r"""
+    A tweak to pd.merge.
+    This makes is easier to merge on any mixture of indices and/or columns
+    
+    merge_on_1/_2:
+        See get_idfr_loc for explanation!
+
+    final_index:
+        Note: for this more flexible merge to work, df_1 and df_2 may have .reset_index called on them. 
+        This determines what the output index in the returned pd.DataFrame object will be.
+        Acceptable values = [None, '1', 1, '2', 2, 'merged']
+        None:
+            Results returned as they are without any modification
+        1/'1':
+            The returned pd.DataFrame will have the same index as the input df_1
+        2/'2':
+            The returned pd.DataFrame will have the same index as the input df_2
+        'merged':
+            The index in the returned pd.DataFrame will be equal to the merged columns/indices
+    """
+    #----------------------------------------------------------------------------------------------------
+    assert(final_index in [None, '1', 1, '2', 2, 'merged'])
+    #-------------------------
+    df_1 = df_1.copy()
+    df_2 = df_2.copy()
+    #-------------------------
+    if isinstance(merge_on_1, list) or isinstance(merge_on_2, list):
+        assert(isinstance(merge_on_1, list) and isinstance(merge_on_2, list))
+        assert(len(merge_on_1)==len(merge_on_2))
+    else:
+        # prep_df_for_merge wants list inputs
+        merge_on_1 = [merge_on_1]
+        merge_on_2 = [merge_on_2]
+    #-------------------------
+    # Grab original index names, in case need restored at end
+    idx_names_1_og = df_1.index.names
+    idx_names_2_og = df_2.index.names
+    #-------------------------
+    # Life is much easier when all index levels have names, so name any unnamed
+    df_1.index.names = [name_i if name_i else f'idx_{i}' for i,name_i in enumerate(df_1.index.names)]
+    df_2.index.names = [name_i if name_i else f'idx_{i}' for i,name_i in enumerate(df_2.index.names)]
+    #-----
+    idx_names_1 = df_1.index.names
+    idx_names_2 = df_2.index.names
+    
+    #----------------------------------------------------------------------------------------------------
+    # Prep the dfs (1)
+    df_1, merge_on_1, reset_idx_called_1 = prep_df_for_merge(
+        df                      = df_1, 
+        merge_on                = merge_on_1,
+        inplace                 = True, 
+        return_reset_idx_called = True
+    )
+    if reset_idx_called_1:
+        idx_names_1 = [find_single_col_in_multiindex_cols(df=df_1, col=x) for x in idx_names_1]
+    #-----
+    df_2, merge_on_2, reset_idx_called_2 = prep_df_for_merge(
+        df       = df_2, 
+        merge_on = merge_on_2,
+        inplace  = True, 
+        return_reset_idx_called=True
+    )
+    if reset_idx_called_2:
+        idx_names_2 = [find_single_col_in_multiindex_cols(df=df_2, col=x) for x in idx_names_2]    
+
+    #----------------------------------------------------------------------------------------------------
+    # Prep the dfs (2)
+    # In order to merge, df_1 and df_2 must have the same number of levels of columns
+    if dummy_col_levels_prefix is None:
+        dummy_col_levels_prefix = Utilities.generate_random_string(str_len=4, letters='letter_only')
+    #-----
+    if df_1.columns.nlevels != df_2.columns.nlevels:
+        if df_1.columns.nlevels > df_2.columns.nlevels:
+            n_levels_to_add = df_1.columns.nlevels - df_2.columns.nlevels
+            #-----
+            df_2 = prepend_levels_to_MultiIndex(
+                df=df_2, 
+                n_levels_to_add=n_levels_to_add, 
+                dummy_col_levels_prefix=dummy_col_levels_prefix
+            )
+            #-----
+            # Get new MultiIndex versions of merge_on_2
+            merge_on_2 = [find_single_col_in_multiindex_cols(df=df_2, col=x) for x in merge_on_2]
+        elif df_1.columns.nlevels < df_2.columns.nlevels:
+            n_levels_to_add = df_2.columns.nlevels - df_1.columns.nlevels
+            #-----
+            df_1 = prepend_levels_to_MultiIndex(
+                df=df_1, 
+                n_levels_to_add=n_levels_to_add, 
+                dummy_col_levels_prefix=dummy_col_levels_prefix
+            )
+            #-----
+            # Get new MultiIndex versions of merge_on_1
+            merge_on_1 = [find_single_col_in_multiindex_cols(df=df_1, col=x) for x in merge_on_1]        
+        else:
+            assert(0)
+        
+    #----------------------------------------------------------------------------------------------------
+    # Perform the merge
+    df_1, df_2 = make_df_col_dtypes_equal(
+        df_1              = df_1, 
+        col_1             = merge_on_1, 
+        df_2              = df_2, 
+        col_2             = merge_on_2, 
+        allow_reverse_set = True, 
+        assert_success    = True, 
+        inplace           = True
+    )
+    assert(
+        df_1[merge_on_1].dtypes.tolist() ==
+        df_2[merge_on_2].dtypes.tolist()
+    )
+    #-----
+    return_df = pd.merge(
+        df_1, 
+        df_2, 
+        left_on  = merge_on_1, 
+        right_on = merge_on_2, 
+        how      = how
+    )
+    
+    #----------------------------------------------------------------------------------------------------
+    if final_index==1 or final_index=='1':
+        if return_df.index.names != idx_names_1:
+            if set(return_df.index.names) == set(idx_names_1):
+                # Same names, different order
+                return_df = return_df.reorder_levels(idx_names_1)
+            else:
+                assert(set(idx_names_1).difference(set(return_df.columns.tolist()))==set())
+                drop_idx = is_df_index_simple(df=return_df, assert_normal=False)
+                return_df = return_df.reset_index(
+                    drop      = drop_idx, 
+                    col_level = -1
+                ).set_index(idx_names_1)
+        assert(return_df.index.names == idx_names_1)
+        return_df.index.names = idx_names_1_og
+    #--------------------------------------------------
+    elif final_index==2 or final_index=='2':
+        if return_df.index.names != idx_names_2:
+            if set(return_df.index.names) == set(idx_names_2):
+                # Same names, different order
+                return_df = return_df.reorder_levels(idx_names_2)
+            else:
+                assert(set(idx_names_2).difference(set(return_df.columns.tolist()))==set())
+                drop_idx = is_df_index_simple(df=return_df, assert_normal=False)
+                return_df = return_df.reset_index(
+                    drop      = drop_idx, 
+                    col_level = -1
+                ).set_index(idx_names_2)
+        assert(return_df.index.names == idx_names_2)
+        return_df.index.names = idx_names_2_og
+    #--------------------------------------------------
+    elif final_index=='merged':
+        return_df = return_df.set_index(merge_on_1)
+    #--------------------------------------------------
+    else:
+        assert(final_index is None)
+    
+    #----------------------------------------------------------------------------------------------------
+    # Resolve any ugly resulting index names, e.g., [('outg_rec_nb', ''), ('trsf_pole_nb', '')]
+    #   i.e., if name_i is a tuple where 0th element is not empty but all other are, then change
+    #         name to 0th element
+    fnl_idx_names = []
+    for idx_name_i in return_df.index.names:
+        if(
+            isinstance(idx_name_i, tuple) and 
+            idx_name_i[0] and
+            not any([True if idx_name_i[i] else False for i in range(1, len(idx_name_i))])
+        ):
+            fnl_idx_names.append(idx_name_i[0])
+        else:
+            fnl_idx_names.append(idx_name_i)
+    return_df.index.names = fnl_idx_names
+
+    #----------------------------------------------------------------------------------------------------
+    # NOTE: If merge_on_1 and merge_on_2 columns are the same, after merge only one will remain, and 
+    #       do not want to drop in such a case!
+    # NOTE: It would be mostly safe to call: return_df.drop(columns=list(set(merge_on_2).difference(merge_on_1)))
+    #       However, this method is safest
+    cols_to_drop=[]
+    for i_col in range(len(merge_on_1)):
+        if merge_on_2[i_col] != merge_on_1[i_col]:
+            cols_to_drop.append(merge_on_2[i_col])
+    #-----
+    # Depending on how index was set above, some of cols_to_drop may no tbe present anymore
+    cols_to_drop = [x for x in cols_to_drop if x in return_df.columns.tolist()]
+    if cols_to_drop:
+        return_df = return_df.drop(columns=cols_to_drop)
+    
+    #----------------------------------------------------------------------------------------------------
+    return return_df
     
     
-#--------------------------------------------------------------------- 
+#----------------------------------------------------------------------------------------------------
+def concat_dfs(
+    dfs                  , 
+    axis                 = 0, 
+    make_col_types_equal = False
+):
+    r"""
+    Previously, one could simply call pd.concat(dfs).
+    However, Pandas now generates the below FutureWarning when an element of list fed to pd.concat is empty.
+        FutureWarning: The behavior of array concatenation with empty entries is deprecated. In a future version, this will no longer exclude empty 
+          items when determining the result dtype. To retain the old behavior, exclude the empty entries before the concat operation.
+    In most all of our applications, this should not have any consequential effect.
+    However, this function is now supplied to eliminate the annoying warning message from popping up everywhere.
+    I have tried many solutions, the one that seems to work most times is trying to ensure all dfs have the same data types!
+
+    make_col_types_equal:
+        If there are many pd.DataFrame objects in dfs, this should be set to False!
+        This will make the concatenation MUCH slower for long lists!!!!!
+    """
+    #-------------------------
+    dfs_to_concat = [
+        x for x in dfs 
+        if x is not None and x.shape[0]>0
+    ]
+    #-------------------------
+    if make_col_types_equal:
+        # I don't think this necessarily guarantees all will have the same dtypes,
+        #   but in most all cases this will do the trick
+        for i in range(len(dfs_to_concat)):
+            for j in range(i+1, len(dfs_to_concat)):
+                ovrlp_cols = list(set(dfs_to_concat[i].columns.tolist()).intersection(set(dfs_to_concat[j].columns.tolist())))
+                try:
+                    df_i, df_j = make_df_col_dtypes_equal(
+                        df_1              = dfs_to_concat[i], 
+                        col_1             = ovrlp_cols, 
+                        df_2              = dfs_to_concat[j], 
+                        col_2             = ovrlp_cols, 
+                        allow_reverse_set = True, 
+                        assert_success    = True
+                    )
+                except:
+                    df_i, df_j = dfs_to_concat[i], dfs_to_concat[j]
+                dfs_to_concat[i] = df_i
+                dfs_to_concat[j] = df_j
+    #-------------------------
+    return_df = pd.concat(
+        dfs_to_concat, 
+        axis = axis
+    )
+    return return_df
+
+
+#----------------------------------------------------------------------------------------------------
+def concat_dfs_in_dir(
+    dir_path             , 
+    regex_pattern        = None, 
+    ignore_case          = False, 
+    ext                  = '.pkl', 
+    make_col_types_equal = False, 
+    return_paths         = False
+):
+    r"""
+    """
+    #--------------------------------------------------
+    assert(os.path.isdir(dir_path))
+    #-------------------------
+    if ext[0] != '.':
+        ext = '.' + ext
+    #-----
+    accptbl_exts  = ['.pkl', '.csv']
+    assert(ext in accptbl_exts)
+    #--------------------------------------------------
+    files_in_dir = [
+        os.path.join(dir_path, x) for x in os.listdir(dir_path) 
+        if (
+            os.path.isfile(os.path.join(dir_path, x)) and
+            os.path.splitext(x)[1] == ext
+        )
+    ]
+    assert(len(files_in_dir) > 0)
+    #-------------------------
+    if regex_pattern is not None:
+        files_in_dir = Utilities.find_in_list_with_regex(
+            lst           = files_in_dir, 
+            regex_pattern = regex_pattern, 
+            ignore_case   = ignore_case    
+        )
+        assert(len(files_in_dir) > 0)
+    #--------------------------------------------------
+    dfs = []
+    for path_i in files_in_dir:
+        if ext=='.pkl':
+            df_i = pd.read_pickle(path_i)
+        elif ext=='.csv':
+            df_i = pd.read_csv(path_i)
+        else:
+            assert(0)
+        #-------------------------
+        dfs.append(df_i)
+    #-------------------------
+    return_df = concat_dfs(
+        dfs                  = dfs, 
+        axis                 = 0, 
+        make_col_types_equal = make_col_types_equal
+    )
+    #-------------------------
+    if return_paths:
+        return return_df, files_in_dir
+    return return_df
+    
+    
+#----------------------------------------------------------------------------------------------------
+def get_true_block_begend_idxs_in_srs(
+    srs, 
+    return_expanded=False
+):
+    r"""
+    Identify continuous blocks of true in pd.Series object srs.
+    Returns a list of lists, block_begend_idxs = [block_begend_idxs_0, block_begend_idxs_1, ..., block_begend_idxs_n]
+        where, e.g., block_begend_idxs_0 contains the index locations (think iloc) of the beginning and ending locations of that block.
+        THIS IS INCLUSIVE, so (4,6) means elements 4, 5, and 6 all belong to the block
+
+    return_expanded:
+        If True, expand out the block intervals
+        ==> each element of the returned list of lists (block_begend_idxs) will contain all indices which belong to that particular block 
+              (instead of the starting and ending points)
+
+    ----- EXAMPLE -----
+        srs = pd.Series([True, False, False, True, True, True, True, True, False, False, True, True])
+        -----
+        return_expanded==False:    Return block_begend_idxs = [(0, 0), (3, 7), (10, 11)]
+        return_expanded==True:     Return block_idxs        = [[0], [3, 4, 5, 6, 7], [10, 11]]
+          
+    """
+    #--------------------------------------------------
+    assert(
+        isinstance(srs, pd.Series) and 
+        srs.dtype==bool
+    )
+    #-------------------------
+    # Build tmp_df from srs, and populate new tmp_diff_col, which will be used to identify blocks
+    tmp_df = srs.to_frame().copy()
+    col    = tmp_df.columns[0]
+    #-----
+    tmp_diff_col = Utilities.generate_random_string()
+    tmp_df[tmp_diff_col] = tmp_df[col].astype(int).diff()
+    #-----
+    tmp_diff_col_idx = find_idxs_in_highest_order_of_columns(df=tmp_df, col=tmp_diff_col, exact_match=True, assert_single=True)
+    
+    #-------------------------
+    # The .diff() operation always leaves the first element as a NaN
+    # However, if the first element value is True, then it represents the beginning
+    #   of a block and the diff should be +1
+    if tmp_df.iloc[0][col]==True:
+        tmp_df.iloc[0, tmp_diff_col_idx] = 1
+    
+    #--------------------------------------------------
+    # Continuous blocks of True begin with diff = +1 and end at the element preceding diff = -1
+    block_beg_idxs = tmp_df.reset_index().index[tmp_df[tmp_diff_col]==1].tolist()
+    #-----
+    block_end_idxs = tmp_df.reset_index().index[tmp_df[tmp_diff_col]==-1].tolist()
+    block_end_idxs = [x-1 for x in block_end_idxs]
+    # If the last entry is True, the procedure above will miss the last end idx
+    #   If single point above threshold at end of data ==> tmp_diff_col = +1
+    #   If multiple points above threshold at the end of the data, then tmp_diff_col for the last value will be 0
+    #     In this case, there does not exist a tmp_diff_col=-1 to signal the end of the block, so must add by hand
+    if tmp_df.iloc[-1][col]==1:
+        block_end_idxs.append(tmp_df.shape[0]-1)
+    #--------------------------------------------------
+    # periods of length one should have idx in both block_beg_idxs and block_end_idxs
+    len_1_pd_idxs = natsorted(set(block_beg_idxs).intersection(set(block_end_idxs)))
+    #-------------------------
+    # Remove the len_1 idxs so the remainders can be matched
+    # NOTE: The following procedure relies on block_beg(end)_idxs being sorting
+    block_beg_idxs = natsorted(set(block_beg_idxs).difference(len_1_pd_idxs))
+    block_end_idxs = natsorted(set(block_end_idxs).difference(len_1_pd_idxs))
+    assert(len(block_beg_idxs)==len(block_end_idxs))
+    block_begend_idxs = list(zip(block_beg_idxs, block_end_idxs))
+    #-------------------------
+    # Include the length 1 blocks!
+    block_begend_idxs.extend([(x,x) for x in len_1_pd_idxs])
+    #-------------------------
+    # Sort
+    block_begend_idxs = natsorted(block_begend_idxs, key=lambda x: x[0])
+    #-------------------------
+    # Sanity check!
+    for i in range(len(block_begend_idxs)):
+        assert(len(block_begend_idxs[i])==2)
+        assert(block_begend_idxs[i][1]>=block_begend_idxs[i][0])
+        if i>0:
+            assert(block_begend_idxs[i][0]>block_begend_idxs[i-1][1])
+    
+    #--------------------------------------------------
+    if return_expanded:
+        block_idxs = [list(range(x[0], x[1]+1)) for x in block_begend_idxs]
+        return block_idxs
+    else:
+        return block_begend_idxs
+    
+#----------------------------------------------------------------------------------------------------
 def get_continuous_blocks_in_df(
     df, 
     col_idfr, 
-    data_sep=pd.Timedelta('15T'), 
+    data_sep=pd.Timedelta('15min'), 
     return_endpoints=True
 ):
     r"""
@@ -808,7 +1711,7 @@ def get_continuous_blocks_in_df(
         See Utilities_df.get_idfr_loc for more information
     data_sep:
         expected separation of sequential events in data
-        e.g., for 15-minute AMI data, data_sep=set pd.Timedelta('15T')
+        e.g., for 15-minute AMI data, data_sep=set pd.Timedelta('15min')
         e.g., when looking for sequential data in integer index values, set data_sep=1
     
     return_endpoints:
@@ -893,7 +1796,198 @@ def get_continuous_blocks_in_df(
         return block_idxs
         
         
-#---------------------------------------------------------------------
+
+#----------------------------------------------------------------------------------------------------
+def get_overlapping_blocks_in_df(
+    df, 
+    intrvl_beg_col       = 'DT_OFF_TS_FULL', 
+    intrvl_end_col       = 'DT_ON_TS', 
+    return_endpoints     = True
+):
+    r"""
+    Given some pd.DataFrame, find blocks of overlapping data.
+    Returns:  tuple = (df, return_list)
+        where df is the input df sorted by [intrvl_beg_col, intrvl_end_col], as required by the procedure.
+              return_list contains the found blocks, and its form is described below under "return_endpoints"
+        
+    
+    return_endpoints:
+        True:   return_list contains only the endpoints of the blocks.
+                These endpoints are INCLUSIVE!
+        False:  return_list contains all indices in the blocks
+    """
+    #--------------------------------------------------
+    # If only one entry, cannot possibly be ovelaps!
+    if df.shape[0]<=1:
+        return []
+    #--------------------------------------------------
+    #--------------------------------------------------
+    outg_intrvl_i_col     = Utilities.generate_random_string()
+    outg_intrvl_im1_col   = Utilities.generate_random_string()
+    outg_intrvl_ip1_col   = Utilities.generate_random_string()
+    #-----
+    overlaps_im1_col      = Utilities.generate_random_string()
+    overlaps_ip1_col      = Utilities.generate_random_string()
+    overlaps_col          = Utilities.generate_random_string()
+    #-----
+    idx_col               = Utilities.generate_random_string()
+    #-----
+    tmp_addtnl_cols = [outg_intrvl_i_col, outg_intrvl_im1_col, outg_intrvl_ip1_col, overlaps_im1_col, overlaps_ip1_col, overlaps_col, idx_col]
+    assert(set(df.columns.tolist()).intersection(set(tmp_addtnl_cols))==set())
+    
+    #--------------------------------------------------
+    # df must be properly sorted for the functionality to behave as expected
+    df = df.sort_values(by=[intrvl_beg_col, intrvl_end_col])
+    #-----
+    df[idx_col] = range(df.shape[0])
+    
+    #-------------------------
+    # Set outg_intrvl_i_col, outg_intrvl_im1_col, outg_intrvl_ip1_col
+    df[outg_intrvl_i_col]   = df.apply(lambda x: pd.Interval(x[intrvl_beg_col], x[intrvl_end_col]), axis=1)
+    df[outg_intrvl_im1_col] = df[outg_intrvl_i_col].shift(1)
+    df[outg_intrvl_ip1_col] = df[outg_intrvl_i_col].shift(-1)
+    
+    #-------------------------
+    # Set dummy values for first and last rows simply so df.apply operation below can run without issue
+    #   first row --> dummy outg_intrvl_im1
+    #   last row  --> dummy outg_intrvl_ip1
+    #-----
+    outg_intrvl_im1_col_idx = find_idxs_in_highest_order_of_columns(df=df, col=outg_intrvl_im1_col, exact_match=True, assert_single=True)
+    outg_intrvl_ip1_col_idx = find_idxs_in_highest_order_of_columns(df=df, col=outg_intrvl_ip1_col, exact_match=True, assert_single=True)
+    #-----
+    df.iloc[0,  outg_intrvl_im1_col_idx] = pd.Interval(pd.Timestamp.min, pd.Timestamp.min)
+    df.iloc[-1, outg_intrvl_ip1_col_idx] = pd.Interval(pd.Timestamp.max, pd.Timestamp.max)
+    
+    #-------------------------
+    # Set overlaps_im1_col and overlaps_ip1_col, containing:
+    #   overlaps_im1_col: whether or not a row overlaps with the previous neighbor
+    #   overlaps_ip1_col: whether or not a row overlaps with the following neighbor
+    df[overlaps_im1_col] = df.apply(lambda x: x[outg_intrvl_i_col].overlaps(x[outg_intrvl_im1_col]), axis=1)
+    df[overlaps_ip1_col] = df.apply(lambda x: x[outg_intrvl_i_col].overlaps(x[outg_intrvl_ip1_col]), axis=1)
+    #-----
+    df[overlaps_col]     = df[overlaps_im1_col]|df[overlaps_ip1_col]
+    
+    #--------------------------------------------------
+    # Get overlap groups
+    #-----
+    # With the overlaps_im1_col, overlaps_ip1_col, and overlaps_col columns:
+    #     overlaps_col==True   ==>  belongs to block
+    #     overlaps_col==False  ==>  does not belong to any block
+    #     
+    #     Beginning of blocks:
+    #         overlaps_im1_col = False
+    #         overlaps_ip1_col = True
+    #         (overlaps_col    = True)
+    #
+    #     End of blocks:
+    #         overlaps_im1_col = True
+    #         overlaps_ip1_col = False
+    #         (overlaps_col    = True)
+    #-----
+    block_beg_idxs = df[
+        (df[overlaps_im1_col] == False) & 
+        (df[overlaps_ip1_col] == True) & 
+        (df[overlaps_col]     == True)
+    ][idx_col].values.tolist()
+    #-------------------------
+    block_end_idxs = df[
+        (df[overlaps_im1_col] == True) & 
+        (df[overlaps_ip1_col] == False) & 
+        (df[overlaps_col]     == True)
+    ][idx_col].values.tolist()
+    #-------------------------
+    assert(len(block_beg_idxs)==len(block_end_idxs))
+    #-----
+    block_begend_idxs = list(zip(block_beg_idxs, block_end_idxs))
+    block_idxs        = [list(range(block_beg_i, block_end_i+1)) for block_beg_i, block_end_i in block_begend_idxs]
+    #--------------------------------------------------
+    if return_endpoints:
+        return_list = block_begend_idxs
+    else:
+        return_list = block_idxs
+    #--------------------------------------------------
+    df = df.drop(columns=tmp_addtnl_cols)
+    #--------------------------------------------------
+    return df, return_list
+
+
+#--------------------------------------------------
+def find_and_append_overlapping_blocks_ids_in_df(
+    df, 
+    intrvl_beg_col       = 'DT_OFF_TS_FULL', 
+    intrvl_end_col       = 'DT_ON_TS', 
+    overlaps_col         = 'overlaps', 
+    overlap_grp_col      = 'overlap_grp', 
+    return_overlaps_only = False, 
+    no_overlap_grp_val   = -1 # sensible values = -1 or np.nan
+):
+    r"""
+    Given some pd.DataFrame, find blocks of overlapping data.
+    Returns:  tuple = (df, return_list)
+        where df is the input df sorted by [intrvl_beg_col, intrvl_end_col], as required by the procedure.
+              return_list contains the found blocks, and its form is described below under "return_endpoints"
+        
+    
+    return_endpoints:
+        True:   return_list contains only the endpoints of the blocks.
+                These endpoints are INCLUSIVE!
+        False:  return_list contains all indices in the blocks
+    """
+    #--------------------------------------------------
+    # If only one entry, cannot possibly be ovelaps!
+    if df.shape[0]<=1:
+        df[overlaps_col]    = False
+        df[overlap_grp_col] = no_overlap_grp_val
+        if return_overlaps_only:
+            return None
+        else:
+            return df
+    #--------------------------------------------------
+    df, block_idxs = get_overlapping_blocks_in_df(
+        df                   = df, 
+        intrvl_beg_col       = intrvl_beg_col, 
+        intrvl_end_col       = intrvl_end_col, 
+        return_endpoints     = False
+    )
+    
+    #--------------------------------------------------
+    # If no overlaps, return
+    if len(block_idxs)==0:
+        df[overlaps_col]    = False
+        df[overlap_grp_col] = no_overlap_grp_val
+        if return_overlaps_only:
+            return None
+        else:
+            return df
+    
+    #--------------------------------------------------
+    df[overlaps_col]    = False
+    df[overlap_grp_col] = no_overlap_grp_val
+    #-----
+    overlaps_col_idx      = find_idxs_in_highest_order_of_columns(df=df, col=overlaps_col,     exact_match=True, assert_single=True)
+    overlap_grp_col_idx   = find_idxs_in_highest_order_of_columns(df=df, col=overlap_grp_col, exact_match=True, assert_single=True)
+    #-----
+    for i_grp, grp_idxs in enumerate(block_idxs):
+        df.iloc[grp_idxs, overlaps_col_idx]    = True
+        df.iloc[grp_idxs, overlap_grp_col_idx] = int(i_grp)
+    
+    #--------------------------------------------------
+    # Sanity checks
+    if np.isnan(no_overlap_grp_val):
+        assert(df[df[overlaps_col]==False][overlap_grp_col].isna().all())
+        assert(df[df[overlaps_col]==True][overlap_grp_col].notna().all())
+    else:
+        assert((df[df[overlaps_col]==False][overlap_grp_col]==no_overlap_grp_val).all())
+        assert((df[df[overlaps_col]==True][overlap_grp_col] !=no_overlap_grp_val).all())
+
+        #--------------------------------------------------
+        if return_overlaps_only:
+            return df[df[overlaps_col]==True]
+        else:
+            return df
+
+#----------------------------------------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------
 def determine_freq_in_df_col(
     df, 
     groupby_SN=True, 
@@ -1120,7 +2214,7 @@ def determine_freq_in_df_col(
     return freq
     
     
-#---------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------
 def build_avgs_series(df, cols_of_interest=None, avg_type='normal'):
     # Intended for use on nrc_df from a single NISTResultContainer
     assert(avg_type=='normal' or avg_type=='trim')
@@ -1137,6 +2231,7 @@ def build_avgs_series(df, cols_of_interest=None, avg_type='normal'):
         assert(0)
     return None
 
+#--------------------------------------------------
 def build_avgs_df(agg_df, groupby_col, cols_of_interest=None, avg_type='normal'):
     # Intended for use on a aggregate of nrc_dfs from multiple NISTResultContainers
     assert(avg_type=='normal' or avg_type=='trim')
@@ -1154,7 +2249,7 @@ def build_avgs_df(agg_df, groupby_col, cols_of_interest=None, avg_type='normal')
         avgs_df = avgs_df.append(avgs_series.to_frame().T, ignore_index=True)
     return avgs_df
 
-#---------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------
 def get_default_sort_by_cols_for_comparison(full_default_sort_by_for_comparison, 
                                             df_1=None, df_2=None):
     if df_1 is None and df_2 is None:
@@ -1170,7 +2265,178 @@ def get_default_sort_by_cols_for_comparison(full_default_sort_by_for_comparison,
     return [x for x in full_default_sort_by_for_comparison 
             if x in shared_cols]
 
-#---------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------
+def get_dfs_overlap(
+    df_1, 
+    df_2, 
+    enforce_eq_cols = False, 
+    include_index   = False
+):
+    r"""
+    Return rows shared between df_1 and df_2.
+    Only the columns shared between df_1 and df_2 are evaluated and returned.
+    ==> If no columns are shared, return pd.DataFrame()
+    
+    enforce_eq_cols:
+        If True, df_1 and df_2 must have the same columns.
+        If the columns are not equal, assertion error is thrown.
+    """
+    #-------------------------
+    cols_1 = df_1.columns.tolist()
+    cols_2 = df_2.columns.tolist()
+    
+    #-------------------------
+    # df_1 and df_2 must share at least one column!
+    if len(set(cols_1).intersection(set(cols_2)))==0:
+        return pd.DataFrame()
+    
+    #-------------------------
+    # If enforce_eq_cols is True, df_1 and df_2 must have the same columns
+    if(
+        enforce_eq_cols and 
+        len(set(cols_1).symmetric_difference(set(cols_2)))!=0
+    ):
+        assert(0)
+    
+    #-------------------------
+    # If include_index, reset the indices so they are included in the comparison
+    if include_index:
+        assert(df_1.index.nlevels==df_2.index.nlevels)
+        #-------------------------
+        # Indices must have same names for comparison, if not so, make so
+        if df_1.index.names != df_2.index.names:
+            df_2.index.names = df_1.index.names
+        #-------------------------
+        # Make sure none of the index names are found in columns, as this would cause .reset_index(drop=False) to fail
+        df_1.index.names = [x if x not in df_1.columns.tolist() else x + '_' + Utilities.generate_random_string(str_len=4, letters='letters_only') for x in df_1.index.names]
+        df_2.index.names = [x if x not in df_2.columns.tolist() else x + '_' + Utilities.generate_random_string(str_len=4, letters='letters_only') for x in df_2.index.names]
+        #-------------------------
+        df_1 = df_1.reset_index(drop=False)
+        df_2 = df_2.reset_index(drop=False)
+
+    #-------------------------
+    shared_df = pd.merge(
+        df_1, 
+        df_2, 
+        left_on=None, 
+        right_on=None, 
+        left_index=False, 
+        right_index=False, 
+        how='inner', 
+        indicator=False
+    )
+    return shared_df
+
+#----------------------------------------------------------------------------------------------------
+def get_dfs_overlap_outer(
+    df_1, 
+    df_2, 
+    enforce_eq_cols = False, 
+    include_index   = False
+):
+    r"""
+    Return rows shared between df_1 and df_2.
+    Only the columns shared between df_1 and df_2 are evaluated and returned.
+    ==> If no columns are shared, return pd.DataFrame()
+    
+    enforce_eq_cols:
+        If True, df_1 and df_2 must have the same columns.
+        If the columns are not equal, assertion error is thrown.
+    """
+    #-------------------------
+    cols_1 = df_1.columns.tolist()
+    cols_2 = df_2.columns.tolist()
+    
+    #-------------------------
+    # df_1 and df_2 must share at least one column!
+    if len(set(cols_1).intersection(set(cols_2)))==0:
+        return pd.DataFrame()
+    
+    #-------------------------
+    # If enforce_eq_cols is True, df_1 and df_2 must have the same columns
+    if(
+        enforce_eq_cols and 
+        len(set(cols_1).symmetric_difference(set(cols_2)))!=0
+    ):
+        assert(0)
+
+    #-------------------------
+    # If include_index, reset the indices so they are included in the comparison
+    if include_index:
+        assert(df_1.index.nlevels==df_2.index.nlevels)
+        #-------------------------
+        # Indices must have same names for comparison, if not so, make so
+        if df_1.index.names != df_2.index.names:
+            df_2.index.names = df_1.index.names
+        #-------------------------
+        # Make sure none of the index names are found in columns, as this would cause .reset_index(drop=False) to fail
+        df_1.index.names = [x if x not in df_1.columns.tolist() else x + '_' + Utilities.generate_random_string(str_len=4, letters='letters_only') for x in df_1.index.names]
+        df_2.index.names = [x if x not in df_2.columns.tolist() else x + '_' + Utilities.generate_random_string(str_len=4, letters='letters_only') for x in df_2.index.names]
+        #-------------------------
+        df_1 = df_1.reset_index(drop=False)
+        df_2 = df_2.reset_index(drop=False)
+    
+    #-------------------------
+    shared_df = pd.merge(
+        df_1, 
+        df_2, 
+        left_on=None, 
+        right_on=None, 
+        left_index=False, 
+        right_index=False, 
+        how='outer', 
+        indicator=True
+    )
+    return shared_df
+    
+#----------------------------------------------------------------------------------------------------
+def do_dfs_overlap(
+    df_1, 
+    df_2, 
+    enforce_eq_cols = True, 
+    include_index   = False
+):
+    r"""
+    Checks to see whether df_1 and df_2 share any rows.
+    If rows shared, return True.
+    If no rows shared, return False.
+    -----
+    Only the columns shared between df_1 and df_2 are evaluated.
+    ==> If no columns are shared, return False
+    
+    enforce_eq_cols:
+        If True, df_1 and df_2 must have the same columns.
+        If the columns are not equal, False is returned
+    """
+    #-------------------------
+    cols_1 = df_1.columns.tolist()
+    cols_2 = df_2.columns.tolist()
+    
+    #-------------------------
+    # If enforce_eq_cols is True, df_1 and df_2 must have the same columns
+    if(
+        enforce_eq_cols and 
+        len(set(cols_1).symmetric_difference(set(cols_2)))!=0
+    ):
+        #return False
+        assert(0)
+    
+    #-------------------------
+    # NOTE: enforce_eq_cols enforced above (possibly in way unique from that in get_dfs_overlap), 
+    #       so set to False in get_dfs_overlap below
+    shared_df = get_dfs_overlap(
+        df_1            = df_1, 
+        df_2            = df_2, 
+        enforce_eq_cols = False, 
+        include_index   = include_index
+    )
+    if shared_df.shape[0]==0:
+        return False
+    else:
+        return True
+
+
+#----------------------------------------------------------------------------------------------------
 def simple_sort_df(df, sort_by, ignore_index=True, inplace=False, use_natsort=True):
     # If df's index is named:
     #   one can include the index in the sorting simply by including
@@ -1249,10 +2515,11 @@ def are_sorted_dfs_equal(df1, df2, sort_by, cols_to_compare=None):
     result = df1_srtd[cols_to_compare].equals(df2_srtd[cols_to_compare])
     return result
     
-#---------------------------------------------------------------------
+#----------------------------------------------------------------------------------------------------
 def assert_dfs_equal(df1, df2):
     assert_frame_equal(df1, df2) #from pandas.util.testing
 
+#--------------------------------------------------
 #TODO get_dfs_diff methods don't work with MultiIndex (indices or columns, probably)
 def get_dfs_diff(df1, df2):
     #df1 and df2 must be identically labelled!
@@ -1291,7 +2558,7 @@ def get_dfs_diff(df1, df2):
     
     return diff_df
     
-    
+#--------------------------------------------------    
 def get_dfs_diff_WEIRD(df1, df2, stack_level=-1):
     # LOOK INTO THIS!!!!!
     #
@@ -1338,7 +2605,7 @@ def get_dfs_diff_WEIRD(df1, df2, stack_level=-1):
     
     return diff_df
     
-    
+#--------------------------------------------------    
 def get_dfs_diff_approx_ok_OLD(df_1, df_2, precision=0.00001, cols_to_compare=None):
     # WARNING: for large dfs this can take a decent amount of time.
     # Get the difference between two DataFrames, 
@@ -1390,7 +2657,8 @@ def get_dfs_diff_approx_ok_OLD(df_1, df_2, precision=0.00001, cols_to_compare=No
     diff_df.index.names = ['row', 'col'] #Again, just to match output of Utilities_df.get_dfs_diff
     #------------------------------------------------------- 
     return diff_df
-    
+
+#--------------------------------------------------    
 def get_dfs_diff_approx_ok_numeric(df_1, df_2, precision=0.00001, cols_to_compare=None, sort_by=None):
     # Get the difference between two DataFrames, 
     # but if values are approximately equal (as decided by precision)
@@ -1424,7 +2692,8 @@ def get_dfs_diff_approx_ok_numeric(df_1, df_2, precision=0.00001, cols_to_compar
     diff_df['rel_delta'] = np.abs(diff_df[['df1_values', 'df2_values']].pct_change(axis=1)['df2_values'])
     diff_df = diff_df[diff_df['rel_delta'] > precision]
     return diff_df
-    
+
+#--------------------------------------------------
 #TODO probably use get_shared_columns
 def get_dfs_diff_approx_ok(df_1, df_2, precision=0.00001, cols_to_compare=None, sort_by=None, return_df_only=False, inplace=False):
     # Get the difference between two DataFrames, 
@@ -1486,7 +2755,8 @@ def get_dfs_diff_approx_ok(df_1, df_2, precision=0.00001, cols_to_compare=None, 
         }
         return return_dict
     
-    
+
+#--------------------------------------------------    
 def get_dfs_diff_approx_ok_WEIRD(df_1, df_2, precision=0.00001, cols_to_compare=None, sort_by=None, stack_level=-1):
     # TODO ELIMINATE THIS ONCE get_dfs_diff_WEIRD is resolved
     #
@@ -1526,7 +2796,7 @@ def get_dfs_diff_approx_ok_WEIRD(df_1, df_2, precision=0.00001, cols_to_compare=
     diff_df = diff_df[diff_df['rel_delta'] > precision]
     return diff_df
     
-#---------------------------------------------------------------------
+#--------------------------------------------------
 def get_nan_rows_and_columns(df, metrics_of_interest):
     # returns a list of dicts 
     #   where each dict has keys   = 'index' (row index in df)
@@ -1545,6 +2815,7 @@ def get_nan_rows_and_columns(df, metrics_of_interest):
         
     return nans_info
 
+#--------------------------------------------------
 def print_nan_rows_and_columns(df, metrics_of_interest):
     nans_info = get_nan_rows_and_columns(df, metrics_of_interest)
     for nan_row in nans_info:
@@ -1556,7 +2827,7 @@ def print_nan_rows_and_columns(df, metrics_of_interest):
         print('-'*50)
         print()
         
-#****************************************************************************************************
+#----------------------------------------------------------------------------------------------------
 def w_avg_df_col(df, w_col, x_col):
     r"""
     Compute weighted average of x_col weighted by values in w_col
@@ -1570,6 +2841,7 @@ def w_avg_df_col(df, w_col, x_col):
     #-------------------------
     return (df[x_col]*df[w_col]).sum()/df[w_col].sum()
 
+#--------------------------------------------------
 def w_avg_df_cols(df, w_col, x_cols=None, include_sum_of_weights=True):
     r"""
     Returns a series.
@@ -1593,6 +2865,7 @@ def w_avg_df_cols(df, w_col, x_cols=None, include_sum_of_weights=True):
         return_series[w_col] = df[w_col].sum()
     return return_series
 
+#--------------------------------------------------
 def w_sum_df_cols(df, w_col, x_cols=None, include_sum_of_weights=True):
     r"""
     Returns a series.
@@ -1615,7 +2888,8 @@ def w_sum_df_cols(df, w_col, x_cols=None, include_sum_of_weights=True):
         return_series[w_col] = df[w_col].sum()
     return return_series
     
-    
+
+#--------------------------------------------------    
 def sum_and_weighted_average_of_df_cols(
     df, 
     sum_x_cols, sum_w_col, 
@@ -1688,6 +2962,7 @@ def sum_and_weighted_average_of_df_cols(
     return return_series
 
 
+#--------------------------------------------------
 def sum_and_weighted_sum_of_df_cols(
     df, 
     sum_x_cols, sum_w_col, 
@@ -1769,7 +3044,7 @@ def sum_and_weighted_sum_of_df_cols(
     
     
 
-#****************************************************************************************************
+#----------------------------------------------------------------------------------------------------
 def consolidate_column_of_lists(df, col, sort=False, include_None=True, batch_size=None, verbose=False):
     r"""
     Purpose is to reduce the serial numbers column (typically '_SNs') down to the unique SNs.
@@ -1822,7 +3097,7 @@ def consolidate_column_of_lists(df, col, sort=False, include_None=True, batch_si
         return return_list
   
 
-  
+#--------------------------------------------------  
 def consolidate_df_OLD(
     df, 
     groupby_col, 
@@ -1945,7 +3220,8 @@ def consolidate_df_OLD(
     #-------------------------
     return return_df
     
-    
+
+#--------------------------------------------------    
 def resolve_uniqueness_violators(
     df, 
     groupby_cols, 
@@ -2132,30 +3408,73 @@ def resolve_uniqueness_violators(
     #--------------------------------------------------
     return red_df
     
-    
+
+#--------------------------------------------------    
 def agg_func_list(x):
     return list(x)
+#--------------------------------------------------
 def agg_func_unq_list(x):
     return list((set(x)))
+#--------------------------------------------------
 def agg_func_list_dropna(x):
     return [x for x in list(x) if pd.notna(x)]
+#--------------------------------------------------
 def agg_func_unq_list_dropna(x):
     return  [x for x in set(x) if pd.notna(x)]
 
+
+
+#--------------------------------------------------
+def read_consolidated_df_from_csv(
+    file_path, 
+    list_cols, 
+    set_col_to_index=None,
+    drop_index_col=False, 
+    convert_cols_and_types_dict=None, 
+    to_numeric_errors='coerce'
+):
+    r"""
+    When stored as a CSV, any list columns are retrieved as a strings, instead of as a lists.
+    Using ast.literal_eval fixes that
+    """
+    #-------------------------
+    df = pd.read_csv(file_path, dtype=str)
+    #-------------------------
+    for col in list_cols:
+        df[col] = df[col].apply(lambda x: literal_eval(x))
+    #-------------------------
+    if set_col_to_index is not None:
+        df.set_index(set_col_to_index, drop=drop_index_col, inplace=True)
+        df.index.name='idx'
+    #-------------------------
+    if convert_cols_and_types_dict is not None:
+        df = Utilities_df.convert_col_types(
+            df=df, 
+            cols_and_types_dict=convert_cols_and_types_dict, 
+            to_numeric_errors=to_numeric_errors, 
+            inplace=True
+        )
+    #-------------------------
+    return df
+
+
+
+#--------------------------------------------------
 def consolidate_df(
-    df, 
-    groupby_cols, 
-    cols_shared_by_group, 
-    cols_to_collect_in_lists, 
-    as_index=True, 
-    include_groupby_cols_in_output_cols=False, 
-    allow_duplicates_in_lists=False, 
-    allow_NaNs_in_lists=False, 
-    recover_uniqueness_violators=True, 
-    gpby_dropna=True, 
-    rename_cols=None, 
-    custom_aggs_for_list_cols=None, 
-    verbose=True
+    df                                  , 
+    groupby_cols                        , 
+    cols_shared_by_group                , 
+    cols_to_collect_in_lists            , 
+    cols_to_drop                        = None, 
+    as_index                            = True, 
+    include_groupby_cols_in_output_cols = False, 
+    allow_duplicates_in_lists           = False, 
+    allow_NaNs_in_lists                 = False, 
+    recover_uniqueness_violators        = True, 
+    gpby_dropna                         = True, 
+    rename_cols                         = None, 
+    custom_aggs_for_list_cols           = None, 
+    verbose                             = True
 ):
     r"""
     TODO: Either use resolve_uniqueness_violators or implement similar methods here!
@@ -2258,6 +3577,9 @@ def consolidate_df(
         TO OBTAIN THE FORM UNDER WHICH THE METHOD WAS CONSTRUCTED, one must set as_index=False AND group_keys=False as arguments
           to groupby (as the apply operations here are essentially just filter calls)!
     """
+    #-------------------------
+    if cols_to_drop is not None:
+        df = df.drop(columns=cols_to_drop)
     #-------------------------
     assert(Utilities.is_object_one_of_types(groupby_cols, [str, list, tuple]))
     if isinstance(groupby_cols, str):
@@ -2432,7 +3754,7 @@ def consolidate_df(
     #-------------------------
     return return_df
     
-    
+#--------------------------------------------------    
 def consolidate_df_according_to_fuzzy_overlap_intervals_OLD(
     df, 
     ovrlp_intrvl_0_col, 
@@ -2742,7 +4064,7 @@ def consolidate_df_according_to_fuzzy_overlap_intervals_OLD(
     return return_df
     
     
-    
+#--------------------------------------------------    
 def find_overlap_intervals_in_df(
     df, 
     ovrlp_intrvl_0_col, 
@@ -2793,7 +4115,7 @@ def find_overlap_intervals_in_df(
     assert(all(df[ovrlp_intrvl_0_col].notna()))
     assert(all((df[ovrlp_intrvl_0_col]<df[ovrlp_intrvl_1_col]) | (df[ovrlp_intrvl_1_col].isna())))
     # For above assertion, probably could have isntead used: 
-    #   assert(all(df[ovrlp_intrvl_0_col]<df[ovrlp_intrvl_1_col].fillna(datetime.datetime.max)))
+    #   assert(all(df[ovrlp_intrvl_0_col]<df[ovrlp_intrvl_1_col].fillna(pd.Timestamp.max)))
     #-------------------------
     # Sort ranges, as will be necessary for this procedure
     df = df.sort_values(by=[ovrlp_intrvl_0_col, ovrlp_intrvl_1_col])
@@ -2853,6 +4175,7 @@ def find_overlap_intervals_in_df(
     #-------------------------
     return overlaps
 
+#--------------------------------------------------
 def consolidate_df_group_according_to_fuzzy_overlap_intervals(
     df_i, 
     ovrlp_intrvl_0_col, 
@@ -2968,6 +4291,7 @@ def consolidate_df_group_according_to_fuzzy_overlap_intervals(
     return return_df
 
 
+#--------------------------------------------------
 def consolidate_df_according_to_fuzzy_overlap_intervals(
     df, 
     ovrlp_intrvl_0_col, 
@@ -3073,7 +4397,7 @@ def consolidate_df_according_to_fuzzy_overlap_intervals(
     return return_df
 
 
-#****************************************************************************************************
+#----------------------------------------------------------------------------------------------------
 def are_all_series_elements_one_of_types(srs, types):
     r"""
     Checks if all list elements are one of the types listed in types.
@@ -3089,6 +4413,7 @@ def are_all_series_elements_one_of_types(srs, types):
             bool_mask = bool_mask|(srs.apply(type)==typ)
     return all(bool_mask)
 
+#--------------------------------------------------
 def are_all_series_elements_one_of_types_and_homogeneous(lst, types):
     r"""
     Checks if all elements in lst are of a single type, and that single type is one of those found in types.
@@ -3099,6 +4424,7 @@ def are_all_series_elements_one_of_types_and_homogeneous(lst, types):
             return True
     return False
 
+#--------------------------------------------------
 def get_list_elements_mask_for_series(srs):
     r"""
     Returns a series (mask) with boolean values identifying which elements are lists.
@@ -3106,12 +4432,84 @@ def get_list_elements_mask_for_series(srs):
     """
     #-------------------------
     assert(isinstance(srs, pd.Series))
-    list_elements_mask = ((srs.apply(type)==np.ndarray)|(srs.apply(type)==list))
+    list_elements_mask = ((srs.apply(type)==np.ndarray)|(srs.apply(type)==list)|(srs.apply(type)==tuple))
     return list_elements_mask
+    
+
+#--------------------------------------------------    
+def get_df_cols_with_list_elements(
+    df
+):
+    r"""
+    If any element in a column contains a list object, then the column is defined as containing list elements.
+    Also, only object type columns can possibly contain lists, so they are the only ones needing inspected.
+    """
+    #-------------------------
+    is_obj_dtype_srs = df.dtypes.apply(lambda x: is_object_dtype(x))
+    cols_to_inspect = is_obj_dtype_srs[is_obj_dtype_srs==True].index.tolist()
+    #-------------------------
+    cols_w_lists = []
+    for col_i in cols_to_inspect:
+        if get_list_elements_mask_for_series(df[col_i]).any():
+            cols_w_lists.append(col_i)
+    #-------------------------
+    return cols_w_lists
+    
+    
+#----------------------------------------------------------------------------------------------------
+def train_test_split_df_group(
+    X,
+    y, 
+    groups, 
+    test_size, 
+    random_state=None
+    
+):
+    r"""
+    This is simply a train-test split according to the outage groups.
+    i.e., this enforces that all entries for a given group remain together (either all in train or all in test)
+          and never split across train/test
+          
+    NOTE: If input is list, return value will be np.ndarray
+          If input is np.ndarray, output np.ndarray
+          If inputs pd.DataFrame/pd.Series, output pd.DataFrame/pd.Series
+    """
+    #-------------------------
+    # The methods expect X and y to be either np.ndarrays, lists or pd.DataFrame/pd.Series (respectively)
+    assert(Utilities.is_object_one_of_types(X, [np.ndarray, list, pd.DataFrame]))
+    assert(Utilities.is_object_one_of_types(y, [np.ndarray, list, pd.Series]))
+    assert(len(X)==len(y)) # next(split) would have failed if this wasn't true, but having it here 
+    #                      makes it easier to locate and debug if it ever happens
+    #-------------------------
+    gss = GroupShuffleSplit(n_splits=1, test_size=test_size, random_state=random_state)
+    split = gss.split(X, y, groups=groups)
+    train_idxs, test_idxs = next(split)
+    #-------------------------
+    # In order to grab elements simply using list of indices (instead of looping through or whatever)
+    #   X and y must be np.ndarrays
+    if isinstance(X, list):
+        X = np.array(X)
+    if isinstance(y, list):
+        y = np.array(y)
+    #-------------------------
+    if isinstance(X, pd.DataFrame):
+        X_train = X.iloc[train_idxs]
+        X_test  = X.iloc[test_idxs]
+    else:
+        X_train = X[train_idxs]
+        X_test  = X[test_idxs]
+    #-----
+    if isinstance(y, pd.Series):
+        y_train = y.iloc[train_idxs]
+        y_test  = y.iloc[test_idxs]
+    else:
+        y_train = y[train_idxs]
+        y_test  = y[test_idxs]
+    #-------------------------
+    return X_train, X_test, y_train, y_test
 
 
-
-#****************************************************************************************************
+#----------------------------------------------------------------------------------------------------
 #---------------------------------------------------------------------
 def set_kit_ids(df, col_for_extraction, 
                 col_for_placement='kit_id', gold_standard='S002'):
@@ -3121,6 +4519,7 @@ def set_kit_ids(df, col_for_extraction,
     df[col_for_placement] = df[col_for_extraction].apply(lambda x: Utilities.get_kit_id(x, gold_standard=gold_standard)[0])
     return df
 
+#--------------------------------------------------
 def set_kit_ids_parent_ids_dates(df, col_for_extraction, 
                                  cols_for_placement=['kit_id', 'parent_kit_id', 'date'], 
                                  gold_standard='S002'):

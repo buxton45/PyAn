@@ -5,7 +5,7 @@ Holds GenAn class.  See GenAn.GenAn for more information.
 """
 
 __author__ = "Jesse Buxton"
-__email__ = "jbuxton@aep.com"
+__email__  = "jbuxton@aep.com"
 __status__ = "Personal"
 
 #--------------------------------------------------
@@ -56,14 +56,16 @@ class GenAn:
     class GenAn documentation
     GenAn stands for GeneralAnalysis
     """
-    def __init__(self, 
-                 df_construct_type=None, 
-                 contstruct_df_args=None, 
-                 init_df_in_constructor=True, 
-                 build_sql_function=None, 
-                 build_sql_function_kwargs=None, 
-                 save_args=False, 
-                 **kwargs):
+    def __init__(
+        self, 
+        df_construct_type=None, 
+        contstruct_df_args=None, 
+        init_df_in_constructor=True, 
+        build_sql_function=None, 
+        build_sql_function_kwargs=None, 
+        save_args=False, 
+        **kwargs
+    ):
         r"""
         if df_construct_type==DFConstructType.kReadCsv or DFConstructType.kReadCsv:
           contstruct_df_args needs to have at least 'file_path'
@@ -282,7 +284,25 @@ class GenAn:
     #****************************************************************************************************
     @staticmethod
     def build_sql_general(build_sql_function, build_sql_function_kwargs={}):
-        sql = build_sql_function(**build_sql_function_kwargs)
+        #-------------------------
+        # Some special kwargs are popped off before feeding into sql function.
+        # Replicate that here
+        keys_to_pop = [
+            'field_to_split', 
+            'field_to_split_location_in_kwargs', 
+            'save_and_dump', 
+            'sort_coll_to_split', 
+            'batch_size', 
+            'verbose', 
+            'n_update', 
+            'ignore_index', 
+        ]
+        kwargs_fnl = {
+            k:v for k,v in build_sql_function_kwargs.items() 
+            if k not in keys_to_pop
+        }
+        #-------------------------
+        sql = build_sql_function(**kwargs_fnl)
         return sql
         
     @staticmethod
@@ -341,6 +361,9 @@ class GenAn:
         #-----
         if read_sql_args:
             read_sql_args = GenAn.reduce_dtypes_in_read_sql_args(sql, read_sql_args)
+        else:
+            # In case read_sql_args was None, set to {}
+            read_sql_args = {}
         #-----
         if Utilities.is_object_one_of_types(sql, [SQLQuery, SQLQueryGeneric]):
             sql = sql.get_sql_statement()
@@ -559,7 +582,7 @@ class GenAn:
         save_args = copy.deepcopy(save_args)
         save_args = GenAn.prepare_save_args(save_args, make_save_dir_if_dne=False)
         #-----
-        file_path_regex = save_args['save_name']+'_(\d*)_summary.json'
+        file_path_regex = save_args['save_name']+r'_(\d*)_summary.json'
         #---------- 
         tags = []
         for path in summary_paths:
@@ -606,6 +629,7 @@ class GenAn:
         batch_size                        = build_sql_function_kwargs.pop('batch_size', 1000)
         verbose                           = build_sql_function_kwargs.pop('verbose', True)
         n_update                          = build_sql_function_kwargs.pop('n_update', 10)
+        ignore_index                      = build_sql_function_kwargs.pop('ignore_index', False)
         save_args = GenAn.prepare_save_args(save_args, make_save_dir_if_dne=True)
         if field_to_split is not None:
             # GenAn.build_df_general_batches essentially splits up the batches and sends them
@@ -625,6 +649,8 @@ class GenAn:
                 to_numeric_errors=to_numeric_errors, 
                 save_args=save_args, 
                 read_sql_args=read_sql_args, 
+                exclude_previously_recorded=True, 
+                ignore_index=ignore_index, 
                 **kwargs
             )
         #-------------------------
@@ -678,21 +704,22 @@ class GenAn:
     
     @staticmethod
     def build_df_general_batches(
-        conn_db, 
-        build_sql_function, 
-        build_sql_function_kwargs, 
-        field_to_split, 
-        field_to_split_location_in_kwargs=None, 
-        save_and_dump=False, 
-        sort_coll_to_split=False, 
-        batch_size=1000, 
-        verbose=True, 
-        n_update=10, 
-        cols_and_types_to_convert_dict=None, 
-        to_numeric_errors='coerce', 
-        save_args=False, 
-        read_sql_args={}, 
-        exclude_previously_recorded=True, 
+        conn_db                           , 
+        build_sql_function                , 
+        build_sql_function_kwargs         , 
+        field_to_split                    , 
+        field_to_split_location_in_kwargs = None, 
+        save_and_dump                     = False, 
+        sort_coll_to_split                = False, 
+        batch_size                        = 1000, 
+        verbose                           = True, 
+        n_update                          = 10, 
+        cols_and_types_to_convert_dict    = None, 
+        to_numeric_errors                 = 'coerce', 
+        save_args                         = False, 
+        read_sql_args                     = {}, 
+        exclude_previously_recorded       = True, 
+        ignore_index                      = False, 
         **kwargs
     ):
         r"""
@@ -755,9 +782,9 @@ class GenAn:
         batch_idxs = Utilities.get_batch_idx_pairs(len(coll_to_split), batch_size)
         n_batches = len(batch_idxs)
         if verbose:
-            print(f'n_coll = {len(coll_to_split)}')
+            print(f'n_coll     = {len(coll_to_split)}')
             print(f'batch_size = {batch_size}')
-            print(f'n_batches = {n_batches}')
+            print(f'n_batches  = {n_batches}')
             
         for i, batch_i in enumerate(batch_idxs):
             if verbose and (i+1)%n_update==0:
@@ -822,7 +849,7 @@ class GenAn:
             if not save_and_dump:
                 if return_df.shape[0]>0:
                     assert(all(df_i.columns==return_df.columns))
-                return_df = pd.concat([return_df, df_i], axis=0, ignore_index=False)
+                return_df = pd.concat([return_df, df_i], axis=0, ignore_index=ignore_index)
         #-------------------------
         if save_args['save_to_file'] and save_args['save_full_final']:
             if not os.path.exists(save_args['save_dir']):

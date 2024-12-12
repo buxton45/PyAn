@@ -17,6 +17,7 @@ import time
 from natsort import natsorted, ns, natsort_keygen
 import copy
 import warnings
+import random
 #---------------------------------------------------------------------
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -36,6 +37,21 @@ import Utilities_dt
 #---------------------------------------------------------------------
 
 #**************************************************
+def save_fig_to_path(
+    fig, save_path, 
+    dpi='figure', format=None, metadata=None, 
+    bbox_inches=None, pad_inches=0.1,
+    facecolor='auto', edgecolor='auto',
+    backend=None, **kwargs
+):
+    fig.savefig(
+        save_path, 
+        dpi=dpi, format=format, metadata=metadata, 
+        bbox_inches=bbox_inches, pad_inches=pad_inches,
+        facecolor=facecolor, edgecolor=edgecolor,
+        backend=backend, **kwargs        
+    )
+
 def save_fig(
     fig, save_dir, save_name, 
     dpi='figure', format=None, metadata=None, 
@@ -46,12 +62,12 @@ def save_fig(
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     save_path = os.path.join(save_dir, save_name)
-    fig.savefig(
-        save_path, 
+    save_fig_to_path(
+        fig=fig, save_path=save_path, 
         dpi=dpi, format=format, metadata=metadata, 
         bbox_inches=bbox_inches, pad_inches=pad_inches,
         facecolor=facecolor, edgecolor=edgecolor,
-        backend=backend, **kwargs        
+        backend=backend, **kwargs
     )
     
 #**************************************************
@@ -226,13 +242,14 @@ def get_standard_linestyles(n_lines, exclude_loose=False):
     return linestyles
     
     
-def get_standard_colors(n_colors, palette=None):
+def get_standard_colors(n_colors, palette=None, random_order=False):
     # colorblind has only 10 different colors
     # If palette is None:
     #   Use colorblind if n_colors < 10
     #   Otherwise use husl (maybe should be Spectral?);
     # Otherwise:
     #   Use palette
+    #-------------------------
     if palette is None:
         if n_colors <= 10:
             colors = sns.color_palette('colorblind', n_colors)
@@ -240,16 +257,20 @@ def get_standard_colors(n_colors, palette=None):
             colors = sns.color_palette('husl', n_colors)
     else:
         colors = sns.color_palette(palette, n_colors)
+    #-------------------------
+    if random_order:
+        random.shuffle(colors)
+    #-------------------------
     return colors
 
-def get_standard_colors_dict(keys, palette=None):
+def get_standard_colors_dict(keys, palette=None, random_order=False):
     n_colors = len(keys)
-    palette_dict = get_standard_colors(n_colors, palette)
+    palette_dict = get_standard_colors(n_colors, palette, random_order=random_order)
     palette_dict = {keys[i]:palette_dict[i] for i in range(n_colors)}
     return palette_dict
     
     
-def get_standard_hatches(n_hatch, exclude_vertical=True):
+def get_standard_hatches(n_hatch=None, exclude_vertical=True, dense_only=False):
     # If n_hatch is less than the number of unique hatches, the list will be chopped down
     # If n_hatch is more than the number of unique hatches, the list will be repeated
     #   until the list has as many as are needed
@@ -259,8 +280,13 @@ def get_standard_hatches(n_hatch, exclude_vertical=True):
     hatches = ['/', '\\', '|', '-', 'x', '+', 'o', 'O', '.', '*', 
                '//', '\\\\', '||', '--', '++', 'xx', 'oo', 'OO', '..', '**', 
                '/o', '\\|', '|*', '-\\', '+o', 'x*', 'o-', 'O|', 'O.']
+    if dense_only:
+        hatches = hatches[10:]
     if exclude_vertical:
         hatches = [x for x in hatches if x not in ('|', '||')]
+        
+    if n_hatch is None:
+        return hatches
     
     if n_hatch > len(hatches):
         # Repeat hatches until have as many as n_hatch
@@ -307,6 +333,36 @@ def get_flattened_axes(
         return axs.flatten(order='C') # 'C' for C-style
     else:
         return axs.flatten(order='F') # 'F' for Fortran-style
+    
+def get_default_subplots_args(
+    default_subplots_args = None
+):
+    r"""
+    """
+    #-------------------------
+    dflt_default_subplots_args = dict(
+        n_x                    = 1,
+        n_y                    = 1,
+        fig_num                = 0,
+        sharex                 = False,
+        sharey                 = False,
+        unit_figsize_width     = 14,
+        unit_figsize_height    = 6, 
+        return_flattened_axes  = False,
+        row_major              = True
+    )
+    if default_subplots_args is None:
+        default_subplots_args = dflt_default_subplots_args
+    else:
+        assert(isinstance(default_subplots_args, dict))
+        default_subplots_args = Utilities.supplement_dict_with_default_values(
+            to_supplmnt_dict=default_subplots_args, 
+            default_values_dict=dflt_default_subplots_args, 
+            extend_any_lists=False, 
+            inplace=False
+        )
+    #-------------------------
+    return default_subplots_args
 
 def default_subplots(
     n_x=1,
@@ -761,7 +817,7 @@ def get_subplots_adjust_args(
             'wspace' : wspace, 
             'hspace' : hspace}
             
-def adjust_subplots_args(fig, subplots_adjust_args):
+def adjust_subplots_args(fig, **subplots_adjust_args):
     r"""
     In the past, I typically have called plt.subplots_adjust(**subplots_adjust_args)
     But, it seems calling subplots_adjust on a figure object works as well, and allows
@@ -805,7 +861,91 @@ def get_subplot_layout_params(fig):
         'right':right, 
         'bottom':bottom, 
         'top':top
-    }            
+    }
+
+
+def replace_xtick_labels_wints(
+    ax                                 , 
+    xtick_ints_offset                  = 0, 
+    add_xtick_labels_legend_textbox    = False, 
+    xtick_labels_legend_textbox_kwargs = None, 
+    fig                                = None, 
+):
+    r"""
+    The xtick labels will be replaced with integers, and if add_xtick_labels_legend_textbox==True,  a key will be 
+      printed to the right of the figures.
+
+    xtick_ints_offset:
+      Set to nonzero value if one wants the counting to start at a value other than 1
+      
+    add_xtick_labels_legend_textbox:
+      Only has effect if replace_xtick_labels_with_ints==True.
+      NOTE: If add_xtick_labels_legend_textbox==True, fig MUST BE PROVIDED!
+      If add_xtick_labels_legend_textbox==True, Plot_General.generate_xtick_labels_legend_textbox is called and a textbox is generated
+        with a legend to translate the xtick_label ints to their true values.
+        
+    xtick_labels_legend_textbox_kwargs:
+      Additional arguments for Plot_General.generate_xtick_labels_legend_textbox
+        
+    fig:
+      Reference to the figure within which the plot is generated.
+      NOTE: NEEDED WHEN replace_xtick_labels_with_ints==add_xtick_labels_legend_textbox==True, AND
+            xtick_labels_legend_textbox_kwargs['wrt_fig'] = True
+            as the fig reference is needed to draw the text box.
+    """
+    #--------------------------------------------------
+    xtick_elements = [x.get_text() for x in ax.get_xticklabels()]
+    xtick_rename_dict = {xtick_el:i+1+xtick_ints_offset for i,xtick_el in enumerate(xtick_elements)}
+    # NOTE: xticks = np.arange(len(xtick_rename_dict)) below is to ensure all ticks are drawn,
+    #       as sometimes mpl draws less ticks when there are many
+    ax = set_general_plotting_args(
+        ax        = ax, 
+        ax_args   = dict(
+            xticks      = np.arange(len(xtick_rename_dict)),
+            xticklabels = list(xtick_rename_dict.values())
+        ), 
+        tick_args = dict(axis='x', labelrotation=0)
+    )
+    #--------------------------------------------------
+    if add_xtick_labels_legend_textbox:
+        if xtick_labels_legend_textbox_kwargs is None:
+            xtick_labels_legend_textbox_kwargs = {}
+        #-------------------------
+        # wrt_fig = With Respect To fig, whether or not the text_x_pos/y_pos are with respect to the figure
+        #            as a whole or the axis.
+        wrt_fig = xtick_labels_legend_textbox_kwargs.pop('wrt_fig', False)
+        if wrt_fig:
+            subplot_layout_params = get_subplot_layout_params(fig)
+        else:
+            subplot_layout_params = {
+                'left'   : ax.get_position().x0, 
+                'right'  : ax.get_position().x1, 
+                'bottom' : ax.get_position().y0, 
+                'top'    : ax.get_position().y1
+            }
+        #-------------------------
+        dflt_xtick_labels_legend_textbox_kwargs = dict(
+            fig                    = fig, 
+            xtick_rename_dict      = xtick_rename_dict, 
+            text_x_pos             = 1.02*subplot_layout_params['right'], 
+            text_y_pos             = subplot_layout_params['top'], 
+            n_chars_per_line       = 30, 
+            multi_line_offset      = None, 
+            new_org_separator      = ': ', 
+            fontsize               = 18, 
+            ha                     = 'left', 
+            va                      = 'top',
+            n_lines_between_entries = 1, 
+            n_cols                  = 1, 
+            col_padding             = 0.01
+        )
+        xtick_labels_legend_textbox_kwargs = Utilities.supplement_dict_with_default_values(
+            to_supplmnt_dict    = xtick_labels_legend_textbox_kwargs, 
+            default_values_dict = dflt_xtick_labels_legend_textbox_kwargs
+        )
+        generate_xtick_labels_legend_textbox(**xtick_labels_legend_textbox_kwargs)
+    #--------------------------------------------------
+    return ax
 
             
 def get_subplots_adjust_args_std_3x1(

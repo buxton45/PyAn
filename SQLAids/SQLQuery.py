@@ -95,13 +95,17 @@ class SQLQuery:
             assert(isinstance(sql_orderby, SQLOrderBy))
             self.sql_orderby = sql_orderby
         
-    def get_sql_statement(self, insert_n_tabs_to_each_line=0, include_alias=False):
+    def get_sql_statement(self, insert_n_tabs_to_each_line=0, include_alias=False, include_with=False):
         r"""
         - If include_alias==True, the alias attribute will be used to return a common table expression of
           the form: 
             f"{alias} AS (\n{***SQL STATEMENT***}\n)"
         - If include_alias==False, the sql statement is returned as normal
         """
+        #-------------------------
+        if not include_alias:
+            include_with = False
+        #-------------------------
         select_stmnt = self.sql_select.get_statement_string(include_alias=True, include_table_alias_prefix=True)
         from_stmnt = self.sql_from.get_statement_string(include_leading_join_whitespace='\t')
         where_stmnt = self.sql_where.get_statement_string(include_table_alias_prefix=True)
@@ -121,6 +125,9 @@ class SQLQuery:
             assert(self.alias)
             return_stmnt = Utilities_sql.prepend_tabs_to_each_line(return_stmnt, n_tabs_to_prepend=1)
             return_stmnt = f"{self.alias} AS (\n{return_stmnt}\n)"
+        #-----
+        if include_with:
+            return_stmnt = f"WITH {return_stmnt}"
         #-----
         if insert_n_tabs_to_each_line > 0:
             return_stmnt = Utilities_sql.prepend_tabs_to_each_line(return_stmnt, 

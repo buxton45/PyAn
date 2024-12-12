@@ -385,3 +385,18 @@ class SQLElementsCollection():
             else:
                 assert(0)
         return return_list
+        
+        
+    def swap_idxs(
+        self, 
+        idx_1,
+        idx_2
+    ):
+        r"""
+        """
+        #-------------------------
+        assert(idx_1 < len(self.collection_dict))
+        assert(idx_2 < len(self.collection_dict))
+        assert(idx_1 != idx_2)
+        #-------------------------
+        self.collection_dict[idx_1], self.collection_dict[idx_2] = self.collection_dict[idx_2], self.collection_dict[idx_1]

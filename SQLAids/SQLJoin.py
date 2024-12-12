@@ -139,8 +139,8 @@ class SQLJoin:
         assert('orig' in col_to_join_dict and 
                'join' in col_to_join_dict and 
                'needs_prefixes' in col_to_join_dict)
-        prefix_orig = f"{orig_table_alias}." if col_to_join_dict['needs_prefixes'] else ''
-        prefix_join = f"{join_table_alias}." if col_to_join_dict['needs_prefixes'] else ''
+        prefix_orig = f"{orig_table_alias}." if (col_to_join_dict['needs_prefixes'] and orig_table_alias) else ''
+        prefix_join = f"{join_table_alias}." if (col_to_join_dict['needs_prefixes'] and join_table_alias) else ''
         return_str =  f"{prefix_orig}{col_to_join_dict['orig']}={prefix_join}{col_to_join_dict['join']}"
         return return_str
 

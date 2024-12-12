@@ -29,7 +29,7 @@ class SQLFrom:
         return from_stmnt  
         
     def get_from_statement(self):
-        return self.from_statement
+        return SQLFrom.build_from_statement(self.schema_name, self.table_name, self.alias)
             
     def set_sql_join_coll(self, sql_join_coll):
         if(isinstance(sql_join_coll, SQLJoin)):

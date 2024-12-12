@@ -17,11 +17,14 @@ class SQLSelectElement(SQLElement):
 						 
 						 
 class SQLSelect(SQLElementsCollection):
-    def __init__(self, 
-                 field_descs=None, 
-                 global_table_alias_prefix=None, 
-                 idxs=None, run_check=False, 
-                 select_distinct=False):
+    def __init__(
+        self, 
+        field_descs               = None, 
+        global_table_alias_prefix = None, 
+        idxs                      = None, 
+        run_check                 = False, 
+        select_distinct           = False
+    ):
         # First, call base class's __init__ method
         super().__init__(field_descs=field_descs, 
                          global_table_alias_prefix=global_table_alias_prefix, 
@@ -135,7 +138,7 @@ class SQLSelect(SQLElementsCollection):
         r"""
         NOTE: Non-static verson = add_aggregate_elements
         
-        - agg_cols_and_types_dict:
+        - agg_cols_and_types:
            keys:
                equal to column names OR SQLElement objects (representing column names) to be aggregated
            values:
