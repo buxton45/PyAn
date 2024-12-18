@@ -5,7 +5,7 @@ Holds CustomEncoder class.  See CustomEncoder.CustomEncoder for more information
 """
 
 __author__ = "Jesse Buxton"
-__email__ = "jbuxton@aep.com"
+__email__  = "buxton.45.jb@gmail.com"
 __status__ = "Personal"
 
 #--------------------------------------------------

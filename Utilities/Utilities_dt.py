@@ -33,7 +33,7 @@ extract_tz_parts_from_tz_aware_dt_str(timeperiod,
 
 """
 __author__ = "Jesse Buxton"
-__email__ = "jbuxton@aep.com"
+__email__  = "buxton.45.jb@gmail.com"
 __status__ = "Personal"
 
 #--------------------------------------------------------------------
