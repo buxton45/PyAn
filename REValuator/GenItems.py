@@ -5,7 +5,7 @@ Holds general items.  See individual classes for more info
 """
 
 __author__ = "Jesse Buxton"
-__email__ = "jbuxton@aep.com"
+__email__  = "buxton.45.jb@gmail.com"
 __status__ = "Personal"
 
 #--------------------------------------------------
