@@ -4,9 +4,14 @@ import sys, os
 import Utilities_sql
 
 class SQLElement:
-    def __init__(self, field_desc, 
-                 alias=None, table_alias_prefix=None, 
-                 comparison_operator=None, value=None):
+    def __init__(
+        self                , 
+        field_desc          , 
+        alias               = None, 
+        table_alias_prefix  = None, 
+        comparison_operator = None, 
+        value               = None
+    ):
         # This is intended to be a base class which can be used multiple places throughout the SQL query.
         # Simplest case: element is field from table
         # Examples
@@ -21,13 +26,16 @@ class SQLElement:
             self.dict_init(field_desc)
             return
         
-        self.field_desc = field_desc
-        self.alias = alias
-        self.table_alias_prefix = table_alias_prefix
+        self.field_desc          = field_desc
+        self.alias               = alias
+        self.table_alias_prefix  = table_alias_prefix
         self.comparison_operator = comparison_operator
-        self.value = value
+        self.value               = value
         
-    def dict_init(self, field_desc_dict):
+    def dict_init(
+        self, 
+        field_desc_dict
+    ):
         assert('field_desc' in field_desc_dict)
         self.field_desc          = field_desc_dict['field_desc']
         self.alias               = field_desc_dict.get('alias', None)
@@ -38,22 +46,22 @@ class SQLElement:
     def get_describe_str(self):
         return (
             f"""
-            field_desc = {self.field_desc}
-            alias = {self.alias}
-            table_alias_prefix = {self.table_alias_prefix}
+            field_desc          = {self.field_desc}
+            alias               = {self.alias}
+            table_alias_prefix  = {self.table_alias_prefix}
             comparison_operator = {self.comparison_operator}
-            value = {self.value}
+            value               = {self.value}
             """
         )
         
     def describe(self):
         print((
             f"""
-            field_desc = {self.field_desc}
-            alias = {self.alias}
-            table_alias_prefix = {self.table_alias_prefix}
+            field_desc          = {self.field_desc}
+            alias               = {self.alias}
+            table_alias_prefix  = {self.table_alias_prefix}
             comparison_operator = {self.comparison_operator}
-            value = {self.value}
+            value               = {self.value}
             """
         ))
         
@@ -111,13 +119,16 @@ class SQLElement:
         #return hash(id(self))
         return hash(self.__key())
         
-    def approx_eq(self, other, 
-                  comp_alias=False, 
-                  comp_table_alias_prefix=False, 
-                  comp_comparison_operator=False, 
-                  comp_value=False, 
-                  none_eq_empty_str=True, 
-                  case_insensitive=False):
+    def approx_eq(
+        self                     , 
+        other                    , 
+        comp_alias               = False, 
+        comp_table_alias_prefix  = False, 
+        comp_comparison_operator = False, 
+        comp_value               = False, 
+        none_eq_empty_str        = True, 
+        case_insensitive         = False
+    ):
         # none_eq_empty_str allows None=='' to return as True
         #   See Utilities_sql.are_strings_equal for more details
         #
@@ -176,7 +187,11 @@ class SQLElement:
     def to_json_value(self):
         return self.get_dict()
         
-    def get_field_desc(self, include_alias=True, include_table_alias_prefix=True):
+    def get_field_desc(
+        self                       , 
+        include_alias              = True, 
+        include_table_alias_prefix = True
+    ):
         return_name = ''
         if include_table_alias_prefix and self.table_alias_prefix:
             return_name =  f"{self.table_alias_prefix}.{self.field_desc}"

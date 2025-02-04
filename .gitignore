@@ -1,4 +1,12 @@
 PersonalToken.txt
+pwd_file.txt
+*ipynb_checkpoints*
+*__pycache__*
+LocalData/*
+SQLAids_20220302BOD/*
+Udemy/*
+PastWork/*
+config.yaml
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

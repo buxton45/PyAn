@@ -793,6 +793,71 @@ def determine_timezone_and_convert_local_to_utc_time(t_local, unique_tz_offsets,
     found_tz = determine_us_timezone(unq_tz_offsets, assert_found=True)
     #--------------------
     return convert_local_to_utc_time(t_local, found_tz)
+
+
+def get_date_ranges(
+    date_0            , 
+    date_1            , 
+    freq              , 
+    include_endpoints = True
+):
+    r"""
+    Essentially takes the output of pd.date_range(date_0, date_1, freq), which is a list of dates,
+      and turns it into a list of ranges (i.e., length-2 lists/tuples)
+
+    freq:
+        Must be at least 1D in duration (e.g, W, MS, 31D, etc. all work)
+    
+    NOTE: Any time information in date_0/date_1 IS IGNORED!
+          Only the date is used
+    """
+    #--------------------------------------------------
+    # Make sure freq is at least 1D in duration
+    dummy_dt = pd.to_datetime('1987-11-02')
+    assert(dummy_dt+pd.tseries.frequencies.to_offset(freq) > dummy_dt+pd.tseries.frequencies.to_offset('1D'))
+    #-------------------------
+    date_0 = pd.to_datetime(date_0).date()
+    date_1 = pd.to_datetime(date_1).date()
+    #-------------------------
+    dates = pd.date_range(
+        start = date_0, 
+        end   = date_1, 
+        freq  = freq
+    )
+    #-------------------------
+    # For the intervals, i.e. the two-element objects, formed by [element_i, element_i+1 - 1Day]
+    dates = [
+        [dates[i].date(), (dates[i+1]-pd.Timedelta('1D')).date()] 
+        for i in range(len(dates)-1)
+    ]
+
+    #-------------------------
+    # If, e.g., MS is used, then date_0 generally won't be included
+    if include_endpoints and dates[0][0]!=date_0:
+        dates.insert(0, [date_0, dates[0][0]-pd.Timedelta('1D')])
+        assert(dates[0][0]==date_0)
+    
+    #-------------------------
+    # In general, date_1 won't be included (unless freq perfectly splits the [date_0,date_1] interval)
+    if include_endpoints and dates[-1][-1]!=date_1:
+        dates.append([dates[-1][-1]+pd.Timedelta('1D'), date_1])
+        assert(dates[-1][-1]==date_1)
+
+    #-------------------------
+    # Make elements tuples, instead of lists (since tuples are immutable)
+    dates = [tuple(i) for i in dates]
+    
+    #-------------------------
+    # SANITY CHECK: Make sure the end of each range differs from the beginning of the next by 1 day
+    for i in range(len(dates)):
+        if i==0:
+            continue
+        range_i   = dates[i]
+        range_im1 = dates[i-1]
+        assert(range_i[0]-range_im1[1] == pd.Timedelta('1D'))
+
+    #-------------------------
+    return dates
     
     
 if __name__ == "__main__":

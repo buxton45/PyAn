@@ -724,7 +724,13 @@ def get_flattened_multiindex_columns(df_columns, join_str = ' ', reverse_order=T
     return rename_dict
 
 #--------------------------------------------------
-def flatten_multiindex_columns(df, join_str = ' ', reverse_order=True, to_ignore=['first'], inplace=True):
+def flatten_multiindex_columns(
+        df            , 
+        join_str      = ' ', 
+        reverse_order = True, 
+        to_ignore     = ['first'], 
+        inplace       = True
+    ):
     # The level=0 value is always kept, as this is typically e.g. the measurement
     # For all other levels, if any element in to_ignore is found, that level is ignored
     #   e.g., col_1 = ('prem_nb',  'first_mtrs',  'first_TRS') and to_ignore=['first']

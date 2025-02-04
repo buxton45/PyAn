@@ -5,7 +5,7 @@ Holds OpItem class.  See OpItem.OpItem for more information.
 """
 
 __author__ = "Jesse Buxton"
-__email__  = "buxton.45.jb@gmail.com"
+__email__ = "jbuxton@aep.com"
 __status__ = "Personal"
 
 #--------------------------------------------------

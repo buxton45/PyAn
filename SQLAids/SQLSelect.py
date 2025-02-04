@@ -5,8 +5,13 @@ from SQLElement import SQLElement
 from SQLElementsCollection import SQLElementsCollection
 
 class SQLSelectElement(SQLElement):
-    def __init__(self, field_desc, 
-                 alias=None, table_alias_prefix=None, is_agg=False):
+    def __init__(
+        self               , 
+        field_desc         , 
+        alias              = None, 
+        table_alias_prefix = None, 
+        is_agg             = False
+    ):
         # TODO for now, dict_init not set up
         assert(isinstance(field_desc,str))
         # First, call base class's __init__ method
@@ -26,29 +31,108 @@ class SQLSelect(SQLElementsCollection):
         select_distinct           = False
     ):
         # First, call base class's __init__ method
-        super().__init__(field_descs=field_descs, 
-                         global_table_alias_prefix=global_table_alias_prefix, 
-                         idxs=idxs, run_check=run_check, SQLElementType=SQLSelectElement)
+        super().__init__(
+            field_descs               = field_descs, 
+            global_table_alias_prefix = global_table_alias_prefix, 
+            idxs                      = idxs, 
+            run_check                 = run_check, 
+            SQLElementType            = SQLSelectElement
+        )
         self.select_distinct=select_distinct
         
-    def add_select_element(self, field_desc, alias=None, table_alias_prefix=None, 
-                           idx=None, run_check=False):
+    def add_select_element(
+        self               , 
+        field_desc         , 
+        alias              = None, 
+        table_alias_prefix = None, 
+        idx                = None, 
+        run_check          = False
+    ):
         if isinstance(field_desc, SQLSelectElement):
             element = field_desc
         else:
-            element = SQLSelectElement(field_desc=field_desc, alias=alias, table_alias_prefix=table_alias_prefix)
-        self.insert_single_element_to_collection_at_idx(element=element, idx=idx, run_check=run_check)
+            element = SQLSelectElement(
+                field_desc         = field_desc, 
+                alias              = alias, 
+                table_alias_prefix = table_alias_prefix
+            )
+        self.insert_single_element_to_collection_at_idx(
+            element   = element, 
+            idx       = idx, 
+            run_check = run_check)
         
-    def add_select_elements(self, field_descs, 
-                            global_table_alias_prefix=None, 
-                            idxs=None, run_check=False):
+    def add_select_elements(
+        self                      , 
+        field_descs               , 
+        global_table_alias_prefix = None, 
+        idxs                      = None, 
+        run_check                 = False
+    ):
         # field_descs should be a list with elements of type SQLElement, dict, or string.
         # See SQLElementsCollection.insert_to_collection_at_idx for more information
-        self.insert_to_collection_at_idx(field_descs=field_descs, 
-                                         global_table_alias_prefix=global_table_alias_prefix, 
-                                         idxs=idxs, run_check=run_check)
+        self.insert_to_collection_at_idx(
+            field_descs               = field_descs, 
+            global_table_alias_prefix = global_table_alias_prefix, 
+            idxs                      = idxs, 
+            run_check                 = run_check
+        )
+
+
+    def cast_element_as_timestamp(
+        self             , 
+        field_desc       , 
+        datetime_pattern = r"([0-9]{4}-[0-9]{2}-[0-9]{2})T([0-9]{2}:[0-9]{2}:[0-9]{2}).*", 
+        new_alias        = None
+    ):
+        r"""
+        """
+        #--------------------------------------------------
+        if datetime_pattern.lower()=='no_cast':
+            return
+        #-------------------------
+        # First, make sure the input field_desc is found in sql_select
+        found_idx = self.find_idx_of_approx_element_in_collection_dict(
+            element                  = field_desc, 
+            assert_max_one           = True, 
+            comp_alias               = False, 
+            comp_table_alias_prefix  = False, 
+            comp_comparison_operator = False, 
+            comp_value               = False
+        )
+        assert(found_idx >= 0)
+        #-------------------------
+        select_el_i = self.collection_dict[found_idx]
+        #-------------------------
+        # NOTE: The table_alias_prefix is handled below, so should be set to None for final element
+        if select_el_i.table_alias_prefix is None:
+            field_desc_fnl = select_el_i.field_desc
+        else:
+            field_desc_fnl = f"{select_el_i.table_alias_prefix}.{select_el_i.field_desc}"
+        #-------------------------
+        if datetime_pattern is None:
+            field_desc_fnl = f"CAST({field_desc_fnl} AS TIMESTAMP)"
+        else:
+            field_desc_fnl = r"CAST(regexp_replace({}, ".format(field_desc_fnl) + r"'{}', '$1 $2') AS TIMESTAMP)".format(datetime_pattern)
+        #-------------------------
+        if new_alias is None:
+            new_alias = select_el_i.alias
+        #-----
+        select_el_i_fnl = SQLSelectElement(
+            field_desc         = field_desc_fnl, 
+            alias              = new_alias, 
+            table_alias_prefix = None, 
+            is_agg             = select_el_i.is_agg
+        )
+        self.collection_dict[found_idx] = select_el_i_fnl
+        #-------------------------
+        return
+    
         
-    def get_statement_string(self, include_alias=True, include_table_alias_prefix=True):
+    def get_statement_string(
+        self                       , 
+        include_alias              = True, 
+        include_table_alias_prefix = True
+    ):
         # If not last line ==> end with comma (',')
         # else             ==> end with nothing
         #---------------
@@ -65,14 +149,26 @@ class SQLSelect(SQLElementsCollection):
             sql += line
         return sql
         
-    def print_statement_string(self, include_alias=True, include_table_alias_prefix=True):
-        stmnt_str = self.get_statement_string(include_alias=include_alias, 
-                                              include_table_alias_prefix=include_table_alias_prefix)
+    def print_statement_string(
+        self                       , 
+        include_alias              = True, 
+        include_table_alias_prefix = True
+    ):
+        stmnt_str = self.get_statement_string(
+            include_alias              = include_alias, 
+            include_table_alias_prefix = include_table_alias_prefix
+        )
         print(stmnt_str)
         
-    def print(self, include_alias=True, include_table_alias_prefix=True):
-        self.print_statement_string(include_alias=include_alias, 
-                                    include_table_alias_prefix=include_table_alias_prefix)
+    def print(
+        self                       , 
+        include_alias              = True, 
+        include_table_alias_prefix = True
+    ):
+        self.print_statement_string(
+            include_alias              = include_alias, 
+            include_table_alias_prefix = include_table_alias_prefix
+        )
         
     def get_agg_element_ids(self):
         agg_elements = []
@@ -84,7 +180,10 @@ class SQLSelect(SQLElementsCollection):
         
         
     @staticmethod
-    def refine_agg_cols_and_types(agg_cols_and_types, try_to_split_col_strs=True):
+    def refine_agg_cols_and_types(
+        agg_cols_and_types    , 
+        try_to_split_col_strs = True
+    ):
         r"""
         Changes any string keys to SQLElement keys in agg_cols_and_types and returns.
         
@@ -132,9 +231,13 @@ class SQLSelect(SQLElementsCollection):
     
     
     @staticmethod
-    def add_aggregate_elements_to_sql_select(sql_select, agg_cols_and_types, 
-                                             try_to_split_col_strs=True, 
-                                             include_counts_including_null=True, **kwargs):
+    def add_aggregate_elements_to_sql_select(
+        sql_select                    , 
+        agg_cols_and_types            , 
+        try_to_split_col_strs         = True, 
+        include_counts_including_null = True, 
+        **kwargs
+    ):
         r"""
         NOTE: Non-static verson = add_aggregate_elements
         
@@ -155,13 +258,15 @@ class SQLSelect(SQLElementsCollection):
         
         """
         #---------------------
-        to_SQL_dict = {'sum':'SUM({})', 
-                       'sq_sum':'SUM(POWER({}, 2))', 
-                       'mean':'AVG({})', 
-                       'std':'STDDEV_SAMP({})', 
-                       'count':'COUNT({})', 
-                       'min':'MIN({})', 
-                       'max':'MIN({})'}
+        to_SQL_dict = {
+            'sum':'SUM({})', 
+            'sq_sum':'SUM(POWER({}, 2))', 
+            'mean':'AVG({})', 
+            'std':'STDDEV_SAMP({})', 
+            'count':'COUNT({})', 
+            'min':'MIN({})', 
+            'max':'MIN({})'
+        }
         #---------------------
         # Make all keys in agg_cols_and_types type SQLElement
         agg_cols_and_types = SQLSelect.refine_agg_cols_and_types(agg_cols_and_types, try_to_split_col_strs)
@@ -171,10 +276,12 @@ class SQLSelect(SQLElementsCollection):
         comp_alias = kwargs.get('comp_alias', False)
         comp_table_alias_prefix = kwargs.get('comp_table_alias_prefix', False)
         for sql_elm in agg_cols_and_types.keys():
-            found_idx = sql_select.find_idx_of_approx_element_in_collection_dict(sql_elm, 
-                                                                                 comp_alias=comp_alias, 
-                                                                                 comp_table_alias_prefix=comp_table_alias_prefix, 
-                                                                                 assert_max_one=True)
+            found_idx = sql_select.find_idx_of_approx_element_in_collection_dict(
+                element                 = sql_elm, 
+                comp_alias              = comp_alias, 
+                comp_table_alias_prefix = comp_table_alias_prefix, 
+                assert_max_one          = True
+            )
             if found_idx > -1:
                 sql_select.remove_single_element_from_collection_at_idx(found_idx)
         #---------------------
@@ -197,21 +304,32 @@ class SQLSelect(SQLElementsCollection):
         return sql_select    
         
 
-    def add_aggregate_elements(self, agg_cols_and_types, 
-                               try_to_split_col_strs=True, 
-                               include_counts_including_null=True, **kwargs):
-        SQLSelect.add_aggregate_elements_to_sql_select(self, 
-                                                       agg_cols_and_types=agg_cols_and_types, 
-                                                       try_to_split_col_strs=try_to_split_col_strs, 
-                                                       include_counts_including_null=include_counts_including_null, 
-                                                       **kwargs)
+    def add_aggregate_elements(
+        self                          , 
+        agg_cols_and_types            , 
+        try_to_split_col_strs         = True, 
+        include_counts_including_null = True, 
+        **kwargs
+    ):
+        SQLSelect.add_aggregate_elements_to_sql_select(
+            self, 
+            agg_cols_and_types            = agg_cols_and_types, 
+            try_to_split_col_strs         = try_to_split_col_strs, 
+            include_counts_including_null = include_counts_including_null, 
+            **kwargs
+        )
     
     @staticmethod
-    def build_aggregate_sql_select(field_descs, agg_cols_and_types, 
-                                   try_to_split_col_strs=True, 
-                                   global_table_alias_prefix=None, idxs=None, run_check=False, 
-                                   include_counts_including_null=True, 
-                                   **kwargs):
+    def build_aggregate_sql_select(
+        field_descs                   , 
+        agg_cols_and_types            , 
+        try_to_split_col_strs         = True, 
+        global_table_alias_prefix     = None, 
+        idxs                          = None, 
+        run_check                     = False, 
+        include_counts_including_null = True, 
+        **kwargs
+    ):
         r"""
         - field_descs, global_table_alias_prefix, idxs, run_check:
             - These are just as should be input into SQLSelect            
@@ -245,12 +363,17 @@ class SQLSelect(SQLElementsCollection):
         """
 
         #---------------------
-        sql_select = SQLSelect(field_descs=field_descs, 
-                               global_table_alias_prefix=global_table_alias_prefix, 
-                               idxs=idxs, run_check=run_check)
-        sql_select = SQLSelect.add_aggregate_elements_to_sql_select(sql_select=sql_select, 
-                                                                    agg_cols_and_types=agg_cols_and_types, 
-                                                                    try_to_split_col_strs=try_to_split_col_strs, 
-                                                                    include_counts_including_null=include_counts_including_null, 
-                                                                    **kwargs) 
+        sql_select = SQLSelect(
+            field_descs               = field_descs, 
+            global_table_alias_prefix = global_table_alias_prefix, 
+            idxs                      = idxs, 
+            run_check                 = run_check
+        )
+        sql_select = SQLSelect.add_aggregate_elements_to_sql_select(
+            sql_select                    = sql_select, 
+            agg_cols_and_types            = agg_cols_and_types, 
+            try_to_split_col_strs         = try_to_split_col_strs, 
+            include_counts_including_null = include_counts_including_null, 
+            **kwargs
+        ) 
         return sql_select

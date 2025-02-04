@@ -10,10 +10,15 @@ from SQLElementsCollection import SQLElementsCollection
 #****************************************************************************************************************************************************
 class SQLWhereElement(SQLElement):
     #TODO Maybe set default comparison_operator  '='?
-    def __init__(self, field_desc,  
-                 value, comparison_operator, needs_quotes=True, 
-                 table_alias_prefix=None, 
-                 is_timestamp=False):
+    def __init__(
+        self                , 
+        field_desc          ,  
+        value               , 
+        comparison_operator , 
+        needs_quotes        =True, 
+        table_alias_prefix  = None, 
+        is_timestamp        = False
+    ):
         r"""
         TODO for now, dict_init not set up
         
@@ -26,18 +31,25 @@ class SQLWhereElement(SQLElement):
         """
         assert(isinstance(field_desc,str))
         # First, call base class's __init__ method
-        super().__init__(field_desc=field_desc, 
-                         alias=None, table_alias_prefix=table_alias_prefix, 
-                         comparison_operator=comparison_operator, value=value)
-        self.needs_quotes = needs_quotes
+        super().__init__(
+            field_desc          = field_desc, 
+            alias               = None, 
+            table_alias_prefix  = table_alias_prefix, 
+            comparison_operator = comparison_operator, 
+            value               = value
+        )
+        self.needs_quotes        = needs_quotes
         self.comparison_operator = comparison_operator.upper()
-        self.is_timestamp = is_timestamp
+        self.is_timestamp        = is_timestamp
         # NOTE: If comparison_operator is 'BETWEEN', then value must be a list or tuple with 2 elements
         if self.comparison_operator == 'BETWEEN':
             assert((isinstance(self.value, list) or isinstance(self.value, tuple)) and 
                    len(self.value)==2)
             
-    def get_where_element_string(self, include_table_alias_prefix=True):
+    def get_where_element_string(
+        self                       , 
+        include_table_alias_prefix = True
+    ):
         # NOTE: If comparison_operator is 'BETWEEN', then value must be a list or tuple with 2 elements
         #-----
         if self.needs_quotes:
@@ -45,7 +57,10 @@ class SQLWhereElement(SQLElement):
         else:
             value_fmt = "{}"
         #-----
-        field_desc = self.get_field_desc(include_alias=False, include_table_alias_prefix=include_table_alias_prefix)
+        field_desc = self.get_field_desc(
+            include_alias              = False, 
+            include_table_alias_prefix = include_table_alias_prefix
+        )
         elmnt_strng = f"{field_desc} {self.comparison_operator} "
         if self.comparison_operator == 'BETWEEN':
             assert((isinstance(self.value, list) or isinstance(self.value, tuple)) and 
@@ -64,11 +79,19 @@ class SQLWhereElement(SQLElement):
 
 #****************************************************************************************************************************************************        
 class CombinedSQLWhereElements:
-    def __init__(self, collection_dict, idxs_to_combine, join_operator):
+    def __init__(
+        self            , 
+        collection_dict , 
+        idxs_to_combine , 
+        join_operator   , 
+    ):
         self.elements = [collection_dict[idx] for idx in idxs_to_combine]
         self.join_operator=join_operator
         
-    def get_combined_where_elements_string(self, include_table_alias_prefix=True):
+    def get_combined_where_elements_string(
+        self                       , 
+        include_table_alias_prefix = True
+    ):
         return_str = "(\n"
         for i,element in enumerate(self.elements):
             assert(isinstance(element, SQLWhereElement) or isinstance(element, CombinedSQLWhereElements))
@@ -128,9 +151,12 @@ class CombinedSQLWhereElements:
 
 #****************************************************************************************************************************************************        
 class SQLWhere(SQLElementsCollection):
-    def __init__(self, 
-                 field_descs=None, 
-                 idxs=None, run_check=False):
+    def __init__(
+        self        , 
+        field_descs = None, 
+        idxs        = None, 
+        run_check   = False
+    ):
         necessary_keys = ['field_desc', 'comparison_operator', 'value']
         if field_descs is not None:
             assert(isinstance(field_descs, list) or isinstance(field_descs, tuple))
@@ -139,10 +165,14 @@ class SQLWhere(SQLElementsCollection):
                 if isinstance(field_desc, dict):
                     assert(all(x in field_desc for x in necessary_keys))
         # First, call base class's __init__ method
-        super().__init__(field_descs=field_descs, 
-                         global_table_alias_prefix=None, 
-                         idxs=idxs, run_check=run_check, SQLElementType=SQLWhereElement, 
-                         other_acceptable_SQLElementTypes=[CombinedSQLWhereElements])
+        super().__init__(
+            field_descs                      = field_descs, 
+            global_table_alias_prefix        = None, 
+            idxs                             = idxs, 
+            run_check                        = run_check, 
+            SQLElementType                   = SQLWhereElement, 
+            other_acceptable_SQLElementTypes = [CombinedSQLWhereElements]
+        )
         #-------------------------
         # NOTE: addtnl_info is just an empty dict which can be used for whatever
         #       I developed it to house field_descs_dict for use with combine_where_elements 
@@ -164,11 +194,19 @@ class SQLWhere(SQLElementsCollection):
         if isinstance(field_desc, SQLWhereElement):
             element = field_desc
         else:
-            element = SQLWhereElement(field_desc=field_desc, 
-                                      value=value, comparison_operator=comparison_operator, needs_quotes=needs_quotes, 
-                                      table_alias_prefix=table_alias_prefix, 
-                                      is_timestamp=is_timestamp)
-        self.insert_single_element_to_collection_at_idx(element=element, idx=idx, run_check=run_check)
+            element = SQLWhereElement(
+                field_desc          = field_desc, 
+                value               = value, 
+                comparison_operator = comparison_operator, 
+                needs_quotes        = needs_quotes, 
+                table_alias_prefix  = table_alias_prefix, 
+                is_timestamp        = is_timestamp
+            )
+        self.insert_single_element_to_collection_at_idx(
+            element   = element, 
+            idx       = idx, 
+            run_check = run_check
+        )
         
     def add_where_statements(
             self, 
@@ -185,9 +223,12 @@ class SQLWhere(SQLElementsCollection):
             assert(Utilities_sql.is_object_one_of_types(field_desc, self.all_acceptable_SQLElementTypes+[dict]))
             if isinstance(field_desc, dict):
                 assert(all(x in field_desc for x in necessary_keys))
-        self.insert_to_collection_at_idx(field_descs=field_descs, 
-                                         global_table_alias_prefix=None, 
-                                         idxs=idxs, run_check=run_check)
+        self.insert_to_collection_at_idx(
+            field_descs               = field_descs, 
+            global_table_alias_prefix = None, 
+            idxs                      = idxs, 
+            run_check                 = run_check
+        )
                                          
     def add_where_statement_equality_or_in(
             sql_where            , 
@@ -213,13 +254,15 @@ class SQLWhere(SQLElementsCollection):
             value=value
             needs_quotes=needs_quotes
         #-------------------------
-        sql_where.add_where_statement(field_desc=field_desc, 
-                                      comparison_operator=comparison_operator, 
-                                      value=value, 
-                                      needs_quotes=needs_quotes, 
-                                      table_alias_prefix=table_alias_prefix, 
-                                      idx=idx, 
-                                      run_check=run_check)
+        sql_where.add_where_statement(
+            field_desc          = field_desc, 
+            comparison_operator = comparison_operator, 
+            value               = value, 
+            needs_quotes        = needs_quotes, 
+            table_alias_prefix  = table_alias_prefix, 
+            idx                 = idx, 
+            run_check           = run_check
+        )
         return sql_where
 
     def remove_where_statement_at_idx(self, idx, run_check=False):
@@ -625,7 +668,7 @@ class SQLWhere(SQLElementsCollection):
     #------------------------------------------------------------------------------------------------
     def get_statement_string(self, include_table_alias_prefix=True):
         # If first line ==> begin with WHERE
-        # else          ==> being with AND
+        # else          ==> begin with AND
         #
         # If not last line ==> end with comma (',')
         # else             ==> end with nothing

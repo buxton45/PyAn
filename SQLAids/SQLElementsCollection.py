@@ -294,11 +294,15 @@ class SQLElementsCollection():
         return found_idxs
         
         
-    def find_idx_of_approx_element_in_collection_dict(self, element, assert_max_one=True, 
-                                                      comp_alias=False, 
-                                                      comp_table_alias_prefix=False, 
-                                                      comp_comparison_operator=False, 
-                                                      comp_value=False):
+    def find_idx_of_approx_element_in_collection_dict(
+        self                     , 
+        element                  , 
+        assert_max_one           = True, 
+        comp_alias               = False, 
+        comp_table_alias_prefix  = False, 
+        comp_comparison_operator = False, 
+        comp_value               = False
+    ):
         #-------------------------
         # Allow for possibility of element being a simple string
         if isinstance(element, str):
@@ -326,27 +330,40 @@ class SQLElementsCollection():
         #---------------
         return found_idxs
         
-    def find_and_remove_element_in_collection_dict(self, element, assert_max_one=True, run_check=True):
-        found_idxs = self.find_idx_of_element_in_collection_dict(element=element, 
-                                                                 assert_max_one=assert_max_one)
+    def find_and_remove_element_in_collection_dict(
+        self           , 
+        element        , 
+        assert_max_one = True, 
+        run_check      = True
+    ):
+        found_idxs = self.find_idx_of_element_in_collection_dict(
+            element        = element, 
+            assert_max_one = assert_max_one
+        )
         if found_idxs==-1:
             return
         if isinstance(found_idxs, int):
             found_idxs = [found_idxs]
         self.remove_elements_from_collection_at_idxs(found_idxs, run_check=run_check)
 
-    def find_and_remove_approx_element_in_collection_dict(self, element, assert_max_one=True, 
-                                                          comp_alias=False, 
-                                                          comp_table_alias_prefix=False, 
-                                                          comp_comparison_operator=False, 
-                                                          comp_value=False, 
-                                                          run_check=True):
-        found_idxs = self.find_idx_of_approx_element_in_collection_dict(element=element, 
-                                                                        assert_max_one=assert_max_one, 
-                                                                        comp_alias=comp_alias, 
-                                                                        comp_table_alias_prefix=comp_table_alias_prefix, 
-                                                                        comp_comparison_operator=comp_comparison_operator, 
-                                                                        comp_value=comp_value)
+    def find_and_remove_approx_element_in_collection_dict(
+        self                     , 
+        element                  , 
+        assert_max_one           = True, 
+        comp_alias               = False, 
+        comp_table_alias_prefix  = False, 
+        comp_comparison_operator = False, 
+        comp_value               = False, 
+        run_check                = True
+    ):
+        found_idxs = self.find_idx_of_approx_element_in_collection_dict(
+            element                  = element, 
+            assert_max_one           = assert_max_one, 
+            comp_alias               = comp_alias, 
+            comp_table_alias_prefix  = comp_table_alias_prefix, 
+            comp_comparison_operator = comp_comparison_operator, 
+            comp_value               = comp_value
+        )
         if found_idxs==-1:
             return
         if isinstance(found_idxs, int):

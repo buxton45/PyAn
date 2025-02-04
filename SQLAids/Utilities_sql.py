@@ -211,7 +211,7 @@ def supplement_dict_with_default_values(to_supplmnt_dict, default_values_dict, e
                                           if x not in to_supplmnt_dict[key]])
     return to_supplmnt_dict
 
-# IMPORTANT!!!!!: prepend_tabs_to_each_line below matchesthat in Utilities
+# IMPORTANT!!!!!: prepend_tabs_to_each_line below matches that in Utilities
 #                 It was reproduced here so SQLAids can be a standalone package.
 #                 However, this may need to be revisited in the future.  
 #--------------------------------------------------------------------

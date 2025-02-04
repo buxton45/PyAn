@@ -297,6 +297,33 @@ def is_hashable(input_obj):
     #-------------------------
     return isinstance(input_obj, typing.Hashable)
 
+#---------------------------------------------------------------------
+def join_list(
+        list_to_join  , 
+        quotes_needed = True, 
+        join_str      = ','
+    ):
+    # Default quotes_needed=True because if quotes are not needed I will
+    #   probably simply use ','.join(list_to_join)
+    if quotes_needed:
+        return_str = join_str.join(["'{}'".format(x) for x in list_to_join])
+    else:
+        # The join method apparently only works if the iterable contains strings...
+        # Therefore, first convert all elements to strings. If the elements are alraedy
+        #   strings this has no effect
+        return_str = join_str.join([str(x) for x in list_to_join])
+    return return_str
+
+def join_list_w_quotes(
+        list_to_join , 
+        join_str     = ','
+    ):
+    return join_list(
+        list_to_join  = list_to_join, 
+        quotes_needed = True, 
+        join_str      = join_str
+    )
+
 #--------------------------------------------------------------------
 def are_all_list_elements_of_type(lst, typ):
     assert(isinstance(lst, list) or isinstance(lst, tuple))

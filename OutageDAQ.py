@@ -40,7 +40,7 @@ import Utilities_config
 #-----
 from MeterPremise import MeterPremise
 #-----
-from AMI_SQL import AMI_SQL
+from AMI_SQL import AMI_SQL, DfToSqlMap
 from AMINonVee_SQL import AMINonVee_SQL
 from AMIEndEvents_SQL import AMIEndEvents_SQL
 from AMIUsgInst_SQL import AMIUsgInst_SQL
@@ -894,7 +894,6 @@ class OutageDAQOutg(OutageDAQ):
         #           )
         #       )
         #----------------------------------------------------------------------------------------------------
-        usg_split_to_CTEs              = True
         df_construct_type              = DFConstructType.kRunSqlQuery
         contstruct_df_args_end_events  = None
         addtnl_groupby_cols            = ['OUTG_REC_NB', 'trsf_pole_nb']
@@ -921,12 +920,11 @@ class OutageDAQOutg(OutageDAQ):
             df_outage                         = self.df_outage_slim, 
             build_sql_function                = AMIEndEvents_SQL.build_sql_end_events, 
             build_sql_function_kwargs         = build_sql_function_kwargs, 
-            split_to_CTEs                     = usg_split_to_CTEs, 
             join_mp_args                      = False, 
             date_only                         = date_only, 
             df_args                           = dict(
                 addtnl_groupby_cols = addtnl_groupby_cols, 
-                mapping_to_ami      = {'PREMISE_NBS':'premise_nbs'}, 
+                mapping_to_ami      = DfToSqlMap(df_col='PREMISE_NBS', kwarg='premise_nbs', sql_col='aep_premise_nb'), 
                 is_df_consolidated  = True
             ),
             # GenAn - keys_to_pop in GenAn.build_sql_general 
@@ -1911,7 +1909,6 @@ class OutageDAQOtBL(OutageDAQ):
         #           )
         #       )
         #----------------------------------------------------------------------------------------------------
-        usg_split_to_CTEs             = True
         df_construct_type             = DFConstructType.kRunSqlQuery
         contstruct_df_args_end_events = None
         #-------------------------
@@ -1944,7 +1941,6 @@ class OutageDAQOtBL(OutageDAQ):
             cols_of_interest                  = cols_of_interest_end_dev_event, 
             build_sql_function                = AMIEndEvents_SQL.build_sql_end_events, 
             build_sql_function_kwargs         = build_sql_function_kwargs, 
-            split_to_CTEs                     = usg_split_to_CTEs, 
             join_mp_args                      = False, 
             date_only                         = date_only, 
             df_args                           = dict(
@@ -1968,7 +1964,7 @@ class OutageDAQOtBL(OutageDAQ):
                 default_values_dict = dict(
                     df_mp_no_outg = self.df_no_outage_slim, 
                     df_args       = dict(
-                        mapping_to_ami     = {'premise_nbs':'premise_nbs'}, 
+                        mapping_to_ami     = DfToSqlMap(df_col='premise_nbs', kwarg='premise_nbs', sql_col='aep_premise_nb'), 
                         is_df_consolidated = True
                     )
                 ), 
@@ -1988,7 +1984,7 @@ class OutageDAQOtBL(OutageDAQ):
                 default_values_dict = dict(
                     df_mp_no_outg = df_mp_no_outg, 
                     df_args       = dict(
-                        mapping_to_ami     = {'prem_nb':'premise_nbs'}, 
+                        mapping_to_ami     = DfToSqlMap(df_col='prem_nb', kwarg='premise_nbs', sql_col='aep_premise_nb'), 
                         is_df_consolidated = False
                     )
                 ), 
@@ -2552,7 +2548,6 @@ class OutageDAQPrBL(OutageDAQ):
         #           )
         #       )
         #----------------------------------------------------------------------------------------------------
-        usg_split_to_CTEs              = True
         df_construct_type              = DFConstructType.kRunSqlQuery
         contstruct_df_args_end_events  = None
         addtnl_groupby_cols            = ['trsf_pole_nb', 'no_outg_rec_nb']
@@ -2578,7 +2573,6 @@ class OutageDAQPrBL(OutageDAQ):
             cols_of_interest                  = cols_of_interest_end_dev_event, 
             build_sql_function                = AMIEndEvents_SQL.build_sql_end_events, 
             build_sql_function_kwargs         = build_sql_function_kwargs, 
-            split_to_CTEs                     = usg_split_to_CTEs, 
             join_mp_args                      = False, 
             date_only                         = date_only, 
             df_args                           = dict(
@@ -2602,7 +2596,7 @@ class OutageDAQPrBL(OutageDAQ):
                 default_values_dict = dict(
                     df_mp_no_outg   = self.df_mp_no_outg_w_events_slim, 
                     df_args         = dict(
-                        mapping_to_ami     = {'premise_nbs':'premise_nbs'}, 
+                        mapping_to_ami     = DfToSqlMap(df_col='premise_nbs', kwarg='premise_nbs', sql_col='aep_premise_nb'), 
                         is_df_consolidated = True
                     )
                 ), 
@@ -2619,7 +2613,7 @@ class OutageDAQPrBL(OutageDAQ):
                 default_values_dict = dict(
                     df_mp_no_outg   = df_mp_no_outg, 
                     df_args         = dict(
-                        mapping_to_ami     = {'prem_nb':'premise_nbs'}, 
+                        mapping_to_ami     = DfToSqlMap(df_col='prem_nb', kwarg='premise_nbs', sql_col='aep_premise_nb'), 
                         is_df_consolidated = False
                     )
                 ), 
