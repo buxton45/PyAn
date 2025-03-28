@@ -9,31 +9,16 @@ __status__ = "Personal"
 
 #---------------------------------------------------------------------
 import sys, os
-import re
 import string
-import copy
-
+from enum import IntEnum
+import json
 import pandas as pd
 import numpy as np
-from pandas.api.types import is_numeric_dtype, is_datetime64_dtype, is_timedelta64_dtype
-from scipy import stats
+from pandas.api.types import is_datetime64_dtype
 import datetime
 import time
-from natsort import natsorted, ns, natsort_keygen
-from packaging import version
-
-import itertools
 import copy
-import pyodbc
 #---------------------------------------------------------------------
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import seaborn as sns
-from matplotlib.backends.backend_pdf import PdfPages
-import matplotlib.patches as mpatches
-from matplotlib.lines import Line2D
-import matplotlib.ticker as ticker
-from matplotlib import dates
 #---------------------------------------------------------------------
 sys.path.insert(0, os.path.realpath('..'))
 import Utilities_config
@@ -41,32 +26,16 @@ import Utilities_config
 from MeterPremise import MeterPremise
 #-----
 from AMI_SQL import AMI_SQL, DfToSqlMap
-from AMINonVee_SQL import AMINonVee_SQL
 from AMIEndEvents_SQL import AMIEndEvents_SQL
-from AMIUsgInst_SQL import AMIUsgInst_SQL
 from DOVSOutages_SQL import DOVSOutages_SQL
 #-----
 from GenAn import GenAn
-from AMINonVee import AMINonVee
 from AMIEndEvents import AMIEndEvents
-from AMIUsgInst import AMIUsgInst
 from DOVSOutages import DOVSOutages
 #---------------------------------------------------------------------
 sys.path.insert(0, Utilities_config.get_sql_aids_dir())
-import Utilities_sql
 import TableInfos
-from TableInfos import TableInfo
-from SQLElement import SQLElement
-from SQLElementsCollection import SQLElementsCollection
-from SQLSelect import SQLSelectElement, SQLSelect
-from SQLFrom import SQLFrom
-from SQLWhere import SQLWhereElement, SQLWhere
-from SQLJoin import SQLJoin, SQLJoinCollection
-from SQLGroupBy import SQLGroupByElement, SQLGroupBy
-from SQLHaving import SQLHaving
-from SQLOrderBy import SQLOrderByElement, SQLOrderBy
 from SQLQuery import SQLQuery
-from SQLQueryGeneric import SQLQueryGeneric
 #---------------------------------------------------------------------
 #sys.path.insert(0, os.path.join(os.path.realpath('..'), 'Utilities'))
 sys.path.insert(0, Utilities_config.get_utilities_dir())
@@ -74,20 +43,39 @@ import Utilities
 import Utilities_df
 from Utilities_df import DFConstructType
 import Utilities_dt
-from CustomJSON import CustomEncoder, CustomWriter
-import DataFrameSubsetSlicer
-from DataFrameSubsetSlicer import DataFrameSubsetSlicer as DFSlicer
-from DataFrameSubsetSlicer import DataFrameSubsetSingleSlicer as DFSingleSlicer
+from CustomJSON import CustomWriter
+
+#------------------------------------------------------------------------------------------------------------------------------------------
+class OutageDType(IntEnum):
+    r"""
+    Enum class for outage data types, which can be:
+        outg = OUTaGe data
+        otbl = Outage Transformers BaseLine
+        prbl = PRistine BaseLine
+    """
+    outg  = 0
+    otbl  = 1
+    prbl  = 2
+    unset = 3
 
 #------------------------------------------------------------------------------------------------------------------------------------------
 class OutageDataInfo:
     r"""
-    Small class/container to hold dataset information
+    Small class/container to hold dataset information.
+    Originally designed as a general clas to hold information on all datasets.
+    Functionality expanded to hold a specific instance as well, if dataset is supplied to constructor.
+    This development is why the form is a little strange, but it is fully functional.
     """
-    #-------------------------
-    def __init__(self):
+    #--------------------------------------------------
+    def __init__(
+            self, 
+            dataset = None
+        ):
         r"""
         """
+        #--------------------------------------------------
+        # General stuff
+        #--------------------------------------------------
         datasets = ['outg', 'otbl', 'prbl']
         dataset_subdirs = {
             'outg': r'Outages', 
@@ -95,7 +83,7 @@ class OutageDataInfo:
             'prbl': r'PristineBaseline'
         }
         dataset_naming_tags = {
-            'outg': '', 
+            'outg': '_outg', 
             'otbl': '_otbl', 
             'prbl': '_prbl'
         }
@@ -113,23 +101,88 @@ class OutageDataInfo:
         self.dataset_naming_tags  = dataset_naming_tags
         self.dataset_is_no_outage = dataset_is_no_outage
 
+        #--------------------------------------------------
+        # Specific stuff, if dataset supplied
+        #--------------------------------------------------
+        self.__dataset      = dataset
+        self.__subdir       = None
+        self.__naming_tag   = None
+        self.__is_no_outage = None
+        if self.__dataset is not None:
+            OutageDataInfo.assert_dataset(self.__dataset)
+            #-----
+            self.__subdir       = OutageDataInfo.get_subdir(self.__dataset)
+            self.__naming_tag   = OutageDataInfo.get_naming_tag(self.__dataset)
+            self.__is_no_outage = OutageDataInfo.get_is_no_outage(self.__dataset)
+
+    #---------------------------------------------------------------------------
+    def copy_constructor(
+        self, 
+        odi
+    ):
+        r"""
+        Annoyingly, the follow simple solution does not work:
+            self = copy.deepcopy(odi)
+          neither does:
+            self = OutageDataInput()
+            self.__dict__ = copy.deepcopy(odi.__dict__)
+    
+        So, I guess it's back to headache C++ style...
+        """
+        #--------------------------------------------------
+        assert(isinstance(odi, OutageDataInfo))
+        #--------------------------------------------------
+        self.datasets             = Utilities.general_copy(odi.datasets)
+        self.dataset_subdirs      = Utilities.general_copy(odi.dataset_subdirs)
+        self.dataset_naming_tags  = Utilities.general_copy(odi.dataset_naming_tags)
+        self.dataset_is_no_outage = Utilities.general_copy(odi.dataset_is_no_outage)
+        #-----
+        self.__dataset            = Utilities.general_copy(odi.__dataset)
+        self.__subdir             = Utilities.general_copy(odi.__subdir)
+        self.__naming_tag         = Utilities.general_copy(odi.__naming_tag)
+        self.__is_no_outage       = Utilities.general_copy(odi.__is_no_outage)
+
+    #--------------------------------------------------
+    def copy(self):
+        r"""
+        """
+        #-------------------------
+        return_odi = OutageDataInfo(odi=self)
+        return return_odi
+
+    #--------------------------------------------------
+    @property
+    def dataset(self):
+        return self.__dataset
+    @property
+    def subdir(self):
+        return self.__subdir
+    @property
+    def naming_tag(self):
+        return self.__naming_tag
+    @property
+    def is_no_outage(self):
+        return self.__is_no_outage
+
+    #--------------------------------------------------
     @staticmethod
     def datasets():
-        self = OutageDataInfo()
-        return self.datasets
+        odi = OutageDataInfo()
+        return odi.datasets
     @staticmethod
     def dataset_subdirs():
-        self = OutageDataInfo()
-        return self.dataset_subdirs
+        odi = OutageDataInfo()
+        return odi.dataset_subdirs
     @staticmethod
     def dataset_naming_tags():
-        self = OutageDataInfo()
-        return self.dataset_naming_tags
+        odi = OutageDataInfo()
+        return odi.dataset_naming_tags
     @staticmethod
     def dataset_is_no_outage():
-        self = OutageDataInfo()
-        return self.dataset_is_no_outage
+        odi = OutageDataInfo()
+        return odi.dataset_is_no_outage
     
+    #--------------------------------------------------
     @staticmethod
     def accpt_dataset(dataset):
         return dataset in OutageDataInfo.datasets()
@@ -140,89 +193,210 @@ class OutageDataInfo:
     @staticmethod
     def get_subdir(dataset):
         OutageDataInfo.assert_dataset(dataset=dataset)
-        self = OutageDataInfo()
-        return self.dataset_subdirs[dataset]
+        return OutageDataInfo.dataset_subdirs()[dataset]
     
     @staticmethod
     def get_naming_tag(dataset):
         OutageDataInfo.assert_dataset(dataset=dataset)
-        self = OutageDataInfo()
-        return self.dataset_naming_tags[dataset]
+        return OutageDataInfo.dataset_naming_tags()[dataset]
     
     @staticmethod
     def get_is_no_outage(dataset):
         OutageDataInfo.assert_dataset(dataset=dataset)
-        self = OutageDataInfo()
-        return self.dataset_is_no_outage[dataset]
+        return OutageDataInfo.dataset_is_no_outage()[dataset]
 
 
 
 #------------------------------------------------------------------------------------------------------------------------------------------
 class OutageDAQ:
     def __init__(
-            self, 
-            run_date, 
-            date_0, 
-            date_1, 
-            collect_evs_sum_vw,     # boolean
-            save_sub_dir, 
-            states                  = None, 
-            opcos                   = None, 
-            cities                  = None, 
-            single_zip_xfmrs_only   = False, 
-            save_end_events         = False, 
-            save_dfs_to_file        = False, 
-            read_dfs_from_file      = True, 
-            base_dir                = os.path.join(
-                Utilities.get_local_data_dir(), 
-                r'dovs_and_end_events_data'
-            ), 
-            run_using_slim          = False
-        ):
-            r"""
-            """
-            #--------------------------------------------------
-            assert(save_dfs_to_file+read_dfs_from_file <=1) # Should never both read and write!
-            #--------------------------------------------------
-            self.run_date              = run_date
-            self.date_0                = date_0
-            self.date_1                = date_1
-            self.collect_evs_sum_vw    = collect_evs_sum_vw
-            #-------------------------
-            self.states                = states
-            self.opcos                 = opcos
-            self.cities                = cities
-            #-------------------------
-            self.single_zip_xfmrs_only = single_zip_xfmrs_only
-            #-------------------------
-            self.save_end_events       = save_end_events
-            self.save_dfs_to_file      = save_dfs_to_file
-            self.read_dfs_from_file    = read_dfs_from_file
-            self.run_using_slim        = run_using_slim
-            #-------------------------
-            self.prep_save_locations( 
-                save_sub_dir     = save_sub_dir,  
-                save_end_events  = save_end_events, 
-                save_dfs_to_file = save_dfs_to_file, 
-                base_dir         = base_dir
-            )
-            #--------------------------------------------------
-            self.conn_outages = None
-            self.conn_aws     = None
-            if not read_dfs_from_file:
-                self.conn_outages = Utilities.get_utldb01p_oracle_connection()
-                self.conn_aws     = Utilities.get_athena_prod_aws_connection()
+        self, 
+        run_date, 
+        date_0, 
+        date_1, 
+        collect_evs_sum_vw,     # boolean
+        save_sub_dir, 
+        td_left                 = pd.Timedelta('-31D'), 
+        td_right                = pd.Timedelta('-1D'),      
+        states                  = None, 
+        opcos                   = None, 
+        cities                  = None, 
+        single_zip_xfmrs_only   = False, 
+        save_end_events         = False, 
+        save_dfs_to_file        = False, 
+        read_dfs_from_file      = True, 
+        base_dir                = os.path.join(
+            Utilities.get_local_data_dir(), 
+            r'dovs_and_end_events_data'
+        ), 
+        dates_subdir_appndx     = None, 
+        run_using_slim          = False
+    ):
+        r"""
+        date_0/date_1:
+            Expecting YYYY-mm-dd or YYYYmmdd
+            NOTE: An exception will be thrown if you lazily give it, e.g., '2024-06-31' since June only has 30 days
+        """
+        #--------------------------------------------------
+        assert(save_dfs_to_file+read_dfs_from_file <=1) # Should never both read and write!
+        #--------------------------------------------------
+        self.run_date              = run_date
+        #--------------------------------------------------
+        if not Utilities.is_datetime(obj=date_0, strict=False):
+            date_0 = pd.to_datetime(date_0, yearfirst=True)
+        if not Utilities.is_datetime(obj=date_1, strict=False):
+            date_1 = pd.to_datetime(date_1, yearfirst=True)
+        assert(date_1 > date_0)
+        #-----
+        self.date_0                = date_0
+        self.date_1                = date_1
+        #--------------------------------------------------
+        self.collect_evs_sum_vw    = collect_evs_sum_vw
+        #--------------------------------------------------
+        assert(td_left <= td_right)
+        # For no great reason, I require td_left and td_right to either both be positive or both be negative.
+        # If this becomes too restrictive for whatever reason, it can probably be removed.
+        # All methods were designed with the idea of td_left and td_right both being negative (i.e., the windows
+        #   being defined prior to the date of interest)
+        assert(
+            (td_left >= pd.Timedelta(0) and td_right >= pd.Timedelta(0)) or 
+            (td_left <= pd.Timedelta(0) and td_right <= pd.Timedelta(0))
+        )
+        #-------------------------
+        if not Utilities.is_timedelta(td_left):
+            td_left  = pd.to_timedelta(td_left)
+        if not Utilities.is_timedelta(td_right):
+            td_right = pd.to_timedelta(td_right)
+        #-----
+        self.td_left               = td_left
+        self.td_right              = td_right
+        #--------------------------------------------------
+        assert(self.date_1-self.date_0 > self.window_width)
+        #--------------------------------------------------
+        self.states                = states
+        self.opcos                 = opcos
+        self.cities                = cities
+        #-------------------------
+        self.single_zip_xfmrs_only = single_zip_xfmrs_only
+        #-------------------------
+        self.dates_subdir_appndx   = dates_subdir_appndx
+        self.save_end_events       = save_end_events
+        self.save_dfs_to_file      = save_dfs_to_file
+        self.read_dfs_from_file    = read_dfs_from_file
+        self.run_using_slim        = run_using_slim
+        #-------------------------
+        self.prep_save_locations( 
+            save_sub_dir = save_sub_dir,  
+            base_dir     = base_dir
+        )
+        #--------------------------------------------------
+        self.conn_outages = None
+        self.conn_aws     = None
+        if not read_dfs_from_file:
+            self.conn_outages = Utilities.get_utldb01p_oracle_connection()
+            self.conn_aws     = Utilities.get_athena_prod_aws_connection()
 
-            #--------------------------------------------------
-            self.df_outage_OG          = None
-            self.sql_outage_full       = None
+        #--------------------------------------------------
+        self.df_outage_OG          = None
+        self.sql_outage_full       = None
+
+
+
+    def get_summary_dict(
+        self
+    ):
+        r"""
+        DAQ settings with adjustments to a few entries (so they can be easily output into the summary JSON file)
+        e.g., Timestamp is not JSON serializable, hence the need for strftime below
+        e.g., Timedelta is not JSON serializable, hence the conversion to total seconds
+        """
+        #--------------------------------------------------
+        summary_dict = dict()
+        #-------------------------
+        summary_dict['run_date']              = self.run_date
+        #-------------------------
+        summary_dict['date_0']                = self.date_0.strftime('%Y-%m-%d %H:%M:%S')
+        summary_dict['date_1']                = self.date_1.strftime('%Y-%m-%d %H:%M:%S')
+        #-------------------------
+        summary_dict['collect_evs_sum_vw']    = self.collect_evs_sum_vw
+        #-------------------------
+        summary_dict['td_left']               = self.td_left.total_seconds()
+        summary_dict['td_right']              = self.td_right.total_seconds()
+        #-------------------------
+        summary_dict['states']                = self.states
+        summary_dict['opcos']                 = self.opcos
+        summary_dict['cities']                = self.cities
+        #-------------------------
+        summary_dict['single_zip_xfmrs_only'] = self.single_zip_xfmrs_only
+        #-------------------------
+        summary_dict['dates_subdir_appndx']   = self.dates_subdir_appndx
+        summary_dict['save_end_events']       = self.save_end_events
+        summary_dict['save_dfs_to_file']      = self.save_dfs_to_file
+        summary_dict['read_dfs_from_file']    = self.read_dfs_from_file
+        summary_dict['run_using_slim']        = self.run_using_slim
+        #-------------------------
+        summary_dict['save_dir_base']         = self.save_dir_base
+        summary_dict['end_events_save_args']  = self.end_events_save_args
+        #--------------------------------------------------
+        return summary_dict
+    
+    @staticmethod
+    def read_summary_dict(
+        save_dir_base      , 
+        summary_dict_fname = 'summary_dict.json'
+    ):
+        r"""
+        """
+        #-------------------------
+        assert(os.path.exists(os.path.join(save_dir_base, summary_dict_fname)))
+        tmp_f = open(os.path.join(save_dir_base, summary_dict_fname))
+        summary_dict = json.load(tmp_f)
+        tmp_f.close()
+        return summary_dict
+
+    @property
+    def window_width(
+        self
+    ):
+        r"""
+        It is assumed that the limits on the time window are EXCLUSIVE on the left and INCLUSIVE on the right, i.e., 
+          (pred_date+td_left, pred_date+td_right].
+            e.g., for most normal cases (where td_left and td_right are negative)
+              (-6 Days, -1 Day], (-11 Days, -6 Days], etc.
+            HOWEVER, note that when td_left and td_right are positive, this implies, e.g., 
+              (1 Day, 6 Days], (6 Days, 11 Days], etc.
+        Thus, the width of the window should be calculated as:
+          window_widths_days = td_right-td_left
+          e.g.:  Assume the window goes from 1 day before (td_right=-1) to 2 days before (td_left=-2):
+                   ==> window_widths_days = 1 days = td_right-td_left =  -1-(-2) = 1
+          e.g.:  Assume the window goes from 1 day before (td_right=-1) to 6 days before (td_left=-6):
+                   ==> window_widths_days = 5 days = td_right-td_left =  -1-(-6) = 5
+          e.g.:  Assume the window goes from 1 day after (td_left=+1) to 6 days after (td_right=+6):
+                   ==> window_widths_days = 5 days = td_right-td_left =  6-1 = 5
+        """
+        #-------------------------
+        window_width = self.td_right - self.td_left
+        return window_width
+    
+    
+    @property
+    def window_width_days(
+        self
+    ):
+        r"""
+        """
+        #-------------------------
+        window_width_days = self.window_width
+        if not isinstance(window_width_days, int):
+            assert(Utilities.is_timedelta(window_width_days))
+            window_width_days = window_width_days.days
+        return window_width_days
+    
 
     def prep_save_locations( 
-        self, 
-        save_sub_dir, 
-        save_end_events  = False, 
-        save_dfs_to_file = False, 
-        base_dir = os.path.join(
+        self         , 
+        save_sub_dir , 
+        base_dir     = os.path.join(
             Utilities.get_local_data_dir(), 
             r'dovs_and_end_events_data'
         )
@@ -236,10 +410,14 @@ class OutageDAQ:
         # DFs will be saved in save_dir_base
         # Collection of end events files will be saved in os.path.join(save_dir_base, 'EndEvents')
         #-------------------------
+        dates_subdir  = self.date_0.strftime('%Y%m%d') + '_' + self.date_1.strftime('%Y%m%d')
+        if self.dates_subdir_appndx is not None:
+            dates_subdir += self.dates_subdir_appndx
+        #-------------------------
         self.save_dir_base = os.path.join(
             base_dir, 
             self.run_date, 
-            f"{self.date_0.replace('-','')}_{self.date_1.replace('-','')}", 
+            dates_subdir, 
             save_sub_dir
         )
         #-------------------------
@@ -404,7 +582,7 @@ class OutageDAQ:
         date_1, 
         window_width, 
         rand_seed      = None, 
-        placement_cols = ['start_date', 'end_date'], 
+        placement_cols = ['t_search_min', 't_search_max'], 
         inplace        = True
     ):
         assert(len(placement_cols)==2)
@@ -425,13 +603,13 @@ class OutageDAQ:
     
     @staticmethod
     def set_random_date_interval_in_df(
-        df, 
-        date_0, 
-        date_1, 
-        window_width, 
+        df             , 
+        date_0         , 
+        date_1         , 
+        window_width   , 
         groupby        = None, 
         rand_seed      = None, 
-        placement_cols = ['start_date', 'end_date'], 
+        placement_cols = ['t_search_min', 't_search_max'], 
         inplace        = True
     ):
         r"""
@@ -492,13 +670,13 @@ class OutageDAQ:
     
     @staticmethod
     def set_random_date_interval_in_df_by_xfmr(
-        df, 
-        date_0, 
-        date_1, 
-        window_width, 
+        df             , 
+        date_0         , 
+        date_1         , 
+        window_width   , 
         xfmr_col       = 'trsf_pole_nb', 
         rand_seed      = None, 
-        placement_cols = ['start_date', 'end_date'], 
+        placement_cols = ['t_search_min', 't_search_max'], 
         inplace        = True
     ):
         r"""
@@ -538,7 +716,607 @@ class OutageDAQ:
         assert(df.shape[1]==og_shape[1]+2)
         #-------------------------
         return df
+    
 
+    @staticmethod
+    def find_clean_subwindows_for_group(
+        final_df_i                      , 
+        min_window_width                , 
+        include_is_first_after_outg_col = True, 
+        t_clean_min_col                 = 't_clean_min', 
+        t_clean_max_col                 = 't_clean_max', 
+        return_t_search_min_col         = 't_search_min', 
+        return_t_search_max_col         = 't_search_max'
+    ):
+        r"""
+        Designed for use in OutageDAQOtBL.find_clean_window_for_group when search_window_strategy=='all_subwindows'.
+        For the clean windows in final_df_i, this will find all acceptable subwindows.
+          So, e.g., if a clean window is of length 171 days and min_window_width=30 days, this will find 5 acceptable subwindows.
+          
+        It is expected that final_df_i contains data for a single group (typically, a single transformer).
+        The DF will have as many rows as clean periods found (see OutageDAQOtBL.find_clean_window_for_group for more information).
+        It is expected that the buffer times have already been taken care of inf final_df_i when defining t_clean_min and max (as
+          is the case when this function is used within OutageDAQOtBL.find_clean_window_for_group)
+        """
+        #-------------------------
+        # Generate random string to be safe when dong all the index re-naming below
+        idx_rndm = Utilities.generate_random_string()
+    
+        # Grab final_df_i index name for later
+        final_df_i_idx_nm = final_df_i.index.name
+    
+        # Iterate over each row in final_df_i, find acceptable subwindows, and add to return_dfs collection.
+        # As noted in the above documentation, final_df_i should contain one row for each clean period
+        return_dfs = []
+        for idx, row_i in final_df_i.iterrows():
+            t_clean_min_i  = row_i[t_clean_min_col]
+            t_clean_max_i  = row_i[t_clean_max_col]
+            n_subwindows_i = np.floor((t_clean_max_i-t_clean_min_i)/min_window_width).astype(int)
+            #-------------------------
+            windows_i = []
+            for i_window in range(n_subwindows_i):
+                window_i_min = t_clean_min_i + i_window*min_window_width
+                window_i_max = t_clean_min_i + (i_window+1)*min_window_width
+                windows_i.append([window_i_min, window_i_max])
+            #-------------------------
+            # Sanity check
+            assert(windows_i[-1][1] <= t_clean_max_i)
+            #-------------------------
+            # Create len(windows_i) copies of row_i and merge (concat with axis=1) with windows_i
+            #-----
+            # Need to call reset_index on rows_i for merge to work, but want to use original index later,
+            #   so rename original to more easily grab later
+            # NOTE: In newer versions of pandas (>=1.5) one can use the names argument of .reset_index,
+            #       allowing the merge to happen in a single line
+            rows_i            = pd.concat([pd.DataFrame(row_i).T]*len(windows_i))
+            assert(rows_i.index.nlevels==1)
+            idx_nm_og         = 'index_og'+idx_rndm
+            rows_i.index.name = idx_nm_og
+            rows_i            =  rows_i.reset_index()
+            #-----
+            return_df_i = pd.concat([
+                rows_i, 
+                pd.DataFrame(windows_i, columns=[return_t_search_min_col, return_t_search_max_col])
+            ], axis=1)
+            #-----
+            if include_is_first_after_outg_col:
+                return_df_i['is_first_after_outg']        = 0
+                return_df_i.loc[0, 'is_first_after_outg'] = 1
+            #-----
+            return_dfs.append(return_df_i)
+        #-------------------------
+        # Combine all return_dfs into return_df
+        return_df = pd.concat(return_dfs)
+        #-------------------------
+        # Join together the original index and the new index (new index should be 0-len(subwindows_i)-1)
+        # This will allow one to track where subwindows came from, in case one needs to debug or whatever
+        # As noted above, in newer versions of pandas (>=1.5) one can use the names argument of .reset_index
+        assert(return_df.index.nlevels==1)
+        idx_nm_new           = 'index_new'+idx_rndm
+        return_df.index.name = idx_nm_new
+        return_df            = return_df.reset_index()
+        #-----
+        idx_nm_final            = 'index_final'+idx_rndm
+        return_df[idx_nm_final] = return_df[[idx_nm_og, idx_nm_new]].astype(str).agg('_'.join, axis=1)
+        # Set index to combination of og and new, rename the index to match that of final_df_i, 
+        #   and drop idx_nm_og and idx_nm_new columns as they are no longer needed
+        return_df            = return_df.set_index(idx_nm_final)
+        return_df.index.name = final_df_i_idx_nm
+        return_df            = return_df.drop(columns=[idx_nm_og, idx_nm_new])
+        #-------------------------
+        return return_df
+
+
+
+    @staticmethod
+    def standardize_bsln_time_interval_infos_df(
+        df               , 
+        PN_regex         = r"prem(?:ise)?_nbs?", 
+        t_min_regex      = r"t(?:_search)?_min", 
+        t_max_regex      = r"t(?:_search)?_max", 
+        drop_gpd_for_sql = True, 
+        return_gpd_cols  = False
+    ):
+        r"""
+        Standardized output columns for premise, t_min, t_max:
+            PN           : premise number
+            t_search_min : t_min
+            t_search_max : t_max
+    
+        This function will cause a crash if it fails!
+        If one wants a softer version, use OutageDAQ.try_to_standardize_bsln_time_interval_infos_df
+    
+        return_gpd_cols:
+            If True, returns (df, gpd_cols)
+            For DAQ, the data are always grouped by t_min/t_max.
+                Additional grouped columns are tagged with _GPD_FOR_SQL
+        """
+        #--------------------------------------------------
+        PN_col = Utilities_df.find_cols_with_regex(
+            df            = df, 
+            regex_pattern = PN_regex, 
+            ignore_case   = True
+        )
+        #-----
+        t_min_col = Utilities_df.find_cols_with_regex(
+            df            = df, 
+            regex_pattern = t_min_regex, 
+            ignore_case   = True
+        )
+        #-----
+        t_max_col = Utilities_df.find_cols_with_regex(
+            df            = df, 
+            regex_pattern = t_max_regex, 
+            ignore_case   = True
+        )
+        #--------------------------------------------------
+        assert(len(PN_col)==len(t_min_col)==len(t_max_col)==1)
+        #--------------------------------------------------
+        PN_col    = PN_col[0]
+        t_min_col = t_min_col[0]
+        t_max_col = t_max_col[0]
+        #-------------------------
+        rename_dict = {
+            PN_col    : 'PN', 
+            t_min_col : 't_search_min', 
+            t_max_col : 't_search_max', 
+        }
+        #-------------------------
+        df = df.rename(columns = rename_dict)
+        #--------------------------------------------------
+        if return_gpd_cols:
+            gpd_cols              = ['t_search_min', 't_search_max']
+            gpd_for_sql_cols_dict = AMI_SQL.get_rename_dict_for_gpd_for_sql_cols(df=df, col_level=-1)
+            if len(gpd_for_sql_cols_dict) > 0:
+                if drop_gpd_for_sql:
+                    gpd_cols.extend(gpd_for_sql_cols_dict.values())
+                else:
+                    gpd_cols.extend(gpd_for_sql_cols_dict.keys())
+        #--------------------------------------------------
+        if drop_gpd_for_sql:
+            df = AMI_SQL.rename_all_cols_with_gpd_for_sql_appendix(df=df)
+        #--------------------------------------------------
+        df['t_search_min'] = pd.to_datetime(df['t_search_min'])
+        df['t_search_max'] = pd.to_datetime(df['t_search_max'])
+        #-----
+        if 'doi' in df.columns:
+            df['doi'] = pd.to_datetime(df['doi'])
+        #-----
+        if 'doi_GPD_FOR_SQL' in df.columns:
+            df['doi_GPD_FOR_SQL'] = pd.to_datetime(df['doi_GPD_FOR_SQL'])
+
+        #--------------------------------------------------
+        if return_gpd_cols:
+            return df, gpd_cols
+        return df
+    
+    
+    @staticmethod
+    def try_to_standardize_bsln_time_interval_infos_df(
+        df               , 
+        PN_regex         = r"prem(?:ise)?_nbs?", 
+        t_min_regex      = r"t(?:_search)?_min", 
+        t_max_regex      = r"t(?:_search)?_max", 
+        drop_gpd_for_sql = True, 
+        return_gpd_cols  = False
+    ):
+        r"""
+        Standardized output columns for premise, t_min, t_max:
+            PN           : premise number
+            t_search_min : t_min
+            t_search_max : t_max
+    
+        This function will cause a crash if it fails!
+        If one wants a softer version, use OutageDAQ.try_to_standardize_bsln_time_interval_infos_df
+    
+        return_gpd_cols:
+            If True, returns (df, gpd_cols)
+            For DAQ, the data are always grouped by t_min/t_max.
+                Additional grouped columns are tagged with _GPD_FOR_SQL
+        """
+        #--------------------------------------------------
+        try:
+            df, gpd_cols = OutageDAQ.standardize_bsln_time_interval_infos_df(
+                df               = df, 
+                PN_regex         = PN_regex, 
+                t_min_regex      = t_min_regex, 
+                t_max_regex      = t_max_regex, 
+                drop_gpd_for_sql = drop_gpd_for_sql, 
+                return_gpd_cols  = True
+            )
+            if return_gpd_cols:
+                return df, gpd_cols
+            return df
+        except:
+            print('!!!!! OutageDAQ.try_to_standardize_bsln_time_interval_infos_df FAILED !!!!!')
+            if return_gpd_cols:
+                return df, []
+            return df
+
+
+    @staticmethod
+    def get_bsln_time_interval_infos_df_from_summary_file(
+        summary_path         , 
+        alias                = 'mapping_table', 
+        include_summary_path = False, 
+        consolidate          = False, 
+        PN_regex             = r"prem(?:ise)?_nbs?", 
+        t_min_regex          = r"t(?:_search)?_min", 
+        t_max_regex          = r"t(?:_search)?_max", 
+        drop_gpd_for_sql     = True, 
+        return_gpd_cols      = False, 
+        verbose              = True
+    ):
+        r"""
+        Returns a pd.DataFrame version of MECPOAn.get_bsln_time_interval_infos_from_summary_file
+        """
+        #--------------------------------------------------
+        assert(os.path.exists(summary_path))
+        #-------------------------
+        f = open(summary_path)
+        summary_json_data = json.load(f)
+        assert('sql_statement' in summary_json_data)
+        sql_statement = summary_json_data['sql_statement']
+        #-------------------------
+        f.close()
+    
+        #--------------------------------------------------
+        return_df = AMI_SQL.extract_mapping_taple_from_sql_statement(
+            sql_statement = sql_statement, 
+            alias         = alias
+        )
+        #-------------------------
+        if include_summary_path:
+            return_df['summary_path'] = summary_path
+        #--------------------------------------------------
+        return_df, gpd_cols = OutageDAQ.standardize_bsln_time_interval_infos_df(
+            df               = return_df, 
+            PN_regex         = PN_regex, 
+            t_min_regex      = t_min_regex, 
+            t_max_regex      = t_max_regex, 
+            drop_gpd_for_sql = drop_gpd_for_sql, 
+            return_gpd_cols  = True
+        )
+        return_df = return_df.drop_duplicates()
+        #--------------------------------------------------
+        if consolidate:
+            return_df = Utilities_df.consolidate_df(
+                df                                  = return_df, 
+                groupby_cols                        = gpd_cols, 
+                cols_shared_by_group                = None, 
+                cols_to_collect_in_lists            = None, 
+                cols_to_drop                        = None, 
+                as_index                            = True, 
+                include_groupby_cols_in_output_cols = False, 
+                allow_duplicates_in_lists           = False, 
+                allow_NaNs_in_lists                 = False, 
+                recover_uniqueness_violators        = True, 
+                gpby_dropna                         = True, 
+                rename_cols                         = None, 
+                custom_aggs_for_list_cols           = None, 
+                verbose                             = verbose
+            )
+        #--------------------------------------------------
+        if return_gpd_cols:
+            return return_df, gpd_cols
+        return return_df 
+    
+
+    @staticmethod
+    def get_bsln_time_interval_infos_df_from_summary_files(
+        summary_paths         , 
+        alias                 = 'mapping_table', 
+        include_summary_paths = False, 
+        consolidate           = False, 
+        PN_regex              = r"prem(?:ise)?_nbs?", 
+        t_min_regex           = r"t(?:_search)?_min", 
+        t_max_regex           = r"t(?:_search)?_max", 
+        drop_gpd_for_sql      = True, 
+        return_gpd_cols       = False, 
+        verbose               = True
+    ):
+        r"""
+        Handles multiple summary files
+    
+        NOTE: Drop duplicates description below mainly pertains to old MECPOAn method.  Keep here for reminder though
+            Note: drop_duplicates will remove rows if indices are different (but all columns equal)
+                  Therefore, if consolidate==True, this should only be done AFTER drop duplicates
+                  This explains why consolidate=False in the call to OutageDAQ.get_bsln_time_interval_infos_df_from_summary_file
+            Note: The reason for drop duplicates is for the case where a collection is split over mulitple
+                  files/runs (i.e., the asynchronous case)
+        """
+        dfs       = []
+        gpd_cols  = None
+        for i,summary_path_i in enumerate(summary_paths):
+            df_i, gpd_cols_i = OutageDAQ.get_bsln_time_interval_infos_df_from_summary_file(
+                summary_path         = summary_path_i, 
+                alias                = alias, 
+                include_summary_path = include_summary_paths, 
+                consolidate          = False, 
+                PN_regex             = PN_regex, 
+                t_min_regex          = t_min_regex, 
+                t_max_regex          = t_max_regex, 
+                drop_gpd_for_sql     = drop_gpd_for_sql, 
+                return_gpd_cols      = True, 
+                verbose              = verbose
+            )
+            #-------------------------
+            if i==0:
+                gpd_cols = gpd_cols_i
+            #-------------------------
+            assert(set(gpd_cols).symmetric_difference(set(gpd_cols_i))==set())
+            dfs.append(df_i)
+        #-------------------------
+        return_df = Utilities_df.concat_dfs(
+            dfs                  = dfs, 
+            axis                 = 0, 
+            make_col_types_equal = False
+        )
+        return_df = return_df.drop_duplicates()
+        #--------------------------------------------------
+        # It is possible that a group was split over multiple files/runs
+        #   e.g., if not run using slim, then a particular outage/transformer group might have premises split
+        #     across neighboring files
+        # Consolidation method below will combine such entries
+        #-------------------------
+        if consolidate:
+            return_df = Utilities_df.consolidate_df(
+                df                                  = return_df, 
+                groupby_cols                        = gpd_cols, 
+                cols_shared_by_group                = None, 
+                cols_to_collect_in_lists            = None, 
+                cols_to_drop                        = None, 
+                as_index                            = True, 
+                include_groupby_cols_in_output_cols = False, 
+                allow_duplicates_in_lists           = False, 
+                allow_NaNs_in_lists                 = False, 
+                recover_uniqueness_violators        = True, 
+                gpby_dropna                         = True, 
+                rename_cols                         = None, 
+                custom_aggs_for_list_cols           = None, 
+                verbose                             = verbose
+            )
+        #--------------------------------------------------
+        if return_gpd_cols:
+            return return_df, gpd_cols
+        return return_df 
+    
+
+    @staticmethod
+    def get_bsln_time_interval_infos_df_for_data_in_dir(
+        data_dir                , 
+        file_path_glob          = r'events_summary_[0-9]*.csv', 
+        alias                   = 'mapping_table', 
+        include_summary_paths   = False, 
+        consolidate             = False, 
+        PN_regex                = r"prem(?:ise)?_nbs?", 
+        t_min_regex             = r"t(?:_search)?_min", 
+        t_max_regex             = r"t(?:_search)?_max", 
+        drop_gpd_for_sql        = True, 
+        return_gpd_cols         = False, 
+        verbose                 = True
+    ):
+        r"""
+        data_dir should point to the directory containing the actual data CSV files.
+            e.g., data_dir = r'...\LocalData\dovs_and_end_events_data\20250318\20240401_20240630\Outages\EvsSums'
+            It is expected that the summary files live in os.path.join(data_dir, 'summary_files')
+
+        If using raw meter events, instead of events summary data, one should likely change
+        file_path_glob = r'events_summary_[0-9]*.csv' ==> r'end_events_[0-9]*.csv'
+        """
+        #-------------------------
+        assert(os.path.isdir(data_dir))
+        data_paths = Utilities.find_all_paths(base_dir=data_dir, glob_pattern=file_path_glob)
+        if len(data_paths)==0:
+            print(f'No files found in base_dir={data_dir} with glob_pattern={file_path_glob}')
+        assert(len(data_paths)>0)
+        #-----
+        summary_paths = [AMIEndEvents.find_summary_file_from_csv(x) for x in data_paths]
+        assert(len(summary_paths)>0)
+        assert(len(summary_paths)==len(data_paths))
+        #-------------------------
+        bsln_time_infos_df, gpd_cols = OutageDAQ.get_bsln_time_interval_infos_df_from_summary_files(
+            summary_paths         = summary_paths, 
+            alias                 = alias, 
+            include_summary_paths = include_summary_paths, 
+            consolidate           = consolidate, 
+            PN_regex              = PN_regex, 
+            t_min_regex           = t_min_regex, 
+            t_max_regex           = t_max_regex, 
+            drop_gpd_for_sql      = drop_gpd_for_sql, 
+            return_gpd_cols       = True, 
+            verbose               = verbose
+        )
+        #-------------------------
+        if return_gpd_cols:
+            return bsln_time_infos_df, gpd_cols
+        return bsln_time_infos_df
+    
+
+    @staticmethod
+    def build_baseline_time_infos_df_simple(
+        data_dir                , 
+        min_req                 = False, 
+        file_path_glob          = r'events_summary_[0-9]*.csv', 
+        alias                   = 'mapping_table', 
+        include_summary_paths   = False, 
+        consolidate             = False, 
+        PN_regex                = r"prem(?:ise)?_nbs?", 
+        t_min_regex             = r"t(?:_search)?_min", 
+        t_max_regex             = r"t(?:_search)?_max", 
+        drop_gpd_for_sql        = True, 
+        return_gpd_cols         = False, 
+        verbose                 = True
+    ):
+        r"""
+        !!!!! Probably use OutageDAQ.build_baseline_time_infos_df method instead !!!!!
+        -----
+        data_dir should point to the directory containing the actual data CSV files.
+            e.g., data_dir = r'...\LocalData\dovs_and_end_events_data\20250318\20240401_20240630\Outages\EvsSums'
+            It is expected that the summary files live in os.path.join(data_dir, 'summary_files')
+    
+        If using raw meter events, instead of events summary data, one should likely change
+        file_path_glob = r'events_summary_[0-9]*.csv' ==> r'end_events_[0-9]*.csv'
+    
+        min_req:
+            If True, the only columns which are returned will be gpd_cols, which should include min_req_cols
+        """
+        #--------------------------------------------------
+        min_req_cols = ['t_search_min', 't_search_max']
+        #--------------------------------------------------
+        time_infos_df, gpd_cols = OutageDAQ.get_bsln_time_interval_infos_df_for_data_in_dir(
+            data_dir                = data_dir, 
+            file_path_glob          = file_path_glob, 
+            alias                   = alias, 
+            include_summary_paths   = include_summary_paths, 
+            consolidate             = consolidate, 
+            PN_regex                = PN_regex, 
+            t_min_regex             = t_min_regex, 
+            t_max_regex             = t_max_regex, 
+            drop_gpd_for_sql        = drop_gpd_for_sql, 
+            return_gpd_cols         = True, 
+            verbose                 = verbose
+        )
+        #-------------------------
+        if consolidate:
+            time_infos_df = time_infos_df.reset_index()
+        #-------------------------
+        assert(set(min_req_cols).difference(set(time_infos_df.columns.tolist()))==set())
+        #-------------------------
+        if min_req:
+            assert(set(min_req_cols).difference(set(gpd_cols))==set())
+            time_infos_df = time_infos_df[gpd_cols].copy()
+            time_infos_df = Utilities_df.move_cols_to_back(
+                df           = time_infos_df, 
+                cols_to_move = min_req_cols
+            )
+        #-------------------------
+        # .drop_dupicates is especially needed if min_req==True, but is safe to run in any case
+        time_infos_df = time_infos_df.drop_duplicates()
+        #-------------------------
+        if return_gpd_cols:
+            return time_infos_df, gpd_cols
+        return time_infos_df
+    
+
+    @staticmethod
+    def build_baseline_time_infos_df(
+        data_dir_base           , 
+        min_req                 = False, 
+        summary_dict_fname      = 'summary_dict.json', 
+        alias                   = 'mapping_table', 
+        include_summary_paths   = False, 
+        consolidate             = False, 
+        PN_regex                = r"prem(?:ise)?_nbs?", 
+        t_min_regex             = r"t(?:_search)?_min", 
+        t_max_regex             = r"t(?:_search)?_max", 
+        drop_gpd_for_sql        = True, 
+        return_gpd_cols         = False, 
+        verbose                 = True
+    ):
+        r"""
+        data_dir_base should point one directory above that containing the actual data CSV files.
+            i.e., should be the save_dir_base attribute of OutageDAQ class
+            e.g., data_dir = r'...\LocalData\dovs_and_end_events_data\20250318\20240401_20240630\Outages'
+            It is expected that the summary files live in os.path.join(data_dir, 'summary_files')
+    
+        summary_dict_fname:
+            Must exist in os.path.join(data_dir_base, summary_dict_fname) and must be a json file (output by OutageDAQ
+              methods, typically at end of collect_events call)
+    
+        min_req:
+            If True, the only columns which are returned will be gpd_cols, which should include min_req_cols
+        """
+        #--------------------------------------------------
+        assert(os.path.exists(os.path.join(data_dir_base, summary_dict_fname)))
+        summary_dict = OutageDAQ.read_summary_dict(        
+            save_dir_base      = data_dir_base, 
+            summary_dict_fname = summary_dict_fname)
+        
+        #-------------------------
+        dataset  = summary_dict['dataset']
+        save_dir = summary_dict['end_events_save_args']['save_dir']
+        
+        #-------------------------
+        td_left  = pd.to_timedelta(f"{summary_dict['td_left']}seconds")
+        td_right = pd.to_timedelta(f"{summary_dict['td_right']}seconds")
+        
+        #-------------------------
+        save_name       = summary_dict['end_events_save_args']['save_name']
+        save_name_regex = Utilities.append_to_path(
+            save_path                     = save_name, 
+            appendix                      = r'_[0-9]*', 
+            ext_to_find                   = '.csv', 
+            append_to_end_if_ext_no_found = False
+        )
+        
+        #--------------------------------------------------
+        time_infos_df, gpd_cols = OutageDAQ.build_baseline_time_infos_df_simple(
+            data_dir                = save_dir, 
+            min_req                 = min_req, 
+            file_path_glob          = save_name_regex, 
+            alias                   = alias, 
+            include_summary_paths   = include_summary_paths, 
+            consolidate             = consolidate, 
+            PN_regex                = PN_regex, 
+            t_min_regex             = t_min_regex, 
+            t_max_regex             = t_max_regex, 
+            drop_gpd_for_sql        = drop_gpd_for_sql, 
+            return_gpd_cols         = True, 
+            verbose                 = verbose
+        )
+        
+        #--------------------------------------------------
+        if dataset == 'prbl':
+            return_window_strategy = summary_dict['return_window_strategy']
+            if return_window_strategy == 'entire':
+                #-------------------------
+                gpd_cols_time     = ['t_search_min', 't_search_max', 'doi']
+                assert(set(gpd_cols_time).difference(set(time_infos_df.columns))==set())
+                #-------------------------
+                assert(
+                    time_infos_df['t_search_min'].nunique()==1 and
+                    time_infos_df['t_search_max'].nunique()==1
+                )
+                #-------------------------
+                time_infos_df = time_infos_df.rename(columns = {
+                    't_search_min' : 't_clean_min', 
+                    't_search_max' : 't_clean_max'
+                })
+                #-------------------------
+                window_width = td_right - td_left
+                
+                #--------------------------------------------------
+                time_infos_df = OutageDAQ.find_clean_subwindows_for_group(
+                    final_df_i                      = time_infos_df, 
+                    min_window_width                = window_width, 
+                    include_is_first_after_outg_col = False, 
+                    t_clean_min_col                 = 't_clean_min', 
+                    t_clean_max_col                 = 't_clean_max', 
+                    return_t_search_min_col         = 't_search_min', 
+                    return_t_search_max_col         = 't_search_max'
+                )
+                
+                #-------------------------
+                time_infos_df['doi']   = time_infos_df['t_search_min'] - td_left
+                time_infos_df['doi_r'] = time_infos_df['t_search_max'] - td_right
+                if time_infos_df['doi'].equals(time_infos_df['doi_r']):
+                    time_infos_df = time_infos_df.drop(columns=['doi_r'])
+                else:
+                    if verbose:
+                        print("!!!!! WARNING: OutageDAQ.build_baseline_time_infos_df!!!!!\n\tdoi and doi_r columns disagree, so both will be kept!")
+                #-------------------------
+                time_infos_df                     = time_infos_df.drop(columns=['t_clean_min', 't_clean_max'])
+                time_infos_df                     = time_infos_df.reset_index(drop=True)
+                #-------------------------
+                rec_nb_col                       = summary_dict['rec_nb_col']
+                time_infos_df[f'{rec_nb_col}_0'] = time_infos_df[rec_nb_col].copy()
+                time_infos_df[rec_nb_col]        = time_infos_df[rec_nb_col] + '_' + time_infos_df.index.astype(str)
+        
+        #--------------------------------------------------
+        if return_gpd_cols:
+            return time_infos_df, gpd_cols
+        return time_infos_df
 
 #------------------------------------------------------------------------------------------------------------------------------------------
 class OutageDAQOutg(OutageDAQ):
@@ -546,52 +1324,85 @@ class OutageDAQOutg(OutageDAQ):
     Class to hold methods specific to Outage (i.e., signal) data acquisition
     """
     def __init__(
-            self, 
-            run_date, 
-            date_0, 
-            date_1, 
-            collect_evs_sum_vw,     # boolean
-            save_sub_dir, 
-            search_time_half_window, 
-            states                  = None, 
-            opcos                   = None, 
-            cities                  = None, 
-            single_zip_xfmrs_only   = False, 
-            save_end_events         = False, 
-            save_dfs_to_file        = False, 
-            read_dfs_from_file      = True, 
-            base_dir                = os.path.join(
-                Utilities.get_local_data_dir(), 
-                r'dovs_and_end_events_data'
-            ), 
-        ):
-            r"""
-            """
-            #--------------------------------------------------
-            assert(pd.to_datetime(date_1)-pd.to_datetime(date_0) > 2*search_time_half_window)
-            self.search_time_half_window = search_time_half_window
-            #--------------------------------------------------
-            self.df_mp_outg     = None
-            self.df_outage      = None
-            self.df_outage_slim = None
+        self                    , 
+        run_date                , 
+        date_0                  , 
+        date_1                  , 
+        collect_evs_sum_vw      ,     # boolean
+        save_sub_dir            , 
+        td_left                 = pd.Timedelta('-31D'), 
+        td_right                = pd.Timedelta('-1D'),     
+        states                  = None, 
+        opcos                   = None, 
+        cities                  = None, 
+        single_zip_xfmrs_only   = False, 
+        save_end_events         = False, 
+        save_dfs_to_file        = False, 
+        read_dfs_from_file      = True, 
+        base_dir                = os.path.join(
+            Utilities.get_local_data_dir(), 
+            r'dovs_and_end_events_data'
+        ), 
+        dates_subdir_appndx     = None, 
+    ):
+        r"""
+        """
+        #--------------------------------------------------
+        self.df_mp_outg     = None
+        self.df_outage      = None
+        self.df_outage_slim = None
 
-            #--------------------------------------------------
-            super().__init__(
-                run_date                = run_date, 
-                date_0                  = date_0, 
-                date_1                  = date_1, 
-                collect_evs_sum_vw      = collect_evs_sum_vw, 
-                save_sub_dir            = save_sub_dir, 
-                states                  = states, 
-                opcos                   = opcos, 
-                cities                  = cities, 
-                single_zip_xfmrs_only   = single_zip_xfmrs_only, 
-                save_end_events         = save_end_events, 
-                save_dfs_to_file        = save_dfs_to_file, 
-                read_dfs_from_file      = read_dfs_from_file, 
-                base_dir                = base_dir, 
-                run_using_slim          = False
-            )
+        #--------------------------------------------------
+        super().__init__(
+            run_date                = run_date, 
+            date_0                  = date_0, 
+            date_1                  = date_1, 
+            collect_evs_sum_vw      = collect_evs_sum_vw, 
+            save_sub_dir            = save_sub_dir, 
+            td_left                 = td_left, 
+            td_right                = td_right, 
+            states                  = states, 
+            opcos                   = opcos, 
+            cities                  = cities, 
+            single_zip_xfmrs_only   = single_zip_xfmrs_only, 
+            save_end_events         = save_end_events, 
+            save_dfs_to_file        = save_dfs_to_file, 
+            read_dfs_from_file      = read_dfs_from_file, 
+            base_dir                = base_dir, 
+            dates_subdir_appndx     = dates_subdir_appndx, 
+            run_using_slim          = False, 
+        )
+
+    def get_summary_dict(
+        self
+    ):
+        r"""
+        DAQ settings with adjustments to a few entries (so they can be easily output into the summary JSON file)
+        e.g., Timestamp is not JSON serializable, hence the need for strftime below
+        e.g., Timedelta is not JSON serializable, hence the conversion to total seconds
+        """
+        #--------------------------------------------------
+        summary_dict = super().get_summary_dict()
+        #--------------------------------------------------
+        summary_dict['dataset']    = 'outg'
+        summary_dict['rec_nb_col'] = 'outg_rec_nb'
+        #--------------------------------------------------
+        return summary_dict
+    
+    def save_summary_dict(
+        self
+    ):
+        r"""
+        """
+        #-------------------------
+        summary_dict = self.get_summary_dict()
+        #-----
+        assert(os.path.isdir(self.save_dir_base))
+        #-----
+        CustomWriter.output_dict_to_json(
+            os.path.join(self.save_dir_base, 'summary_dict.json'), 
+            summary_dict
+        )
     
 
     @staticmethod
@@ -793,9 +1604,23 @@ class OutageDAQOutg(OutageDAQ):
             )
 
             #-------------------------
+            # To be certain we obtain the range we need, should I expand the search window +- 1 day on each end?
+            # The only concern (mainly for baseline) is this would mess up the windows grabbed using, e.g., 
+            #  get_bsln_time_interval_infos_df_from_summary_files
+            # search_time_window = [
+            #     self.td_left  - pd.Timedelta('1Day'), 
+            #     self.td_right + pd.Timedelta('1Day')
+            # ]
+            search_time_window = [self.td_left, self.td_right]            
+            #-----
             self.df_outage_slim = DOVSOutages.set_search_time_in_outage_df(
-                df_outage               = self.df_outage_slim, 
-                search_time_half_window = self.search_time_half_window
+                df_outage                   = self.df_outage_slim, 
+                search_time_window          = search_time_window, 
+                power_out_col               = 'DT_OFF_TS_FULL',
+                power_on_col                = 'DT_ON_TS',
+                t_search_min_col            = 't_search_min', 
+                t_search_max_col            = 't_search_max', 
+                wrt_out_only                = True
             )
 
             #-------------------------
@@ -871,7 +1696,7 @@ class OutageDAQOutg(OutageDAQ):
         #----------------------------------------------------------------------------------------------------
         if batch_size is None:
             if self.collect_evs_sum_vw:
-                batch_size = 100
+                batch_size = 50 
             else:
                 batch_size = 30
         #----------------------------------------------------------------------------------------------------
@@ -894,9 +1719,14 @@ class OutageDAQOutg(OutageDAQ):
         #           )
         #       )
         #----------------------------------------------------------------------------------------------------
+        df_outage_slim = self.df_outage_slim.copy()
+        #-----
+        # Below, doi = Date Of Interest
+        df_outage_slim = df_outage_slim.rename(columns={'DT_OFF_TS_FULL' : 'doi'})
+        #--------------------------------------------------
         df_construct_type              = DFConstructType.kRunSqlQuery
         contstruct_df_args_end_events  = None
-        addtnl_groupby_cols            = ['OUTG_REC_NB', 'trsf_pole_nb']
+        addtnl_groupby_cols            = ['OUTG_REC_NB', 'trsf_pole_nb', 'doi']
         #-----
         if self.collect_evs_sum_vw:
             cols_of_interest_end_dev_event = ['*']
@@ -917,11 +1747,12 @@ class OutageDAQOutg(OutageDAQ):
         #--------------------------------------------------
         end_events_sql_function_kwargs = dict(
             cols_of_interest                  = cols_of_interest_end_dev_event, 
-            df_outage                         = self.df_outage_slim, 
+            df_outage                         = df_outage_slim, 
             build_sql_function                = AMIEndEvents_SQL.build_sql_end_events, 
             build_sql_function_kwargs         = build_sql_function_kwargs, 
             join_mp_args                      = False, 
             date_only                         = date_only, 
+            output_t_minmax                   = True, 
             df_args                           = dict(
                 addtnl_groupby_cols = addtnl_groupby_cols, 
                 mapping_to_ami      = DfToSqlMap(df_col='PREMISE_NBS', kwarg='premise_nbs', sql_col='aep_premise_nb'), 
@@ -956,6 +1787,25 @@ class OutageDAQOutg(OutageDAQ):
         if verbose:
             print(f'exit_status = {exit_status}')
             print(f'Build time  = {time.time()-start}')
+        #----------------------------------------------------------------------------------------------------
+        if exit_status:
+            self.save_summary_dict()
+            #-------------------------
+            time_infos_df = OutageDAQ.build_baseline_time_infos_df(
+                data_dir_base           = self.save_dir_base, 
+                min_req                 = True, 
+                summary_dict_fname      = 'summary_dict.json', 
+                alias                   = 'mapping_table', 
+                include_summary_paths   = False, 
+                consolidate             = False, 
+                PN_regex                = r"prem(?:ise)?_nbs?", 
+                t_min_regex             = r"t(?:_search)?_min", 
+                t_max_regex             = r"t(?:_search)?_max", 
+                drop_gpd_for_sql        = True, 
+                return_gpd_cols         = False, 
+                verbose                 = verbose
+            )
+            time_infos_df.to_pickle(os.path.join(self.save_dir_base, 'time_infos_df.pkl'))
 
     
 #------------------------------------------------------------------------------------------------------------------------------------------
@@ -964,73 +1814,135 @@ class OutageDAQOtBL(OutageDAQ):
     Class to hold methods specific to Outage BaseLine (OtBL) data acquisition
     """
     def __init__(
-            self, 
-            run_date, 
-            date_0, 
-            date_1, 
-            collect_evs_sum_vw,     # boolean
-            save_sub_dir, 
-            groupby_col             = 'trsf_pole_nb', 
-            min_window_width        = pd.Timedelta('31 days'), 
-            buffer_time_left        = pd.Timedelta('1 days'), 
-            buffer_time_rght        = pd.Timedelta('31 days'), 
-            pd_selection_stategy    = 'all', 
-            search_window_strategy  = 'all_subwindows', 
-            states                  = None, 
-            opcos                   = None, 
-            cities                  = None, 
-            single_zip_xfmrs_only   = False, 
-            save_end_events         = False, 
-            save_dfs_to_file        = False, 
-            read_dfs_from_file      = True, 
-            base_dir                = os.path.join(
-                Utilities.get_local_data_dir(), 
-                r'dovs_and_end_events_data'
-            ), 
-            run_using_slim          = False 
-        ):
-            r"""
-            """
-            #--------------------------------------------------
-            # Not sure if fully built out for 'PREMISE_NB' since making updates
-            # assert(groupby_col in ['trsf_pole_nb', 'PREMISE_NB'])
-            assert(groupby_col in ['trsf_pole_nb'])
-            self.groupby_col      = groupby_col
-            #-----
-            self.min_window_width       = min_window_width
-            self.buffer_time_left       = buffer_time_left
-            self.buffer_time_rght       = buffer_time_rght
-            self.pd_selection_stategy   = pd_selection_stategy
-            self.search_window_strategy = search_window_strategy
-            #--------------------------------------------------
-            self.PNs              = None
-            #-----
-            self.mp_df_PNs        = None
-            self.mp_df_sql_stmnts = None
-            #-----
-            self.mp_df_xfmrs      = None
-            #-------------------------
-            self.all_outages_df = None
-            self.df_mp          = None
-            self.df_no_outage   = None
-            self.df_no_outage_slim = None
-            #--------------------------------------------------
-            super().__init__(
-                run_date                = run_date, 
-                date_0                  = date_0, 
-                date_1                  = date_1, 
-                collect_evs_sum_vw      = collect_evs_sum_vw, 
-                save_sub_dir            = save_sub_dir, 
-                states                  = states, 
-                opcos                   = opcos, 
-                cities                  = cities, 
-                single_zip_xfmrs_only   = single_zip_xfmrs_only, 
-                save_end_events         = save_end_events, 
-                save_dfs_to_file        = save_dfs_to_file, 
-                read_dfs_from_file      = read_dfs_from_file, 
-                base_dir                = base_dir, 
-                run_using_slim          = run_using_slim
-            )
+        self, 
+        run_date, 
+        date_0, 
+        date_1, 
+        collect_evs_sum_vw,     # boolean
+        save_sub_dir, 
+        groupby_col             = 'trsf_pole_nb', 
+        td_left                 = pd.Timedelta('-31D'), 
+        td_right                = pd.Timedelta('-1D'),   
+        buffer_time_left        = pd.Timedelta('1 days'), 
+        buffer_time_rght        = pd.Timedelta('31 days'), 
+        pd_selection_stategy    = 'all', 
+        search_window_strategy  = 'all_subwindows', 
+        states                  = None, 
+        opcos                   = None, 
+        cities                  = None, 
+        single_zip_xfmrs_only   = False, 
+        save_end_events         = False, 
+        save_dfs_to_file        = False, 
+        read_dfs_from_file      = True, 
+        base_dir                = os.path.join(
+            Utilities.get_local_data_dir(), 
+            r'dovs_and_end_events_data'
+        ), 
+        dates_subdir_appndx     = None, 
+        run_using_slim          = False 
+    ):
+        r"""
+        """
+        #--------------------------------------------------
+        # Not sure if fully built out for 'PREMISE_NB' since making updates
+        # assert(groupby_col in ['trsf_pole_nb', 'PREMISE_NB'])
+        assert(groupby_col in ['trsf_pole_nb'])
+        self.groupby_col            = groupby_col
+        #-------------------------
+        if not Utilities.is_timedelta(buffer_time_left):
+            buffer_time_left  = pd.to_timedelta(buffer_time_left)
+        if not Utilities.is_timedelta(buffer_time_rght):
+            buffer_time_rght = pd.to_timedelta(buffer_time_rght)
+        #-----
+        assert(
+            buffer_time_left >= pd.Timedelta(0) and
+            buffer_time_rght >= pd.Timedelta(0)
+        )
+        #-----
+        self.buffer_time_left       = buffer_time_left
+        self.buffer_time_rght       = buffer_time_rght
+        #-------------------------
+        assert(pd_selection_stategy   in ['max', 'min', 'rand', 'all'])
+        assert(search_window_strategy in ['centered', 'rand', 'all_subwindows'] or isinstance(search_window_strategy, datetime.timedelta))
+        #-----
+        self.pd_selection_stategy   = pd_selection_stategy
+        self.search_window_strategy = search_window_strategy
+        #--------------------------------------------------
+        self.PNs                    = None
+        #-----
+        self.mp_df_PNs              = None
+        self.mp_df_sql_stmnts       = None
+        #-----
+        self.mp_df_xfmrs            = None
+        #-------------------------
+        self.all_outages_df         = None
+        self.df_mp                  = None
+        self.df_no_outage           = None
+        self.df_no_outage_slim      = None
+        #--------------------------------------------------
+        super().__init__(
+            run_date                = run_date, 
+            date_0                  = date_0, 
+            date_1                  = date_1, 
+            collect_evs_sum_vw      = collect_evs_sum_vw, 
+            save_sub_dir            = save_sub_dir, 
+            td_left                 = td_left, 
+            td_right                = td_right, 
+            states                  = states, 
+            opcos                   = opcos, 
+            cities                  = cities, 
+            single_zip_xfmrs_only   = single_zip_xfmrs_only, 
+            save_end_events         = save_end_events, 
+            save_dfs_to_file        = save_dfs_to_file, 
+            read_dfs_from_file      = read_dfs_from_file, 
+            base_dir                = base_dir, 
+            dates_subdir_appndx     = dates_subdir_appndx, 
+            run_using_slim          = run_using_slim
+        )
+        self.min_window_width       = self.window_width
+
+
+    def get_summary_dict(
+        self
+    ):
+        r"""
+        DAQ settings with adjustments to a few entries (so they can be easily output into the summary JSON file)
+        e.g., Timestamp is not JSON serializable, hence the need for strftime below
+        e.g., Timedelta is not JSON serializable, hence the conversion to total seconds
+        """
+        #--------------------------------------------------
+        summary_dict = super().get_summary_dict()
+        #--------------------------------------------------
+        summary_dict['dataset']                = 'otbl'
+        summary_dict['rec_nb_col']             = 'no_outg_rec_nb'
+        #-------------------------
+        summary_dict['groupby_col']            = self.groupby_col
+        #-------------------------
+        summary_dict['buffer_time_left']       = self.buffer_time_left.total_seconds()
+        summary_dict['buffer_time_rght']       = self.buffer_time_rght.total_seconds()
+        #-------------------------
+        summary_dict['pd_selection_stategy']   = self.pd_selection_stategy
+        summary_dict['search_window_strategy'] = self.search_window_strategy
+        #-------------------------
+        summary_dict['min_window_width']       = self.min_window_width.total_seconds()
+        #--------------------------------------------------
+        return summary_dict
+    
+    def save_summary_dict(
+        self
+    ):
+        r"""
+        """
+        #-------------------------
+        summary_dict = self.get_summary_dict()
+        #-----
+        assert(os.path.isdir(self.save_dir_base))
+        #-----
+        CustomWriter.output_dict_to_json(
+            os.path.join(self.save_dir_base, 'summary_dict.json'), 
+            summary_dict
+        )
+    
 
     def build_or_load_mp_df_xfmrs(
         self, 
@@ -1239,9 +2151,9 @@ class OutageDAQOtBL(OutageDAQ):
                     inplace             = True
                 )
             return_df = GenAn.build_df_general(
-                conn_db                  = conn_outages, 
-                build_sql_function       = DOVSOutages_SQL.build_sql_std_outage, 
-                build_sql_function_kwarg = build_sql_std_outage_kwargs
+                conn_db                   = conn_outages, 
+                build_sql_function        = DOVSOutages_SQL.build_sql_std_outage, 
+                build_sql_function_kwargs = build_sql_std_outage_kwargs
             )
         elif method=='query_all':
             build_sql_std_outage_kwargs = dict(
@@ -1273,103 +2185,14 @@ class OutageDAQOtBL(OutageDAQ):
         #-------------------------
         return return_df
     
-
-    @staticmethod
-    def find_clean_subwindows_for_group(
-        final_df_i, 
-        min_window_width, 
-        include_is_first_after_outg_col = True, 
-        t_clean_min_col                 = 't_clean_min', 
-        t_clean_max_col                 = 't_clean_max', 
-        return_t_search_min_col         = 't_search_min', 
-        return_t_search_max_col         = 't_search_max'
-    ):
-        r"""
-        Designed for use in OutageDAQOtBL.find_clean_window_for_group when search_window_strategy=='all_subwindows'.
-        For the clean windows in final_df_i, this will find all acceptable subwindows.
-          So, e.g., if a clean window is of length 171 days and min_window_width=30 days, this will find 5 acceptable subwindows.
-          
-        It is expected that final_df_i contains data for a single group (typically, a single transformer).
-        The DF will have as many rows as clean periods found (see OutageDAQOtBL.find_clean_window_for_group for more information).
-        It is expected that the buffer times have already been taken care of inf final_df_i when defining t_clean_min and max (as
-          is the case when this function is used within OutageDAQOtBL.find_clean_window_for_group)
-        """
-        #-------------------------
-        # Generate random string to be safe when dong all the index re-naming below
-        idx_rndm = Utilities.generate_random_string()
-    
-        # Grab final_df_i index name for later
-        final_df_i_idx_nm = final_df_i.index.name
-    
-        # Iterate over each row in final_df_i, find acceptable subwindows, and add to return_dfs collection.
-        # As noted in the above documentation, final_df_i should contain one row for each clean period
-        return_dfs = []
-        for idx, row_i in final_df_i.iterrows():
-            t_clean_min_i  = row_i[t_clean_min_col]
-            t_clean_max_i  = row_i[t_clean_max_col]
-            n_subwindows_i = np.floor((t_clean_max_i-t_clean_min_i)/min_window_width).astype(int)
-            #-------------------------
-            windows_i = []
-            for i_window in range(n_subwindows_i):
-                window_i_min = t_clean_min_i + i_window*min_window_width
-                window_i_max = t_clean_min_i + (i_window+1)*min_window_width
-                windows_i.append([window_i_min, window_i_max])
-            #-------------------------
-            # Sanity check
-            assert(windows_i[-1][1] <= t_clean_max_i)
-            #-------------------------
-            # Create len(windows_i) copies of row_i and merge (concat with axis=1) with windows_i
-            #-----
-            # Need to call reset_index on rows_i for merge to work, but want to use original index later,
-            #   so rename original to more easily grab later
-            # NOTE: In newer versions of pandas (>=1.5) one can use the names argument of .reset_index,
-            #       allowing the merge to happen in a single line
-            rows_i            = pd.concat([pd.DataFrame(row_i).T]*len(windows_i))
-            assert(rows_i.index.nlevels==1)
-            idx_nm_og         = 'index_og'+idx_rndm
-            rows_i.index.name = idx_nm_og
-            rows_i            =  rows_i.reset_index()
-            #-----
-            return_df_i = pd.concat([
-                rows_i, 
-                pd.DataFrame(windows_i, columns=[return_t_search_min_col, return_t_search_max_col])
-            ], axis=1)
-            #-----
-            if include_is_first_after_outg_col:
-                return_df_i['is_first_after_outg']=0
-                return_df_i.loc[0, 'is_first_after_outg']=1
-            #-----
-            return_dfs.append(return_df_i)
-        #-------------------------
-        # Combine all return_dfs into return_df
-        return_df = pd.concat(return_dfs)
-        #-------------------------
-        # Join together the original index and the new index (new index should be 0-len(subwindows_i)-1)
-        # This will allow one to track where subwindows came from, in case one needs to debug or whatever
-        # As noted above, in newer versions of pandas (>=1.5) one can use the names argument of .reset_index
-        assert(return_df.index.nlevels==1)
-        idx_nm_new = 'index_new'+idx_rndm
-        return_df.index.name=idx_nm_new
-        return_df=return_df.reset_index()
-        #-----
-        idx_nm_final = 'index_final'+idx_rndm
-        return_df[idx_nm_final] = return_df[[idx_nm_og, idx_nm_new]].astype(str).agg('_'.join, axis=1)
-        # Set index to combination of og and new, rename the index to match that of final_df_i, 
-        #   and drop idx_nm_og and idx_nm_new columns as they are no longer needed
-        return_df = return_df.set_index(idx_nm_final)
-        return_df.index.name = final_df_i_idx_nm
-        return_df = return_df.drop(columns=[idx_nm_og, idx_nm_new])
-        #-------------------------
-        return return_df
-    
     
     @staticmethod
     def find_clean_window_for_group(
-        df_i, 
-        min_window_width, 
-        buffer_time_left, 
-        buffer_time_rght,
-        date_1,  
+        df_i                       , 
+        min_window_width           , 
+        buffer_time_left           , 
+        buffer_time_rght           ,
+        date_1                     ,  
         set_search_window          = True, 
         pd_selection_stategy       = 'max', 
         search_window_strategy     = 'centered', 
@@ -1401,7 +2224,7 @@ class OutageDAQOtBL(OutageDAQ):
             To find the amount of clean time after the last outage, use date_1 as an endpoint
         """
         #-------------------------
-        assert(pd_selection_stategy in ['max', 'min', 'rand', 'all'])
+        assert(pd_selection_stategy   in ['max', 'min', 'rand', 'all'])
         assert(search_window_strategy in ['centered', 'rand', 'all_subwindows'] or isinstance(search_window_strategy, datetime.timedelta))
         #-------------------------
         # For this to function properly, df_i must be sorted according to time
@@ -1422,8 +2245,8 @@ class OutageDAQOtBL(OutageDAQ):
         # NOTE: The buffer_time_left/_rght arguments allow one to ensure the period of time is not 
         #       immediately proceeding or preceding an outage event
         # NOTE: good_clean_windows_after must have a name in order to merge with df_i
-        good_clean_windows_after = clean_windows_after[clean_windows_after > min_window_width+buffer_time_left+buffer_time_rght]
-        good_clean_windows_after.name='clean_window_full'
+        good_clean_windows_after      = clean_windows_after[clean_windows_after > min_window_width+buffer_time_left+buffer_time_rght]
+        good_clean_windows_after.name = 'clean_window_full'
         if len(good_clean_windows_after)==0:
             return pd.DataFrame()
     
@@ -1436,13 +2259,13 @@ class OutageDAQOtBL(OutageDAQ):
             good_df_i['clean_window_usable'] = good_df_i['clean_window_full'] - (buffer_time_left+buffer_time_rght)
         #-------------------------
         # Select subset of good_df_i according to pd_selection_stategy
-        if pd_selection_stategy=='max':
+        if pd_selection_stategy   == 'max':
             final_df_i = good_df_i.iloc[[good_df_i['clean_window_full'].argmax()]].copy()
-        elif pd_selection_stategy=='min':
+        elif pd_selection_stategy == 'min':
             final_df_i = good_df_i.iloc[[good_df_i['clean_window_full'].argmin()]].copy()
-        elif pd_selection_stategy=='rand':
+        elif pd_selection_stategy == 'rand':
             final_df_i = good_df_i.sample().copy()
-        elif pd_selection_stategy=='all':
+        elif pd_selection_stategy == 'all':
             final_df_i = good_df_i.copy()
         else:
             assert(0)
@@ -1458,13 +2281,13 @@ class OutageDAQOtBL(OutageDAQ):
     
         #-------------------------
         if set_search_window:
-            if search_window_strategy=='centered':
+            if search_window_strategy == 'centered':
                 # Mid point of clean time interval = final_df_i[['t_clean_min', 't_clean_max']].mean(numeric_only=False, axis=1)
                 # ==> Left  point = (final_df_i[['t_clean_min', 't_clean_max']].mean(numeric_only=False, axis=1)) - min_window_width/2
                 # ==> Right point = (final_df_i[['t_clean_min', 't_clean_max']].mean(numeric_only=False, axis=1)) + min_window_width/2
                 final_df_i['t_search_min'] = (final_df_i[['t_clean_min', 't_clean_max']].mean(numeric_only=False, axis=1)) - min_window_width/2
                 final_df_i['t_search_max'] = (final_df_i[['t_clean_min', 't_clean_max']].mean(numeric_only=False, axis=1)) + min_window_width/2
-            elif search_window_strategy=='rand':
+            elif search_window_strategy == 'rand':
                 final_df_i['t_search_min'] = pd.NaT
                 final_df_i['t_search_max'] = pd.NaT
                 #-----
@@ -1476,9 +2299,9 @@ class OutageDAQOtBL(OutageDAQ):
                         rand_seed    = None        
                     )
                     final_df_i.loc[idx, ['t_search_min', 't_search_max']] = rnd_intrvl_i
-            elif search_window_strategy=='all_subwindows':
-                final_df_i = OutageDAQOtBL.find_clean_subwindows_for_group(
-                    final_df_i                     = final_df_i, 
+            elif search_window_strategy == 'all_subwindows':
+                final_df_i = OutageDAQ.find_clean_subwindows_for_group(
+                    final_df_i                      = final_df_i, 
                     min_window_width                = min_window_width, 
                     include_is_first_after_outg_col = True, 
                     t_clean_min_col                 = 't_clean_min', 
@@ -1800,6 +2623,21 @@ class OutageDAQOtBL(OutageDAQ):
         rand_pfx                       = Utilities.generate_random_string(str_len=5, letters=string.ascii_letters + string.digits)
         df_no_outage['no_outg_rec_nb'] = df_no_outage.groupby(['trsf_pole_nb', 't_search_min', 't_search_max']).ngroup()
         df_no_outage['no_outg_rec_nb'] = rand_pfx + df_no_outage['no_outg_rec_nb'].astype(str)
+        #--------------------------------------------------
+        # Set the date of interest (doi) column, which is akin to the DT_OFF_TS_FULL column for the outg case
+        #   The doi is the reference point from which the various time groupings will be formed.
+        # Reconstruction of prediction_date/doi
+        #   range_left  = prediction_date + td_left  ==> prediction_date = range_left - td_left
+        #   range_right = prediction_date + td_right ==> prediction_date = range_right - td_right
+        # As shown above, reconstruction using td_left or td_right should yield the same result.
+        # IF FOR SOME REASON THEY YIELD DIFFERENT RESULTS, BOTH WILL BE KEPT (columns 'doi', from left, and 'doi_r' from right)
+        df_no_outage['doi']   = df_no_outage['t_search_min'] - self.td_left
+        df_no_outage['doi_r'] = df_no_outage['t_search_max'] - self.td_right
+        if df_no_outage['doi'].equals(df_no_outage['doi_r']):
+            df_no_outage = df_no_outage.drop(columns=['doi_r'])
+        else:
+            if verbose:
+                print("!!!!! WARNING: OutageDAQOtBL.build_or_load_df_no_outage !!!!!\n\tdoi and doi_r columns disagree, so both will be kept!")
         #----------------------------------------------------------------------------------------------------
         self.df_no_outage = df_no_outage
         #----------------------------------------------------------------------------------------------------
@@ -1833,9 +2671,9 @@ class OutageDAQOtBL(OutageDAQ):
             rename_cols['mfr_devc_ser_nbr'] = 'serial_numbers'
         #-------------------------
         if self.groupby_col=='trsf_pole_nb':
-            consol_groupby_cols = ['no_outg_rec_nb', self.groupby_col, 't_search_min', 't_search_max']
+            consol_groupby_cols = ['no_outg_rec_nb', self.groupby_col, 't_search_min', 't_search_max', 'doi']
         elif self.groupby_col=='PREMISE_NB':
-            consol_groupby_cols =[ 'no_outg_rec_nb', 't_search_min', 't_search_max']
+            consol_groupby_cols =[ 'no_outg_rec_nb', 't_search_min', 't_search_max', 'doi']
         else:
             assert(0)
         #-------------------------
@@ -1917,6 +2755,8 @@ class OutageDAQOtBL(OutageDAQ):
         if self.groupby_col=='PREMISE_NB':
             addtnl_groupby_cols = ['no_outg_rec_nb']
         #-----
+        addtnl_groupby_cols.append('doi')
+        #-----
         if self.search_window_strategy=='all_subwindows':
             addtnl_groupby_cols.append('is_first_after_outg')
         #-------------------------
@@ -1943,6 +2783,7 @@ class OutageDAQOtBL(OutageDAQ):
             build_sql_function_kwargs         = build_sql_function_kwargs, 
             join_mp_args                      = False, 
             date_only                         = date_only, 
+            output_t_minmax                   = True, 
             df_args                           = dict(
                 addtnl_groupby_cols = addtnl_groupby_cols, 
                 t_search_min_col    = 't_search_min', 
@@ -2011,6 +2852,25 @@ class OutageDAQOtBL(OutageDAQ):
         if verbose:
             print(f'exit_status = {exit_status}')
             print(f'Build time  = {time.time()-start}')
+        #----------------------------------------------------------------------------------------------------
+        if exit_status:
+            self.save_summary_dict()
+            #-------------------------
+            time_infos_df = OutageDAQ.build_baseline_time_infos_df(
+                data_dir_base           = self.save_dir_base, 
+                min_req                 = True, 
+                summary_dict_fname      = 'summary_dict.json', 
+                alias                   = 'mapping_table', 
+                include_summary_paths   = False, 
+                consolidate             = False, 
+                PN_regex                = r"prem(?:ise)?_nbs?", 
+                t_min_regex             = r"t(?:_search)?_min", 
+                t_max_regex             = r"t(?:_search)?_max", 
+                drop_gpd_for_sql        = True, 
+                return_gpd_cols         = False, 
+                verbose                 = verbose
+            )
+            time_infos_df.to_pickle(os.path.join(self.save_dir_base, 'time_infos_df.pkl'))
 
 
 
@@ -2021,61 +2881,102 @@ class OutageDAQPrBL(OutageDAQ):
     Class to hold methods specific to Pristine BaseLine (PrBL) data acquisition
     """
     def __init__(
-            self, 
-            run_date, 
-            date_0, 
-            date_1, 
-            collect_evs_sum_vw,     # boolean
-            save_sub_dir, 
-            window_width, 
-            states                  = None, 
-            opcos                   = None, 
-            cities                  = None, 
-            single_zip_xfmrs_only   = False, 
-            trsf_pole_nbs_to_ignore = [' ', 'TRANSMISSION', 'PRIMARY', 'NETWORK'], 
-            save_end_events         = False, 
-            save_dfs_to_file        = False, 
-            read_dfs_from_file      = True, 
-            base_dir                = os.path.join(
-                Utilities.get_local_data_dir(), 
-                r'dovs_and_end_events_data'
-            ), 
-            run_using_slim          = True
-        ):
-            r"""
-            """
-            #--------------------------------------------------
-            assert(pd.to_datetime(date_1)-pd.to_datetime(date_0) > window_width)
-            self.window_width = window_width
-            #--------------------------------------------------
-            self.df_outage_location_ids      = None
-            self.sql_outage_location_ids     = None
-            #--------------------------------------------------
-            self.trsf_pole_nbs_to_ignore     = trsf_pole_nbs_to_ignore
-            self.df_xfmrs_no_outg            = None
-            self.trsf_pole_nbs               = None
-            #-------------------------
-            self.df_mp_no_outg               = None
-            self.pns_with_end_events         = None
-            self.df_mp_no_outg_w_events      = None 
-            self.df_mp_no_outg_w_events_slim = None
-            #--------------------------------------------------
-            super().__init__(
-                run_date                = run_date, 
-                date_0                  = date_0, 
-                date_1                  = date_1, 
-                collect_evs_sum_vw      = collect_evs_sum_vw, 
-                save_sub_dir            = save_sub_dir, 
-                states                  = states, 
-                opcos                   = opcos, 
-                cities                  = cities, 
-                single_zip_xfmrs_only   = single_zip_xfmrs_only, 
-                save_end_events         = save_end_events, 
-                save_dfs_to_file        = save_dfs_to_file, 
-                read_dfs_from_file      = read_dfs_from_file, 
-                base_dir                = base_dir, 
-                run_using_slim          = run_using_slim
-            )
+        self                    , 
+        run_date                , 
+        date_0                  , 
+        date_1                  , 
+        collect_evs_sum_vw      ,     # boolean
+        save_sub_dir            , 
+        td_left                 = pd.Timedelta('-31D'), 
+        td_right                = pd.Timedelta('-1D'), 
+        return_window_strategy  = 'entire', 
+        states                  = None, 
+        opcos                   = None, 
+        cities                  = None, 
+        single_zip_xfmrs_only   = False, 
+        trsf_pole_nbs_to_ignore = [' ', 'TRANSMISSION', 'PRIMARY', 'NETWORK'], 
+        save_end_events         = False, 
+        save_dfs_to_file        = False, 
+        read_dfs_from_file      = True, 
+        base_dir                = os.path.join(
+            Utilities.get_local_data_dir(), 
+            r'dovs_and_end_events_data'
+        ), 
+        dates_subdir_appndx     = None, 
+        run_using_slim          = True
+    ):
+        r"""
+        """
+        #--------------------------------------------------
+        assert(return_window_strategy in ['all_subwindows', 'entire', 'rand'])
+        self.return_window_strategy      = return_window_strategy
+        #--------------------------------------------------
+        self.df_outage_location_ids      = None
+        self.sql_outage_location_ids     = None
+        #--------------------------------------------------
+        self.trsf_pole_nbs_to_ignore     = trsf_pole_nbs_to_ignore
+        self.df_xfmrs_no_outg            = None
+        self.trsf_pole_nbs               = None
+        #-------------------------
+        self.df_mp_no_outg               = None
+        self.pns_with_end_events         = None
+        self.df_mp_no_outg_w_events      = None 
+        self.df_mp_no_outg_w_events_slim = None
+        #--------------------------------------------------
+        super().__init__(
+            run_date                = run_date, 
+            date_0                  = date_0, 
+            date_1                  = date_1, 
+            collect_evs_sum_vw      = collect_evs_sum_vw, 
+            save_sub_dir            = save_sub_dir, 
+            td_left                 = td_left, 
+            td_right                = td_right, 
+            states                  = states, 
+            opcos                   = opcos, 
+            cities                  = cities, 
+            single_zip_xfmrs_only   = single_zip_xfmrs_only, 
+            save_end_events         = save_end_events, 
+            save_dfs_to_file        = save_dfs_to_file, 
+            read_dfs_from_file      = read_dfs_from_file, 
+            base_dir                = base_dir, 
+            dates_subdir_appndx     = dates_subdir_appndx, 
+            run_using_slim          = run_using_slim
+        )
+
+
+    def get_summary_dict(
+        self
+    ):
+        r"""
+        DAQ settings with adjustments to a few entries (so they can be easily output into the summary JSON file)
+        e.g., Timestamp is not JSON serializable, hence the need for strftime below
+        e.g., Timedelta is not JSON serializable, hence the conversion to total seconds
+        """
+        #--------------------------------------------------
+        summary_dict = super().get_summary_dict()
+        #--------------------------------------------------
+        summary_dict['dataset']                 = 'prbl'
+        summary_dict['rec_nb_col']              = 'no_outg_rec_nb'
+        summary_dict['return_window_strategy']  = self.return_window_strategy
+        summary_dict['trsf_pole_nbs_to_ignore'] = self.trsf_pole_nbs_to_ignore
+        #--------------------------------------------------
+        return summary_dict
+    
+    def save_summary_dict(
+        self
+    ):
+        r"""
+        """
+        #-------------------------
+        summary_dict = self.get_summary_dict()
+        #-----
+        assert(os.path.isdir(self.save_dir_base))
+        #-----
+        CustomWriter.output_dict_to_json(
+            os.path.join(self.save_dir_base, 'summary_dict.json'), 
+            summary_dict
+        )
+
 
 
     def build_or_load_df_outage_location_ids(
@@ -2251,12 +3152,16 @@ class OutageDAQPrBL(OutageDAQ):
 
     
     def build_or_load_df_mp_no_outg(
-        self, 
-        verbose=True
+        self            , 
+        verbose         = True, 
+        ensure_no_lists = False
     ):
         r"""
         Reads df_mp_no_outg_OG from file df_mp_no_outg_full.pkl
         If building from scratch, results output to df_mp_no_outg_curr_hist.pkl then df_mp_no_outg_full.pkl
+
+        ensure_no_lists:
+            Suggest keeping False, as it takes time and shouldn't really be necessary anymore, post dev
         """
         #----------------------------------------------------------------------------------------------------
         if self.read_dfs_from_file:
@@ -2296,43 +3201,70 @@ class OutageDAQPrBL(OutageDAQ):
                 df_mp_no_outg_OG.to_pickle(os.path.join(self.save_dir_base, 'df_mp_no_outg_curr_hist.pkl'))
             #****************************************************************************************************
             #----------------------------------------------------------------------------------------------------
-            # For each transformer, set a random date interval between date_0 and date_1 around which
-            #   results will be acquired.
-            # This is analogous to the outage event for that dataset.
+            # Set t_search_min/t_search_max columns according to the strategy set as self.return_window_strategy
             #----------------------------------------------------------------------------------------------------
-            start = time.time()
-            df_mp_no_outg_OG = OutageDAQ.set_random_date_interval_in_df_by_xfmr(
-                df             = df_mp_no_outg_OG, 
-                date_0         = self.date_0, 
-                date_1         = self.date_1, 
-                window_width   = self.window_width, 
-                xfmr_col       = 'trsf_pole_nb', 
-                rand_seed      = None, 
-                placement_cols = ['start_date', 'end_date'], 
-                inplace        = True    
-            )
-            # If I'm looking at a single year, with a window_width of 30 days, there are only
-            # 365-30=335 possible unique start dates, regardless of number of groups.
-            # So, there are bound to be repeats!
-            # HOWEVER, I am now using also a random time for each day, so the likeliness of repeats
-            #   is significantly reduced!
-            if verbose:
-                print('-----'*20+f'\nSetting random date interval of width={self.window_width} between date_0={self.date_0} and date_1={self.date_1}'+
-                      '\nfor all remaining transformers in no-outage collection\n')
-                print(f"# trsf_pole_nbs: {df_mp_no_outg_OG['trsf_pole_nb'].nunique()}")
-                print(f"# start_dates  : {df_mp_no_outg_OG['start_date'].nunique()}")
-                print(f"# end_dates    : {df_mp_no_outg_OG['end_date'].nunique()}")
-                print(f'\ntime = {time.time()-start}\n'+'-----'*20)
-                
+            #--------------------------------------------------
+            if self.return_window_strategy == 'rand':
+                # For each transformer, set a random date interval between date_0 and date_1 around which
+                #   results will be acquired.
+                # This is analogous to the outage event for that dataset.
+                #--------------------------------------------------
+                start = time.time()
+                df_mp_no_outg_OG = OutageDAQ.set_random_date_interval_in_df_by_xfmr(
+                    df             = df_mp_no_outg_OG, 
+                    date_0         = self.date_0, 
+                    date_1         = self.date_1, 
+                    window_width   = self.window_width, 
+                    xfmr_col       = 'trsf_pole_nb', 
+                    rand_seed      = None, 
+                    placement_cols = ['t_search_min', 't_search_max'], 
+                    inplace        = True    
+                )
+                # If I'm looking at a single year, with a window_width of 30 days, there are only
+                # 365-30=335 possible unique start dates, regardless of number of groups.
+                # So, there are bound to be repeats!
+                # HOWEVER, I am now using also a random time for each day, so the likeliness of repeats
+                #   is significantly reduced!
+                if verbose:
+                    print('-----'*20+f'\nSetting random date interval of width={self.window_width} between date_0={self.date_0} and date_1={self.date_1}'+
+                        '\nfor all remaining transformers in no-outage collection\n')
+                    print(f"# trsf_pole_nbs: {df_mp_no_outg_OG['trsf_pole_nb'].nunique()}")
+                    print(f"# t_search_mins: {df_mp_no_outg_OG['t_search_min'].nunique()}")
+                    print(f"# t_search_maxs: {df_mp_no_outg_OG['t_search_max'].nunique()}")
+                    print(f'\ntime = {time.time()-start}\n'+'-----'*20)
+            #--------------------------------------------------
+            elif self.return_window_strategy == 'all_subwindows':
+                # ALL PRISTINES WILL HAVE THE SAME WINDOWS, which should be fine.
+                # If one did want differnt transformers to have different windows, one would need to set
+                #   unique t_clean_min and t_clean_max for each transformer, but I don't see the reason for doing so at this point
+                #-----
+                df_mp_no_outg_OG['t_clean_min'] = self.date_0
+                df_mp_no_outg_OG['t_clean_max'] = self.date_1
+                #-----
+                df_mp_no_outg_OG = OutageDAQ.find_clean_subwindows_for_group(
+                    final_df_i                      = df_mp_no_outg_OG, 
+                    min_window_width                = self.window_width, 
+                    include_is_first_after_outg_col = False, 
+                    t_clean_min_col                 = 't_clean_min', 
+                    t_clean_max_col                 = 't_clean_max', 
+                    return_t_search_min_col         = 't_search_min', 
+                    return_t_search_max_col         = 't_search_max'
+                )
+            #--------------------------------------------------
+            elif self.return_window_strategy == 'entire':
+                df_mp_no_outg_OG['t_search_min'] = self.date_0
+                df_mp_no_outg_OG['t_search_max'] = self.date_1
+            else:
+                assert(0)
             #----------------------------------------------------------------------------------------------------
             # Currently, df_mp_no_outg_OG contains all current and historical MeterPremise data.
             # Keep only the data for the meters active during the relevant time periods, as
-            #   dictated by the start_date and end_date fields.
+            #   dictated by the t_search_min and t_search_max fields.
             #----------------------------------------------------------------------------------------------------
             shape_b4 = df_mp_no_outg_OG.shape
             df_mp_no_outg_OG = df_mp_no_outg_OG[
-                (df_mp_no_outg_OG['inst_ts']<=df_mp_no_outg_OG['start_date']) & 
-                (df_mp_no_outg_OG['rmvl_ts'].fillna(pd.Timestamp.max)>df_mp_no_outg_OG['end_date'])
+                (df_mp_no_outg_OG['inst_ts']                          <= df_mp_no_outg_OG['t_search_min']) & 
+                (df_mp_no_outg_OG['rmvl_ts'].fillna(pd.Timestamp.max) >  df_mp_no_outg_OG['t_search_max'])
             ]
             if verbose:
                 print('-----'*20+f'\nKeep only meters active for the relevant times\n')
@@ -2351,35 +3283,58 @@ class OutageDAQPrBL(OutageDAQ):
             # The current solution is to have the addtnl_groupby_cols below, but a more general solution 
             #   should be implemented, e.g., if lists, then join the lists or whatever
             #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            shape_b4 = df_mp_no_outg_OG.shape
+            shape_b4            = df_mp_no_outg_OG.shape
+            addtnl_groupby_cols = addtnl_mp_df_cols+['t_search_min', 't_search_max']
+            if self.return_window_strategy == 'all_subwindows':
+                addtnl_groupby_cols.extend(['t_clean_min', 't_clean_max'])
             df_mp_no_outg_OG = MeterPremise.drop_approx_mp_duplicates(
                 mp_df               = df_mp_no_outg_OG, 
                 fuzziness           = pd.Timedelta('1 hour'), 
-                addtnl_groupby_cols = addtnl_mp_df_cols+['start_date', 'end_date'], 
+                addtnl_groupby_cols = addtnl_groupby_cols, 
             )
+            #-------------------------
             if verbose:
                 print('-----'*20+f'\nDrop approximate duplicates\n')
                 print(f"BEFORE: df_mp_no_outg_OG.shape = {shape_b4}")
                 print(f"AFTER : df_mp_no_outg_OG.shape = {df_mp_no_outg_OG.shape}")
                 print(f'\ntime = {time.time()-start}\n'+'-----'*20)
-            # Make sure no list entries! (PROBABLY NOT NEEDED ANYMORE AFTER DEV STAGE!)
-            for col in df_mp_no_outg_OG.columns:
-                for i in range(df_mp_no_outg_OG.shape[0]):
-                    if isinstance(df_mp_no_outg_OG.iloc[i][col], list):
-                        print(col, i)
-                        assert(0)
+            #-------------------------
+            if ensure_no_lists:
+                # Make sure no list entries! (PROBABLY NOT NEEDED ANYMORE AFTER DEV STAGE!)
+                # See also Utilities_df.find_columns_with_list_element/does_df_contain_any_column_elements
+                if df_mp_no_outg_OG.map(lambda x: isinstance(x, list)).any().any():
+                    print('In OutageDAQPrBL.build_or_load_df_mp_no_outg: LISTS FOUND IN df_mp_no_outg_OG!!!!!')
+                    print(df_mp_no_outg_OG.map(lambda x: isinstance(x, list)).any())
+                    assert(0)
     
             #----------------------------------------------------------------------------------------------------
             # Add no_outg_rec_nb column to allow easier grouping when building rcpo_dfs, and for identification later
             #----------------------------------------------------------------------------------------------------
             start=time.time()
             rand_pfx = Utilities.generate_random_string(str_len=5, letters=string.ascii_letters + string.digits)
-            df_mp_no_outg_OG['no_outg_rec_nb'] = df_mp_no_outg_OG.groupby(['trsf_pole_nb', 'start_date', 'end_date']).ngroup()
+            df_mp_no_outg_OG['no_outg_rec_nb'] = df_mp_no_outg_OG.groupby(['trsf_pole_nb', 't_search_min', 't_search_max']).ngroup()
             df_mp_no_outg_OG['no_outg_rec_nb'] = rand_pfx + df_mp_no_outg_OG['no_outg_rec_nb'].astype(str)
             if verbose:
                 print('-----'*20+f'\nCreating no_outg_rec_nb column\n')
                 print(f'\ntime = {time.time()-start}\n'+'-----'*20)
             
+            #----------------------------------------------------------------------------------------------------
+            #--------------------------------------------------
+            # Set the date of interest (doi) column, which is akin to the DT_OFF_TS_FULL column for the outg case
+            #   The doi is the reference point from which the various time groupings will be formed.
+            # Reconstruction of prediction_date/doi
+            #   range_left  = prediction_date + td_left  ==> prediction_date = range_left - td_left
+            #   range_right = prediction_date + td_right ==> prediction_date = range_right - td_right
+            # As shown above, reconstruction using td_left or td_right should yield the same result.
+            # IF FOR SOME REASON THEY YIELD DIFFERENT RESULTS, BOTH WILL BE KEPT (columns 'doi', from left, and 'doi_r' from right)
+            df_mp_no_outg_OG['doi']   = df_mp_no_outg_OG['t_search_min'] - self.td_left
+            df_mp_no_outg_OG['doi_r'] = df_mp_no_outg_OG['t_search_max'] - self.td_right
+            if df_mp_no_outg_OG['doi'].equals(df_mp_no_outg_OG['doi_r']):
+                df_mp_no_outg_OG = df_mp_no_outg_OG.drop(columns=['doi_r'])
+            else:
+                if verbose:
+                    print("!!!!! WARNING: OutageDAQPrBL.build_or_load_df_mp_no_outg !!!!!\n\tdoi and doi_r columns disagree, so both will be kept!")
+
             #****************************************************************************************************
             if self.save_dfs_to_file:
                 df_mp_no_outg_OG.to_pickle(os.path.join(self.save_dir_base, 'df_mp_no_outg_full.pkl'))
@@ -2479,7 +3434,7 @@ class OutageDAQPrBL(OutageDAQ):
             start=time.time()
             df_mp_no_outg_slim_OG = Utilities_df.consolidate_df(
                 df                                  = self.df_mp_no_outg_w_events, 
-                groupby_cols                        = ['no_outg_rec_nb', 'trsf_pole_nb', 'start_date', 'end_date'], 
+                groupby_cols                        = ['no_outg_rec_nb', 'trsf_pole_nb', 't_search_min', 't_search_max', 'doi'], 
                 cols_shared_by_group                = cols_shared_by_group, 
                 cols_to_collect_in_lists            = cols_to_collect_in_lists, 
                 include_groupby_cols_in_output_cols = False, 
@@ -2550,7 +3505,7 @@ class OutageDAQPrBL(OutageDAQ):
         #----------------------------------------------------------------------------------------------------
         df_construct_type              = DFConstructType.kRunSqlQuery
         contstruct_df_args_end_events  = None
-        addtnl_groupby_cols            = ['trsf_pole_nb', 'no_outg_rec_nb']
+        addtnl_groupby_cols            = ['trsf_pole_nb', 'no_outg_rec_nb', 'doi']
         #-------------------------
         if self.collect_evs_sum_vw:
             cols_of_interest_end_dev_event = ['*']
@@ -2575,10 +3530,11 @@ class OutageDAQPrBL(OutageDAQ):
             build_sql_function_kwargs         = build_sql_function_kwargs, 
             join_mp_args                      = False, 
             date_only                         = date_only, 
+            output_t_minmax                   = True, 
             df_args                           = dict(
                 addtnl_groupby_cols = addtnl_groupby_cols, 
-                t_search_min_col    = 'start_date', 
-                t_search_max_col    = 'end_date'
+                t_search_min_col    = 't_search_min', 
+                t_search_max_col    = 't_search_max'
             ), 
             # GenAn - keys_to_pop in GenAn.build_sql_general 
             field_to_split                    = 'df_mp_no_outg', 
@@ -2606,7 +3562,7 @@ class OutageDAQPrBL(OutageDAQ):
         #-------------------------
         else:
             df_mp_no_outg = self.df_mp_no_outg_w_events.copy()
-            df_mp_no_outg = df_mp_no_outg.sort_values(by=['no_outg_rec_nb', 'trsf_pole_nb', 'prem_nb', 'start_date'], ignore_index=True)
+            df_mp_no_outg = df_mp_no_outg.sort_values(by=['no_outg_rec_nb', 'trsf_pole_nb', 'prem_nb', 't_search_min'], ignore_index=True)
             #----------
             end_events_sql_function_kwargs = Utilities.supplement_dict_with_default_values(
                 to_supplmnt_dict = end_events_sql_function_kwargs, 
@@ -2640,3 +3596,22 @@ class OutageDAQPrBL(OutageDAQ):
         if verbose:
             print(f'exit_status = {exit_status}')
             print(f'Build time  = {time.time()-start}')
+        #----------------------------------------------------------------------------------------------------
+        if exit_status:
+            self.save_summary_dict()
+            #-------------------------
+            time_infos_df = OutageDAQ.build_baseline_time_infos_df(
+                data_dir_base           = self.save_dir_base, 
+                min_req                 = True, 
+                summary_dict_fname      = 'summary_dict.json', 
+                alias                   = 'mapping_table', 
+                include_summary_paths   = False, 
+                consolidate             = False, 
+                PN_regex                = r"prem(?:ise)?_nbs?", 
+                t_min_regex             = r"t(?:_search)?_min", 
+                t_max_regex             = r"t(?:_search)?_max", 
+                drop_gpd_for_sql        = True, 
+                return_gpd_cols         = False, 
+                verbose                 = verbose
+            )
+            time_infos_df.to_pickle(os.path.join(self.save_dir_base, 'time_infos_df.pkl'))

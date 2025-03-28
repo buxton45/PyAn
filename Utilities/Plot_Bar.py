@@ -5,45 +5,25 @@ Utilities specifically for plotting bar plots (using seaborn barplot)
 """
 
 #---------------------------------------------------------------------
-import sys, os
-import re
 
 import pandas as pd
-import numpy as np
-from pandas.api.types import is_numeric_dtype
-from scipy import stats
-import datetime
-import time
-from natsort import natsorted, ns, natsort_keygen
 from copy import deepcopy
 #---------------------------------------------------------------------
-import matplotlib as mpl
-import matplotlib.pyplot as plt
 import seaborn as sns
-from matplotlib.backends.backend_pdf import PdfPages
-import matplotlib.patches as mpatches
-from matplotlib.lines import Line2D
-import matplotlib.ticker as ticker
-from matplotlib import dates
-import matplotlib.colors as mcolors
-import matplotlib.cm as cm #e.g. for cmap=cm.jet
 #---------------------------------------------------------------------
 import Utilities
-import Utilities_xml
-import Utilities_df
-import Utilities_dt
 import Plot_General
 import Plot_Hist
 #---------------------------------------------------------------------
 
 #**************************************************
 def adjust_bar_and_line_positions_and_widths(
-    ax, 
-    div_width_by, 
-    position_idx, 
-    i_patch_beg=None, 
-    i_patch_end=None, 
-    orient='v'
+    ax           , 
+    div_width_by , 
+    position_idx , 
+    i_patch_beg  = None, 
+    i_patch_end  = None, 
+    orient       = 'v'
 ):
     r"""
     This is similar to the Plot_Hist.adjust_patch_positions_and_widths.
@@ -83,12 +63,12 @@ def adjust_bar_and_line_positions_and_widths(
         i_patch_end = len(ax.patches)
     #-------------------------
     ax = Plot_Hist.adjust_patch_positions_and_widths(
-        ax=ax, 
-        div_width_by=div_width_by, 
-        position_idx=position_idx, 
-        i_patch_beg=i_patch_beg, 
-        i_patch_end=i_patch_end, 
-        orient=orient
+        ax           = ax, 
+        div_width_by = div_width_by, 
+        position_idx = position_idx, 
+        i_patch_beg  = i_patch_beg, 
+        i_patch_end  = i_patch_end, 
+        orient       = orient
     )
     #-------------------------
     # I suppose there could be an instance where these are not equal?
@@ -103,7 +83,7 @@ def adjust_bar_and_line_positions_and_widths(
     #       in Plot_Hist.adjust_patch_positions_and_widths call.  Therefore, do not need to be
     #       considered below for lines, and can simply use new patch positions.
     for i in range(len(lines)):
-        line = lines[i]
+        line  = lines[i]
         patch = patches[i]
         #----------
         new_line_width = 0.5*line.get_linewidth()
@@ -120,24 +100,24 @@ def adjust_bar_and_line_positions_and_widths(
 
 #**************************************************
 def plot_barplot(
-    ax, 
-    df, 
-    x=None,
-    y=None,
-    hue=None, 
-    order=None, 
-    n_bars_to_include=None, 
-    barplot_kwargs=None, 
-    keep_edges_opaque=True, 
-    div_drawn_width_by=None, 
-    relative_position_idx=None, 
-    run_set_general_plotting_args=True, 
-    orient='v', 
-    replace_xtick_labels_with_ints=False, 
-    xtick_ints_offset=0, 
-    add_xtick_labels_legend_textbox=False, 
-    xtick_labels_legend_textbox_kwargs=None, 
-    fig=None, 
+    ax                                 , 
+    df                                 , 
+    x                                  = None,
+    y                                  = None,
+    hue                                = None, 
+    order                              = None, 
+    n_bars_to_include                  = None, 
+    barplot_kwargs                     = None, 
+    keep_edges_opaque                  = True, 
+    div_drawn_width_by                 = None, 
+    relative_position_idx              = None, 
+    run_set_general_plotting_args      = True, 
+    orient                             = 'v', 
+    replace_xtick_labels_with_ints     = False, 
+    xtick_ints_offset                  = 0, 
+    add_xtick_labels_legend_textbox    = False, 
+    xtick_labels_legend_textbox_kwargs = None, 
+    fig                                = None, 
     **kwargs
 ):
     r"""
@@ -258,14 +238,14 @@ def plot_barplot(
     n_patches_beg = len(ax.patches) # Needed in case adjust_bar_and_line_positions_and_widths used
     #---------------------------
     barplot_kwargs = Plot_Hist.set_box_color_attributes(
-        plot_kwargs=barplot_kwargs, 
-        keep_edges_opaque=keep_edges_opaque
+        plot_kwargs       = barplot_kwargs, 
+        keep_edges_opaque = keep_edges_opaque
     )
     barplot_kwargs['orient'] = orient
     #---------------------------
     if order is not None:
         if n_bars_to_include is not None:
-            order=order[:n_bars_to_include]
+            order = order[:n_bars_to_include]
         df_to_plot = df[order]
     else:
         df_to_plot = df
@@ -274,7 +254,15 @@ def plot_barplot(
         df_to_plot = df_to_plot.iloc[:, :n_bars_to_include]
     #------------------------------------------------------
     #******************************************************
-    sns.barplot(ax=ax, data=df_to_plot, x=x, y=y, hue=hue, order=order, **barplot_kwargs);
+    sns.barplot(
+      ax    = ax, 
+      data  = df_to_plot, 
+      x     = x, 
+      y     = y, 
+      hue   = hue, 
+      order = order, 
+      **barplot_kwargs
+    );
     #******************************************************
     #------------------------------------------------------
     if run_set_general_plotting_args:
@@ -286,79 +274,48 @@ def plot_barplot(
         if relative_position_idx is None:
             relative_position_idx = 0
         ax = adjust_bar_and_line_positions_and_widths(
-            ax=ax, 
-            div_width_by=div_drawn_width_by, 
-            position_idx=relative_position_idx, 
-            i_patch_beg=n_patches_beg, 
-            i_patch_end=n_patches_end, 
-            orient=orient
+            ax           = ax, 
+            div_width_by = div_drawn_width_by, 
+            position_idx = relative_position_idx, 
+            i_patch_beg  = n_patches_beg, 
+            i_patch_end  = n_patches_end, 
+            orient       = orient
         )
     #---------------------------
     # Regardless of run_set_general_plotting_args, if replace_xtick_labels_with_ints==True
     #   Plot_General.set_general_plotting_args needs to be called with new tick elements
     if replace_xtick_labels_with_ints:
-        xtick_elements = df_to_plot.columns.tolist()
-        xtick_rename_dict = {xtick_el:i+1+xtick_ints_offset for i,xtick_el in enumerate(xtick_elements)}
-        # NOTE: xticks = np.arange(len(xtick_rename_dict)) below is to ensure all ticks are drawn,
-        #       as sometimes mpl draws less ticks when there are many
-        ax = Plot_General.set_general_plotting_args(
-            ax=ax, 
-            ax_args=dict(
-                xticks = np.arange(len(xtick_rename_dict)),
-                xticklabels=list(xtick_rename_dict.values())
-            ), 
-            tick_args=dict(axis='x', labelrotation=0)
-        )
-        if add_xtick_labels_legend_textbox:
-            subplot_layout_params = Plot_General.get_subplot_layout_params(fig)
-            dflt_xtick_labels_legend_textbox_kwargs = dict(
-                fig=fig, 
-                xtick_rename_dict=xtick_rename_dict, 
-                text_x_pos=1.02*subplot_layout_params['right'], 
-                text_y_pos=subplot_layout_params['top'], 
-                n_chars_per_line=30, 
-                multi_line_offset=None, 
-                new_org_separator=': ', 
-                fontsize=18, 
-                ha='left', 
-                va='top',
-                n_lines_between_entries=1, 
-                n_cols=1, 
-                col_padding = 0.01
-            )
-            if xtick_labels_legend_textbox_kwargs is None:
-                xtick_labels_legend_textbox_kwargs={}
-            xtick_labels_legend_textbox_kwargs = Utilities.supplement_dict_with_default_values(
-                to_supplmnt_dict=xtick_labels_legend_textbox_kwargs, 
-                default_values_dict=dflt_xtick_labels_legend_textbox_kwargs
-            )
-            Plot_General.generate_xtick_labels_legend_textbox(
-                **xtick_labels_legend_textbox_kwargs
-            )
+        ax = Plot_General.replace_xtick_labels_wints(
+          ax                                 = ax, 
+          xtick_ints_offset                  = xtick_ints_offset, 
+          add_xtick_labels_legend_textbox    = add_xtick_labels_legend_textbox, 
+          xtick_labels_legend_textbox_kwargs = xtick_labels_legend_textbox_kwargs, 
+          fig                                = fig, 
+      )
     #---------------------------
     return ax
     
     
 #**************************************************
 def plot_multiple_barplots(
-    ax, 
-    dfs_w_args, 
-    x=None,
-    y=None,
-    hue=None, 
-    order=None, 
-    n_bars_to_include=None, 
-    keep_edges_opaque=True, 
-    include_hatches=False, 
-    draw_side_by_side=False, 
-    draw_single_idx_full_width=None,     
-    run_set_general_plotting_args=True, 
-    orient='v', 
-    replace_xtick_labels_with_ints=False,
-    xtick_ints_offset=0, 
-    add_xtick_labels_legend_textbox=False, 
-    xtick_labels_legend_textbox_kwargs=None, 
-    fig=None, 
+    ax                                 , 
+    dfs_w_args                         , 
+    x                                  = None,
+    y                                  = None,
+    hue                                = None, 
+    order                              = None, 
+    n_bars_to_include                  = None, 
+    keep_edges_opaque                  = True, 
+    include_hatches                    = False, 
+    draw_side_by_side                  = False, 
+    draw_single_idx_full_width         = None,     
+    run_set_general_plotting_args      = True, 
+    orient                             = 'v', 
+    replace_xtick_labels_with_ints     = False,
+    xtick_ints_offset                  = 0, 
+    add_xtick_labels_legend_textbox    = False, 
+    xtick_labels_legend_textbox_kwargs = None, 
+    fig                                = None, 
     **kwargs
 ):
     r"""
@@ -434,7 +391,7 @@ def plot_multiple_barplots(
     else:
         div_drawn_width_by=None
     #---------------------------
-    colors = Plot_General.get_standard_colors(len(dfs_w_args), palette=dfs_color_palette)
+    colors  = Plot_General.get_standard_colors(len(dfs_w_args), palette=dfs_color_palette)
     hatches = Plot_General.get_standard_hatches(len(dfs_w_args))
     for i in range(len(dfs_w_args)):
         # First, normalize dfs_w_args[i] so it is a tuple whose first first element
@@ -445,9 +402,11 @@ def plot_multiple_barplots(
 
         # At this point, dfs_w_args[i] is definitely a list/tuple.  
         # Make sure length=2, first item is pd.DataFrame, and second is dict
-        assert(len(dfs_w_args[i])==2 and 
-               isinstance(dfs_w_args[i][0], pd.DataFrame) and 
-               isinstance(dfs_w_args[i][1], dict))
+        assert(
+            len(dfs_w_args[i])==2 and 
+            isinstance(dfs_w_args[i][0], pd.DataFrame) and 
+            isinstance(dfs_w_args[i][1], dict)
+        )
         
         # However, in order to make changes, it must be a list, and not a tuple!
         if isinstance(dfs_w_args[i], tuple):
@@ -463,7 +422,7 @@ def plot_multiple_barplots(
     if order is None:
         order = dfs_w_args[0][0].columns.tolist()
     if n_bars_to_include is not None:
-        order=order[:n_bars_to_include]
+        order = order[:n_bars_to_include]
     for i in range(len(dfs_w_args)):
         dfs_w_args[i][0] = dfs_w_args[i][0][order]
     #---------------------------------------------------------------------
@@ -473,72 +432,52 @@ def plot_multiple_barplots(
         if draw_side_by_side:
             if (draw_single_idx_full_width is not None and 
                 draw_single_idx_full_width==i):
-                div_drawn_width_by_i=None
-                relative_position_idx=None
+                div_drawn_width_by_i  = None
+                relative_position_idx = None
             else:
                 relative_position_idx = sbs_count
                 sbs_count += 1
         else:
-            relative_position_idx=None
+            relative_position_idx = None
         #----------------------------
         if i==len(dfs_w_args)-1:
-            run_set_general_plotting_args=True
+            run_set_general_plotting_args = True
         else:
-            run_set_general_plotting_args=False
+            run_set_general_plotting_args = False
         #----------------------------
         # NOTE: order and n_bars_to_include already handled above
         #       so can be set to None below
         # NOTE: Only want xtick_labels_legend_textbox to be drawn once, so
         #       set to False below, and handled at end of function
         ax = plot_barplot(
-            ax=ax, 
-            df=dfs_w_args[i][0], 
-            x=x,
-            y=y,
-            hue=hue, 
-            order=None, 
-            n_bars_to_include=None, 
-            barplot_kwargs=dfs_w_args[i][1], 
-            keep_edges_opaque=keep_edges_opaque, 
-            div_drawn_width_by=div_drawn_width_by_i, 
-            relative_position_idx=relative_position_idx, 
-            run_set_general_plotting_args=run_set_general_plotting_args, 
-            orient=orient, 
-            replace_xtick_labels_with_ints=replace_xtick_labels_with_ints, 
-            xtick_ints_offset=xtick_ints_offset, 
-            add_xtick_labels_legend_textbox=False, 
-            xtick_labels_legend_textbox_kwargs=None, 
-            fig=None, 
+            ax                                 = ax, 
+            df                                 = dfs_w_args[i][0], 
+            x                                  = x,
+            y                                  = y,
+            hue                                = hue, 
+            order                              = None, 
+            n_bars_to_include                  = None, 
+            barplot_kwargs                     = dfs_w_args[i][1], 
+            keep_edges_opaque                  = keep_edges_opaque, 
+            div_drawn_width_by                 = div_drawn_width_by_i, 
+            relative_position_idx              = relative_position_idx, 
+            run_set_general_plotting_args      = run_set_general_plotting_args, 
+            orient                             = orient, 
+            replace_xtick_labels_with_ints     = replace_xtick_labels_with_ints, 
+            xtick_ints_offset                  = xtick_ints_offset, 
+            add_xtick_labels_legend_textbox    = False, 
+            xtick_labels_legend_textbox_kwargs = None, 
+            fig                                = None, 
             **kwargs
         )
     #---------------------------------------------------------------------
-    if replace_xtick_labels_with_ints and add_xtick_labels_legend_textbox:
-        xtick_elements = dfs_w_args[0][0].columns.tolist()
-        xtick_rename_dict = {xtick_el:i+1+xtick_ints_offset for i,xtick_el in enumerate(xtick_elements)}
-        subplot_layout_params = Plot_General.get_subplot_layout_params(fig)
-        dflt_xtick_labels_legend_textbox_kwargs = dict(
-            fig=fig, 
-            xtick_rename_dict=xtick_rename_dict, 
-            text_x_pos=1.02*subplot_layout_params['right'], 
-            text_y_pos=subplot_layout_params['top'], 
-            n_chars_per_line=30, 
-            multi_line_offset=None, 
-            new_org_separator=': ', 
-            fontsize=18, 
-            ha='left', 
-            va='top',
-            n_lines_between_entries=1, 
-            n_cols=1, 
-            col_padding = 0.01
-        )
-        if xtick_labels_legend_textbox_kwargs is None:
-            xtick_labels_legend_textbox_kwargs={}
-        xtick_labels_legend_textbox_kwargs = Utilities.supplement_dict_with_default_values(
-            to_supplmnt_dict=xtick_labels_legend_textbox_kwargs, 
-            default_values_dict=dflt_xtick_labels_legend_textbox_kwargs
-        )
-        Plot_General.generate_xtick_labels_legend_textbox(
-            **xtick_labels_legend_textbox_kwargs
-        )    
+    if replace_xtick_labels_with_ints:
+        ax = Plot_General.replace_xtick_labels_wints(
+          ax                                 = ax, 
+          xtick_ints_offset                  = xtick_ints_offset, 
+          add_xtick_labels_legend_textbox    = add_xtick_labels_legend_textbox, 
+          xtick_labels_legend_textbox_kwargs = xtick_labels_legend_textbox_kwargs, 
+          fig                                = fig, 
+      )
     #----------------------------
     return ax

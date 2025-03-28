@@ -50,6 +50,7 @@ from MECPODf import MECPODf
 from MECPOAn import MECPOAn
 from MECPOCollection import MECPOCollection
 from DOVSOutages import DOVSOutages
+from OutageDAQ import OutageDataInfo as ODI
 #---------------------------------------------------------------------
 sys.path.insert(0, Utilities_config.get_sql_aids_dir())
 import TableInfos
@@ -180,6 +181,8 @@ class OutageModeler:
         self.target_col         = ('is_outg', 'is_outg')
         self.from_outg_col      = ('from_outg', 'from_outg')
         #-------------------------
+        self.__can_model          = True
+        #-------------------------
         self.__df_train           = copy.deepcopy(self.init_dfs_to)
         self.__df_test            = copy.deepcopy(self.init_dfs_to)
         self.__df_holdout         = copy.deepcopy(self.init_dfs_to)
@@ -274,6 +277,11 @@ class OutageModeler:
         self.save_sub_dir  = save_sub_dir
         if self.save_sub_dir is None:
             self.save_sub_dir = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        if(
+            save_base_dir is not None and 
+            not os.path.exists(os.path.join(save_base_dir, save_sub_dir))
+        ):
+            os.makedirs(os.path.join(save_base_dir, save_sub_dir))
         #---------------------------------------------------------------------------
         self.__save_data                   = save_data
         self.__save_model                  = save_model
@@ -376,6 +384,8 @@ class OutageModeler:
         self.target_col                      = OutageModeler.general_copy(outg_mdlr.target_col)
         self.from_outg_col                   = OutageModeler.general_copy(outg_mdlr.from_outg_col)
         #-------------------------
+        self.__can_model                     = OutageModeler.general_copy(outg_mdlr.__can_model)
+        #-------------------------
         self.__df_train                      = OutageModeler.general_copy(outg_mdlr.__df_train)
         self.__df_test                       = OutageModeler.general_copy(outg_mdlr.__df_test)
         self.__df_holdout                    = OutageModeler.general_copy(outg_mdlr.__df_holdout)
@@ -466,7 +476,7 @@ class OutageModeler:
         #-------------------------
         self.__saved_time_infos_df           = OutageModeler.general_copy(outg_mdlr.__saved_time_infos_df)
         self.__saved_eemsp                   = OutageModeler.general_copy(outg_mdlr.__saved_eemsp)
-        self.__saved_eemsp_end               = OutageModeler.general_copy(outg_mdlr.__saved_eemsp_enc)
+        self.__saved_eemsp_enc               = OutageModeler.general_copy(outg_mdlr.__saved_eemsp_enc)
         self.__saved_data_structure_df       = OutageModeler.general_copy(outg_mdlr.__saved_data_structure_df)
         self.__saved_scaler                  = OutageModeler.general_copy(outg_mdlr.__saved_scaler)
         self.__saved_pca                     = OutageModeler.general_copy(outg_mdlr.__saved_pca)
@@ -541,7 +551,9 @@ class OutageModeler:
             other_kwargs = other_kwargs
         )
 
-
+    @property
+    def can_model(self):
+        return self.__can_model
     @property
     def df_train(self):
         return self.__df_train
@@ -1036,48 +1048,6 @@ class OutageModeler:
         assert(OutageModeler.check_mecpx_build_info_dict(mecpx_build_info_dict))
         return mecpx_build_info_dict
         
-    def set_mecpx_build_args_OLD(
-        self, 
-        extend_any_lists = False, 
-        **kwargs
-    ):
-        r"""
-        Set any of the arguments used to build the MECPO collections.
-            e.g., outg_mdlr.set_mecpx_build_args(max_total_counts=1000)
-        extend_any_lists:
-            If True, any list values in self.mecpx_build_info_dict will be supplemented with the values from kwargs
-              instead of being replace by them.
-        -----
-        Note, for the purposes here the input to Utilities.supplement_dict_with_default_values may seem backwards, but
-         they are, in fact, correct.
-        Namely:
-            to_supplmnt_dict    = kwargs
-            default_values_dict = self.mecpx_build_info_dict
-        From Utilities.supplement_dict_with_default_values documentation:
-                If a key IS NOT contained in to_supplmnt_dict
-                  ==> a new key/value pair is simply created.
-                If a key IS already contained in to_supplmnt_dict
-                  ==> value (to_supplmnt_dict[key]) is kept 
-                      UNLESS extend_any_lists==True and to_supplmnt_dict[key] and/or default_values_dict[key] is a list,
-                        in which case the two lists are combined
-        ==> Since to_supplmnt_dict=kwargs below, the values from kwargs are kept over those in self.mecpx_build_info_dict
-        """
-        #-------------------------
-        if len(kwargs)==0:
-            return
-        #-------------------------
-        assert(set(kwargs.keys()).difference(set(self.mecpx_build_info_dict.keys()))==set())
-        #-------------------------
-        # NOTE: For our purposes here, self.mecpx_build_info_dict will actually be the default_values_dict parameter below!
-        #       This is because we want to keep values in kwargs over those in self.mecpx_build_info_dict
-        self.mecpx_build_info_dict = Utilities.supplement_dict_with_default_values(
-            to_supplmnt_dict    = kwargs, 
-            default_values_dict = self.mecpx_build_info_dict, 
-            extend_any_lists    = extend_any_lists, 
-            inplace             = False
-        )
-        #-------------------------
-        assert(OutageModeler.check_mecpx_build_info_dict(self.mecpx_build_info_dict))
         
     def set_mecpx_build_args(
         self, 
@@ -1122,7 +1092,7 @@ class OutageModeler:
             return
         #----------------------------------------------------------------------------------------------------
         addtnl_acceptable_kwargs = OutageModeler.get_acceptable_generic_mecpx_build_args()
-        acceptable_kwargs = list(self.mecpx_build_info_dict.keys()) + addtnl_acceptable_kwargs
+        acceptable_kwargs = list(OutageModeler.get_default_mecpx_build_info_dict().keys()) + addtnl_acceptable_kwargs
         assert(set(kwargs.keys()).difference(set(acceptable_kwargs))==set())
         #-------------------------
         for generic_key_i in addtnl_acceptable_kwargs:
@@ -1130,10 +1100,13 @@ class OutageModeler:
                 continue
             # Need to remove generic_key_i from kwargs and update the specific versions, BUT ONLY IF NOT CONTAINED IN kwargs
             generic_val_i = kwargs.pop(generic_key_i)
-            if generic_key_i not in  ['grp_by_cols_bsln', 'std_dict_grp_by_cols_bsln']:
+            if generic_key_i in ['grp_by_cols_bsln', 'std_dict_grp_by_cols_bsln']:
+                kwargs[f'{generic_key_i[:-5]}_otbl'] = kwargs.get(f'{generic_key_i[:-5]}_otbl', generic_val_i)
+                kwargs[f'{generic_key_i[:-5]}_prbl'] = kwargs.get(f'{generic_key_i[:-5]}_prbl', generic_val_i)
+            else:
                 kwargs[f'{generic_key_i}_outg'] = kwargs.get(f'{generic_key_i}_outg', generic_val_i)
-            kwargs[f'{generic_key_i}_otbl'] = kwargs.get(f'{generic_key_i}_otbl', generic_val_i)
-            kwargs[f'{generic_key_i}_prbl'] = kwargs.get(f'{generic_key_i}_prbl', generic_val_i)
+                kwargs[f'{generic_key_i}_otbl'] = kwargs.get(f'{generic_key_i}_otbl', generic_val_i)
+                kwargs[f'{generic_key_i}_prbl'] = kwargs.get(f'{generic_key_i}_prbl', generic_val_i)
 
         #----------------------------------------------------------------------------------------------------
         # NOTE: For our purposes here, self.mecpx_build_info_dict will actually be the default_values_dict parameter below!
@@ -1448,11 +1421,12 @@ class OutageModeler:
         
     @staticmethod
     def get_mecpx_base_dirs(
-        dataset, 
-        acq_run_date, 
-        data_date_ranges, 
-        data_dir_base    = r'C:\Users\s346557\Documents\LocalData\dovs_and_end_events_data', 
-        assert_found     = True
+        dataset                    , 
+        acq_run_date               , 
+        data_date_ranges           , 
+        acq_run_date_subdir_appndx = None, 
+        data_dir_base              = r'C:\Users\s346557\Documents\LocalData\dovs_and_end_events_data', 
+        assert_found               = True
     ):
         r"""
         Find the directories housing the data to be used for build_and_combine_mecpo_colls_for_dates.
@@ -1461,9 +1435,9 @@ class OutageModeler:
                 data_dir_base, 
                 acq_run_date, 
                 date_pd_subdir, 
-                dataset_subdirs[dataset]
+                ODI.get_subdir(dataset)
             )
-        where date_pd_subdir corresponds to the particular date range, dataset_subdirs can be found below in the code
+        where date_pd_subdir corresponds to the particular date range, dataset_subdirs can be found in OutageDataInfo class (in OutageDAQ module)
         -------------------------
         dataset:
             Must be one of ['outg', 'otbl', 'prbl']
@@ -1483,41 +1457,23 @@ class OutageModeler:
                 r'U:\CloudData\dovs_and_end_events_data'
         """
         #--------------------------------------------------
-        #TODO Maybe make small class/container to hold dataset information?
-        # TODO: Class OutageDataInfo (In OutageDAQ.py) now exists, use it!
-        datasets = ['outg', 'otbl', 'prbl']
-        dataset_subdirs = {
-            'outg': r'Outages', 
-            'otbl': r'OutgXfmrBaseline', 
-            'prbl': r'PristineBaseline'
-        }
-        dataset_naming_tags = {
-            'outg': None, 
-            'otbl': '_otbl', 
-            'prbl': '_prbl'
-        }
-        dataset_is_no_outage = {
-            'outg': False, 
-            'otbl': True, 
-            'prbl': True
-        }
-        assert(len(set(datasets).symmetric_difference(set(dataset_subdirs.keys())))==0)
-        assert(len(set(datasets).symmetric_difference(set(dataset_naming_tags.keys())))==0)
-        assert(len(set(datasets).symmetric_difference(set(dataset_is_no_outage.keys())))==0)
-        #--------------------------------------------------
-        assert(dataset in datasets)
+        ODI.assert_dataset(dataset)
         #-----
         assert(Utilities.is_object_one_of_types(data_date_ranges, [list, tuple]))
         assert(Utilities.are_list_elements_lengths_homogeneous(data_date_ranges, length=2))
+        #-------------------------
+        acq_run_date_subdir = acq_run_date
+        if acq_run_date_subdir_appndx is not None:
+            acq_run_date_subdir += acq_run_date_subdir_appndx
         #-------------------------
         data_dirs_dict = {}
         for date_0, date_1 in data_date_ranges:
             date_pd_subdir = f"{date_0.replace('-','')}_{date_1.replace('-','')}"
             data_dir_i = os.path.join(
                 data_dir_base, 
-                acq_run_date, 
+                acq_run_date_subdir, 
                 date_pd_subdir, 
-                dataset_subdirs[dataset]
+                ODI.get_subdir(dataset)
             )
             if assert_found and not os.path.isdir(data_dir_i):
                 print(f'Directory DNE!\n\t{data_dir_i}\nCRASH IMMINENT!!!!!!')
@@ -1621,10 +1577,10 @@ class OutageModeler:
                 data_dir_base, 
                 acq_run_date, 
                 date_pd_subdir, 
-                dataset_subdirs[dataset], 
+                ODI.get_subdir(dataset), 
                 data_subdir
             )
-        where date_pd_subdir corresponds to the particular date range, dataset_subdirs can be found below in the code, 
+        where date_pd_subdir corresponds to the particular date range, dataset_subdirs can be found in OutageDataInfo class (in OutageDAQ module)
         and data_subdir is determined from grp_by_cols
         -------------------------
         dataset:
@@ -1713,27 +1669,6 @@ class OutageModeler:
             data_dir_base
         """
         #--------------------------------------------------
-        #TODO Maybe make small class/container to hold dataset information?
-        datasets = ['outg', 'otbl', 'prbl']
-        dataset_subdirs = {
-            'outg': r'Outages', 
-            'otbl': r'OutgXfmrBaseline', 
-            'prbl': r'PristineBaseline'
-        }
-        dataset_naming_tags = {
-            'outg': None, 
-            'otbl': '_otbl', 
-            'prbl': '_prbl'
-        }
-        dataset_is_no_outage = {
-            'outg': False, 
-            'otbl': True, 
-            'prbl': True
-        }
-        assert(len(set(datasets).symmetric_difference(set(dataset_subdirs.keys())))==0)
-        assert(len(set(datasets).symmetric_difference(set(dataset_naming_tags.keys())))==0)
-        assert(len(set(datasets).symmetric_difference(set(dataset_is_no_outage.keys())))==0)
-        #--------------------------------------------------
         if old_to_new_keys_dict is not None:
             assert(len(old_to_new_keys_dict)==len(days_min_max_outg_td_windows))
         #-------------------------
@@ -1746,7 +1681,7 @@ class OutageModeler:
         )
         #-------------------------
         if coll_label is None:
-            coll_label = dataset_subdirs[dataset] + Utilities.generate_random_string(str_len=4)
+            coll_label = ODI.get_subdir(dataset) + Utilities.generate_random_string(str_len=4)
         if barplot_kwargs_shared is None:
             barplot_kwargs_shared = dict(facecolor='tab:blue')
         #-------------------------
@@ -1761,9 +1696,9 @@ class OutageModeler:
                 pkls_base_dir                = rcpo_pkl_dir_i,
                 days_min_max_outg_td_windows = days_min_max_outg_td_windows, 
                 pkls_sub_dirs                = None,
-                naming_tag                   = dataset_naming_tags[dataset],
+                naming_tag                   = ODI.get_naming_tag(dataset),
                 normalize_by_time_interval   = normalize_by_time_interval, 
-                are_no_outg                  = dataset_is_no_outage[dataset]    
+                are_no_outg                  = ODI.get_is_no_outage(dataset) 
             )
             if old_to_new_keys_dict is not None:
                 mecpo_coll_i.change_mecpo_an_keys(old_to_new_keys_dict)
@@ -4185,9 +4120,11 @@ class OutageModeler:
             self.merged_df_prbl = Utilities_df.move_cols_to_back(df=self.merged_df_prbl, cols_to_move=[self.from_outg_col, self.target_col])
             
         #--------------------------------------------------
-        if self.__save_data:
-            self.save_merged_dfs(tag=None)
-            self.save_counts_series(tag=None)
+        # IMPORTANT: Notice, we do not call save_merged_dfs/save_counts_series here.  This is on purpose.  The final form or merged_dfs
+        #              will ultimately depend on decisions such as include_month, merge_eemsp, remove_scheduled_outages, etc.
+        #            We want the saved versions of merged_dfs to be able to be used regardless of what user chooses for these parameters.
+        #            If we did, e.g., save here after the user opted to include_month, then the user went back to run a model without the month
+        #              it would still be included (assuming __force_build==False, as is standard) 
         
 
             
@@ -4727,7 +4664,8 @@ class OutageModeler:
         
     def build_train_test_data(
         self,
-        verbose=True
+        assert_can_model = True, 
+        verbose          = True
     ):
         r"""
         """
@@ -4735,24 +4673,53 @@ class OutageModeler:
         if self.get_train_test_by_date:
             # Make sure the minimum required dates are supplied
             needed_dates = [self.date_0_train, self.date_1_train, self.date_0_test, self.date_1_test]
-            print(needed_dates)
-            assert(all([x is not None for x in needed_dates]))
+            if any([x is None for x in needed_dates]):
+                self.__can_model = False
+                if verbose:
+                    print('Cannot model!!!!! needed_dates missing!')
+                    print(f'\tself.date_0_train = {self.date_0_train}')
+                    print(f'\tself.date_1_train = {self.date_1_train}')
+                    print(f'\tself.date_0_test  = {self.date_0_test}')
+                    print(f'\tself.date_1_test  = {self.date_1_test}')
+                if assert_can_model:
+                    assert(0)
+                return
             #-----
             # Make sure the minimum required dates can be converted to datetime/timestamp objects
             _ = [pd.to_datetime(x) for x in needed_dates]
         #----------------------------------------------------------------------------------------------------
-        assert(
+        if not (
             self.merged_df_outg.shape[0]>0 and 
             self.merged_df_otbl.shape[0]>0 and 
             self.time_infos_df.shape[0]>0 
-        )
+        ):
+            self.__can_model = False
+            if verbose:
+                print('Cannot model!!!!! merged_df and/or time_infos_df missing!')
+                print(f'\tself.merged_df_outg.shape[0] = {self.merged_df_outg.shape[0]}')
+                print(f'\tself.merged_df_otbl.shape[0] = {self.merged_df_otbl.shape[0]}')
+                print(f'\tself.time_infos_df.shape[0]  = {self.time_infos_df.shape[0]}')
+            if assert_can_model:
+                assert(0)
+            return
         #-----
         include_prbl = False
         if self.merged_df_prbl is not None and self.merged_df_prbl.shape[0]>0:
             include_prbl = True
         #----------------------------------------------------------------------------------------------------
         if self.date_0_holdout is not None or self.date_1_holdout is not None:
-            assert(self.date_0_holdout is not None and self.date_1_holdout is not None)
+            if(
+                self.date_0_holdout is None or 
+                self.date_1_holdout is None
+            ):
+                self.__can_model = False
+                if verbose:
+                    print('Cannot model!!!!! date_0/andor1_holdout missing!')
+                    print(f'\tself.date_0_holdout = {self.date_0_holdout}')
+                    print(f'\tself.date_1_holdout = {self.date_1_holdout}')
+                if assert_can_model:
+                    assert(0)
+                return
             date_range_holdout = [self.date_0_holdout, self.date_1_holdout]
         else:
             date_range_holdout = None
@@ -4810,7 +4777,13 @@ class OutageModeler:
             addtnl_bsln_test    = split_data_dict_otbl['test']
             addtnl_bsln_holdout = split_data_dict_otbl['holdout']
         #-------------------------
-        assert(0 <= self.addtnl_bsln_frac <= 1.0)
+        if not(0 <= self.addtnl_bsln_frac <= 1.0):
+            self.__can_model = False
+            if verbose:
+                print(f'Cannot model!!!!! self.addtnl_bsln_frac inappropriate (= {self.addtnl_bsln_frac})')
+            if assert_can_model:
+                assert(0)
+            return
         if self.addtnl_bsln_frac < 1.0:
             addtnl_bsln_train   = addtnl_bsln_train.sample(frac=self.addtnl_bsln_frac, random_state=self.random_state)
             addtnl_bsln_test    = addtnl_bsln_test.sample(frac=self.addtnl_bsln_frac, random_state=self.random_state)
@@ -5279,9 +5252,10 @@ class OutageModeler:
         """
         #----------------------------------------------------------------------------------------------------
         self.__saved_data_structure_df     = False
-        self.__saved_scaler                = False
-        self.__saved_pca                   = False
         self.__saved_eemsp_enc             = False
+        self.__saved_pca                   = False
+        self.__saved_scaler                = False
+        self.__saved_summary_dict          = False
         #----------------------------------------------------------------------------------------------------
         if verbose:
             print('In OutageModeler.finalize_train_test_data\nBEFORE ensure_target_val_1_min_pct')
@@ -5384,10 +5358,10 @@ class OutageModeler:
         #---------------------------------------------------------------------------------------------------
         if self.__save_model:
             self.save_data_structure_df()
-            self.save_summary_dict()
-            self.save_scaler()
-            self.save_pca()
             self.save_eemsp_enc()
+            self.save_pca()
+            self.save_scaler()
+            self.save_summary_dict()
 
 
 
@@ -5412,7 +5386,7 @@ class OutageModeler:
         return cross_val_scores
         
     def print_dumb_cross_val_scores(
-        self, 
+        self    , 
         cv      = 3, 
         scoring = 'accuracy'
     ):
@@ -5422,8 +5396,8 @@ class OutageModeler:
         scores = OutageModeler.get_dumb_cross_val_scores(
             X       = self.X_train,
             y       = self.y_train, 
-            cv      = 3, 
-            scoring = 'accuracy'
+            cv      = cv, 
+            scoring = scoring
         )
         #-------------------------
         print('Dumb cross val. scores:')
@@ -5477,19 +5451,12 @@ class OutageModeler:
           from loading because they can be quite large in (memory) size.
         The purpose of this function is to try to load only the absolutely necessary elements needed for running these
           subsequent generations.
+
+        IMPORTANT:  Notice the _0 versions of merged_dfs are loaded, not the final versions!  This is by design.
+                    As outlined in OutageModeler.finalize_merged_dfs, the final form or merged_dfs will ultimately depend on 
+                      decisions such as include_month, merge_eemsp, remove_scheduled_outages, etc.
+                    Therefore, we start from _0 versions and implement such parameters as desired by the current run!
         """
-        #-------------------------
-        try:
-            self.load_merged_dfs(
-                tag     = None, 
-                verbose = verbose
-            )
-            #-----
-            self.build_or_load_time_infos_df(verbose=verbose)
-            #-----
-            return True
-        except:
-            pass
         #-------------------------
         try:
             self.load_merged_dfs(
@@ -5511,35 +5478,56 @@ class OutageModeler:
     
     def finalize_data(
         self, 
-        verbose = True
+        assert_can_model  = True, 
+        print_dumb_scores = True, 
+        verbose           = True
     ):
         r"""
         Methods to refine merged DFs down to what we want
         """
         #-------------------------
-        self.build_train_test_data(verbose=verbose)
-        self.finalize_train_test_data(verbose=verbose)
-        self.print_dumb_cross_val_scores(cv=3, scoring='accuracy')    
+        self.build_train_test_data(
+            assert_can_model = assert_can_model, 
+            verbose          = verbose
+        )
+        if not self.can_model:
+            return
+        #-------------------------
+        self.finalize_train_test_data(
+            verbose = verbose
+        )
+        #-------------------------
+        if print_dumb_scores:
+            self.print_dumb_cross_val_scores(
+                cv      = 3, 
+                scoring = 'accuracy'
+            )    
     
     
     def compile_data(
         self, 
-        verbose=True
+        assert_can_model  = True, 
+        print_dumb_scores = True, 
+        verbose           = True
     ):
         r"""
         Always try to easiest with minimum memory usage method first!
         """
         #--------------------------------------------------
         if not self.__force_build:
-            data_loaded = self.min_memory_impact_load(verbose=verbose)
+            data_loaded = self.min_memory_impact_load(verbose = verbose)
         else:
             data_loaded = False
         #-------------------------
         if not data_loaded:
-            self.initialize_data(verbose=verbose)
-            self.refine_data(verbose=verbose)
+            self.initialize_data(verbose = verbose)
+            self.refine_data(verbose = verbose)
         #--------------------------------------------------
-        self.finalize_data(verbose=verbose)
+        self.finalize_data(
+            assert_can_model  = assert_can_model, 
+            print_dumb_scores = print_dumb_scores, 
+            verbose           = verbose
+        )
     #----------------------------------------------------------------------------------------------------
     #----------------------------------------------------------------------------------------------------
         
@@ -5611,15 +5599,14 @@ class OutageModeler:
     
     def fit(
         self, 
-        verbose=True
+        verbose = True
     ):
         r"""
         """
         #-------------------------
-        
-        # !!!!!!!!!!!!!!!!!!!!!!!!!TODO!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        
-        # TODO: Add some checks to make sure model is initiated and data are properly loaded
+        assert(self.can_model)
+        #-------------------------
+        self.__saved_model_clf = False
         #-------------------------
         start = time.time()
         self.model_clf.fit(self.X_train, self.y_train)
@@ -5634,10 +5621,12 @@ class OutageModeler:
     
     def predict(
         self, 
-        verbose=True
+        verbose = True
     ):
         r"""
         """
+        #-------------------------
+        assert(self.can_model)
         #-------------------------
         self.__y_train_pred = self.model_clf.predict(self.X_train)
         self.__y_test_pred  = self.model_clf.predict(self.X_test)

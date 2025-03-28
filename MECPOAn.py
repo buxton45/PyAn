@@ -11,26 +11,17 @@ __status__ = "Personal"
 import Utilities_config
 import sys, os
 import re
-from string import punctuation
 import string
 import json
-import pickle
 from pathlib import Path
 
 import pandas as pd
 import numpy as np
-from pandas.api.types import is_numeric_dtype, is_datetime64_dtype, is_timedelta64_dtype
-from scipy import stats
-import datetime
-import time
-from natsort import natsorted, ns
-import warnings
+from natsort import natsorted
 import copy
 import itertools
 
 #--------------------------------------------------
-import CommonLearningMethods as clm
-from AMIEndEvents_SQL import AMIEndEvents_SQL
 from AMIEndEvents import AMIEndEvents
 from DOVSOutages import DOVSOutages
 from MECPODf import MECPODf, OutageDType
@@ -38,9 +29,6 @@ from MECPODf import MECPODf, OutageDType
 sys.path.insert(0, Utilities_config.get_utilities_dir())
 import Utilities
 import Utilities_df
-from Utilities_df import DFConstructType
-import Utilities_dt
-import DataFrameSubsetSlicer
 from DataFrameSubsetSlicer import DataFrameSubsetSlicer as DFSlicer
 #--------------------------------------------------
 
@@ -57,17 +45,17 @@ class MECPOAn:
     """
     
     def __init__(
-        self, 
-        data_type, 
-        pkls_base_dir,
-        days_min_max_outg_td_window=None, 
-        pkls_sub_dir=None,
-        naming_tag=None,
-        normalize_by_time_interval=False, 
-        is_no_outg=False, 
-        outg_rec_nb_col='index', 
-        read_and_load_all_pickles=False, 
-        init_cpo_dfs_to=pd.DataFrame() # Should be pd.DataFrame() or None
+        self                        , 
+        data_type                   , 
+        pkls_base_dir               ,
+        days_min_max_outg_td_window = None, 
+        pkls_sub_dir                = None,
+        naming_tag                  = None,
+        normalize_by_time_interval  = False, 
+        is_no_outg                  = False, 
+        outg_rec_nb_col             = 'index', 
+        read_and_load_all_pickles   = False, 
+        init_cpo_dfs_to             = pd.DataFrame() # Should be pd.DataFrame() or None
     ):
         #-----
         self.data_type = None
@@ -288,8 +276,10 @@ class MECPOAn:
     @rcpo_df_OG.setter
     def rcpo_df_OG(self, df):
         self.rcpo_dfs_coll['rcpo_df_OG'] = df
-        if(self.rcpo_dfs_coll['rcpo_df_OG'] is not None and 
-           self.rcpo_dfs_coll['rcpo_df_OG'].shape[0]>0):
+        if(
+            self.rcpo_dfs_coll['rcpo_df_OG'] is not None and 
+            self.rcpo_dfs_coll['rcpo_df_OG'].shape[0]>0
+        ):
             self.set_outg_rec_nbs()
     @rcpo_df_OG.deleter
     def rcpo_df_OG(self):
@@ -485,7 +475,7 @@ class MECPOAn:
     def identify_lists_and_counts_cols_in_df(
         self, 
         df, 
-        addtnl_possible_lists_and_counts_cols=[
+        addtnl_possible_lists_and_counts_cols = [
             ['_prem_nbs', '_nprem_nbs']
         ]
     ):
@@ -577,11 +567,11 @@ class MECPOAn:
         
     #--------------------------------------------------
     def build_norm_counts_df(
-        self, 
-        cpo_df_name_w_counts='rcpo_df_raw', 
-        include_norm_lists=True, 
-        include_all_available=True, 
-        look_in_all_dfs_for_missing=True
+        self                        , 
+        cpo_df_name_w_counts        = 'rcpo_df_raw', 
+        include_norm_lists          = True, 
+        include_all_available       = True, 
+        look_in_all_dfs_for_missing = True
     ):
         r"""
         Build a DF containing all of the normalization counts (and possibly lists of SNs).
@@ -635,8 +625,10 @@ class MECPOAn:
         norm_counts_cols = [x for x in norm_counts_cols if x is not None]
         #-------------------------
         # Find available_cols which are contained in self.get_cpo_df(cpo_df_name_w_counts)
-        available_cols = [x for x in norm_counts_cols 
-                          if x in self.get_cpo_df(cpo_df_name_w_counts).columns]
+        available_cols = [
+            x for x in norm_counts_cols 
+            if x in self.get_cpo_df(cpo_df_name_w_counts).columns
+        ]
         norm_counts_df = self.get_cpo_df(cpo_df_name_w_counts)[available_cols].copy()
         #--------------------------------------------------
         #--------------------------------------------------
@@ -644,8 +636,10 @@ class MECPOAn:
         #   absent from available_cols by looking in all other cpo dfs
         if look_in_all_dfs_for_missing:
             missing_cols = list(set(norm_counts_cols).difference(set(available_cols)))
-            other_cpo_df_names = [x for x in self.get_all_cpo_df_names(non_empty_only=True) 
-                                  if x!=cpo_df_name_w_counts]
+            other_cpo_df_names = [
+                x for x in self.get_all_cpo_df_names(non_empty_only=True) 
+                if x!=cpo_df_name_w_counts
+            ]
             found_missing = []
             for missing_col in missing_cols:
                 if missing_col in found_missing:
@@ -679,13 +673,13 @@ class MECPOAn:
 
 
     def build_and_set_norm_counts_df(
-        self, 
-        remove_cols_from_dfs=True, 
-        cpo_df_name_w_counts='rcpo_df_raw', 
-        include_norm_lists=True, 
-        include_all_available=True, 
-        look_in_all_dfs_for_missing=True, 
-        replace_if_present=True
+        self                        , 
+        remove_cols_from_dfs        = True, 
+        cpo_df_name_w_counts        = 'rcpo_df_raw', 
+        include_norm_lists          = True, 
+        include_all_available       = True, 
+        look_in_all_dfs_for_missing = True, 
+        replace_if_present          = True
     ):
         r"""
         See build_norm_counts_df for more information.
@@ -702,19 +696,19 @@ class MECPOAn:
             return
         #-------------------------
         norm_counts_df = self.build_norm_counts_df(
-            cpo_df_name_w_counts=       cpo_df_name_w_counts, 
-            include_norm_lists=         include_norm_lists, 
-            include_all_available=      include_all_available, 
-            look_in_all_dfs_for_missing=look_in_all_dfs_for_missing
+            cpo_df_name_w_counts        = cpo_df_name_w_counts, 
+            include_norm_lists          = include_norm_lists, 
+            include_all_available       = include_all_available, 
+            look_in_all_dfs_for_missing = look_in_all_dfs_for_missing
         )
         self.norm_counts_df = norm_counts_df
         if remove_cols_from_dfs:
             self.remove_SNs_cols_from_all_cpo_dfs(
-                SNs_tags=None, 
-                include_cpo_df_OG=True,
-                include_cpo_df_raw=True,
-                cpo_dfs_to_ignore=None, 
-                is_long=False
+                SNs_tags           = None, 
+                include_cpo_df_OG  = True,
+                include_cpo_df_raw = True,
+                cpo_dfs_to_ignore  = None, 
+                is_long            = False
             )
         
     #--------------------------------------------------
@@ -814,9 +808,9 @@ class MECPOAn:
         self.outg_rec_nbs = MECPODf.get_outg_rec_nbs_list_from_cpo_df(cpo_df=self.rcpo_df_OG, idfr=self.outg_rec_nb_col, unique_only=True)
             
     def build_mjr_mnr_causes_for_outages_df(
-        self, 
-        include_equip_type=True, 
-        set_outg_rec_nb_as_index=True
+        self                     , 
+        include_equip_type       = True, 
+        set_outg_rec_nb_as_index = True
     ):
         r"""
         """
@@ -826,13 +820,17 @@ class MECPOAn:
         assert(len(self.outg_rec_nbs)>0)
         #-------------------------
         self.mjr_mnr_causes_for_outages_df = DOVSOutages.get_mjr_mnr_causes_for_outages(
-            outg_rec_nbs=self.outg_rec_nbs, 
-            include_equip_type=include_equip_type, 
-            set_outg_rec_nb_as_index=set_outg_rec_nb_as_index
+            outg_rec_nbs             = self.outg_rec_nbs, 
+            include_equip_type       = include_equip_type, 
+            set_outg_rec_nb_as_index = set_outg_rec_nb_as_index
         )
     
     @staticmethod
-    def read_pickle_if_exists(dir_path, file_name, verbose=False):
+    def read_pickle_if_exists(
+        dir_path  , 
+        file_name , 
+        verbose   = False
+    ):
         f"""
         Simple function tries to read pickle at os.path.join(dir_path, file_name)
         If the file does not exist (or fails to open), it returns None
@@ -853,13 +851,13 @@ class MECPOAn:
 
     @staticmethod
     def read_all_pickles(
-        base_dir, 
-        days_min_max_outg_td_window=None,
-        sub_dir=None, 
-        naming_tag=None, 
-        normalize_by_time_interval=False, 
-        is_no_outg=False, 
-        return_pkls_dir = False
+        base_dir                    , 
+        days_min_max_outg_td_window = None,
+        sub_dir                     = None, 
+        naming_tag                  = None, 
+        normalize_by_time_interval  = False, 
+        is_no_outg                  = False, 
+        return_pkls_dir             = False
     ):
         r"""
         Somewhat specific function for loading all pickles needed to create a MECPOAn from a directory.
@@ -920,17 +918,17 @@ class MECPOAn:
             pkls_dir=base_dir
         assert(os.path.isdir(pkls_dir))
         #----------------------------------------------------------------------------------------------------
-        rcpo_df_OG = MECPOAn.read_pickle_if_exists(pkls_dir, f'rcpo{naming_tag}_df_OG.pkl', verbose=True)
+        rcpo_df_OG                = MECPOAn.read_pickle_if_exists(pkls_dir, f'rcpo{naming_tag}_df_OG.pkl', verbose=True)
         #-------------------------
-        ede_typeid_to_reason_df = MECPOAn.read_pickle_if_exists(pkls_dir, f'ede_typeid_to_reason{naming_tag}_df_OG.pkl', verbose=True)
-        reason_to_ede_typeid_df = AMIEndEvents.invert_ede_typeid_to_reason_df(ede_typeid_to_reason_df)   
+        ede_typeid_to_reason_df   = MECPOAn.read_pickle_if_exists(pkls_dir, f'ede_typeid_to_reason{naming_tag}_df_OG.pkl', verbose=True)
+        reason_to_ede_typeid_df   = AMIEndEvents.invert_ede_typeid_to_reason_df(ede_typeid_to_reason_df)   
         #-------------------------
-        rcpo_df_raw = MECPOAn.read_pickle_if_exists(pkls_dir, f'rcpo{naming_tag}_df_raw.pkl', verbose=True)
-        rcpo_df_norm = MECPOAn.read_pickle_if_exists(pkls_dir, f'rcpo{naming_tag}_df_norm.pkl', verbose=True)
+        rcpo_df_raw               = MECPOAn.read_pickle_if_exists(pkls_dir, f'rcpo{naming_tag}_df_raw.pkl', verbose=True)
+        rcpo_df_norm              = MECPOAn.read_pickle_if_exists(pkls_dir, f'rcpo{naming_tag}_df_norm.pkl', verbose=True)
         rcpo_df_norm_by_xfmr_nSNs = MECPOAn.read_pickle_if_exists(pkls_dir, f'rcpo{naming_tag}_df_norm_by_xfmr_nSNs.pkl', verbose=True)
         #-----
-        icpo_df_raw = MECPOAn.read_pickle_if_exists(pkls_dir, f'icpo{naming_tag}_df_raw.pkl', verbose=False)
-        icpo_df_norm = MECPOAn.read_pickle_if_exists(pkls_dir, f'icpo{naming_tag}_df_norm.pkl', verbose=False)
+        icpo_df_raw               = MECPOAn.read_pickle_if_exists(pkls_dir, f'icpo{naming_tag}_df_raw.pkl', verbose=False)
+        icpo_df_norm              = MECPOAn.read_pickle_if_exists(pkls_dir, f'icpo{naming_tag}_df_norm.pkl', verbose=False)
         icpo_df_norm_by_xfmr_nSNs = MECPOAn.read_pickle_if_exists(pkls_dir, f'icpo{naming_tag}_df_norm_by_xfmr_nSNs.pkl', verbose=False)
         if not is_no_outg:
             rcpo_df_norm_by_outg_nSNs = MECPOAn.read_pickle_if_exists(pkls_dir, f'rcpo{naming_tag}_df_norm_by_outg_nSNs.pkl', verbose=False)
@@ -961,27 +959,27 @@ class MECPOAn:
                 icpo_df_norm_by_prim_nSNs = MECPODf.remove_SNs_cols_from_rcpo_df(icpo_df_norm_by_prim_nSNs)
         #----------------------------------------------------------------------------------------------------
         return_dict = {
-            'rcpo_df_OG':rcpo_df_OG, 
-            'ede_typeid_to_reason_df':ede_typeid_to_reason_df, 
-            'reason_to_ede_typeid_df':reason_to_ede_typeid_df, 
+            'rcpo_df_OG'                : rcpo_df_OG, 
+            'ede_typeid_to_reason_df'   : ede_typeid_to_reason_df, 
+            'reason_to_ede_typeid_df'   : reason_to_ede_typeid_df, 
 
-            'rcpo_df_raw':rcpo_df_raw, 
-            'rcpo_df_norm':rcpo_df_norm, 
-            'rcpo_df_norm_by_xfmr_nSNs':rcpo_df_norm_by_xfmr_nSNs,
+            'rcpo_df_raw'               : rcpo_df_raw, 
+            'rcpo_df_norm'              : rcpo_df_norm, 
+            'rcpo_df_norm_by_xfmr_nSNs' : rcpo_df_norm_by_xfmr_nSNs,
 
-            'icpo_df_raw':icpo_df_raw, 
-            'icpo_df_norm':icpo_df_norm, 
-            'icpo_df_norm_by_xfmr_nSNs':icpo_df_norm_by_xfmr_nSNs
+            'icpo_df_raw'               : icpo_df_raw, 
+            'icpo_df_norm'              : icpo_df_norm, 
+            'icpo_df_norm_by_xfmr_nSNs' : icpo_df_norm_by_xfmr_nSNs
         }
         if not is_no_outg:
             return_dict = {
                 **return_dict, 
                 **{
-                    'rcpo_df_norm_by_outg_nSNs':rcpo_df_norm_by_outg_nSNs,
-                    'rcpo_df_norm_by_prim_nSNs':rcpo_df_norm_by_prim_nSNs, 
+                    'rcpo_df_norm_by_outg_nSNs' : rcpo_df_norm_by_outg_nSNs,
+                    'rcpo_df_norm_by_prim_nSNs' : rcpo_df_norm_by_prim_nSNs, 
 
-                    'icpo_df_norm_by_outg_nSNs':icpo_df_norm_by_outg_nSNs, 
-                    'icpo_df_norm_by_prim_nSNs':icpo_df_norm_by_prim_nSNs
+                    'icpo_df_norm_by_outg_nSNs' : icpo_df_norm_by_outg_nSNs, 
+                    'icpo_df_norm_by_prim_nSNs' : icpo_df_norm_by_prim_nSNs
                 }
             }
         #----------------------------------------------------------------------------------------------------
@@ -998,23 +996,26 @@ class MECPOAn:
             return return_dict, pkls_dir
         return return_dict
 
-    def load_dfs_from_dict(self, input_dict):
+    def load_dfs_from_dict(
+        self, 
+        input_dict
+    ):
         r"""
         """
         #-------------------------
-        self.ede_typeid_to_reason_df = input_dict.get('ede_typeid_to_reason_df', None)
-        self.reason_to_ede_typeid_df = input_dict.get('reason_to_ede_typeid_df', None)
+        self.ede_typeid_to_reason_df   = input_dict.get('ede_typeid_to_reason_df', None)
+        self.reason_to_ede_typeid_df   = input_dict.get('reason_to_ede_typeid_df', None)
         #-------------------------
-        self.rcpo_df_OG = input_dict.get('rcpo_df_OG', copy.deepcopy(self.init_cpo_dfs_to))
+        self.rcpo_df_OG                = input_dict.get('rcpo_df_OG', copy.deepcopy(self.init_cpo_dfs_to))
         #-------------------------
-        self.rcpo_df_raw = input_dict.get('rcpo_df_raw', copy.deepcopy(self.init_cpo_dfs_to))
-        self.rcpo_df_norm = input_dict.get('rcpo_df_norm', copy.deepcopy(self.init_cpo_dfs_to))
+        self.rcpo_df_raw               = input_dict.get('rcpo_df_raw', copy.deepcopy(self.init_cpo_dfs_to))
+        self.rcpo_df_norm              = input_dict.get('rcpo_df_norm', copy.deepcopy(self.init_cpo_dfs_to))
         self.rcpo_df_norm_by_xfmr_nSNs = input_dict.get('rcpo_df_norm_by_xfmr_nSNs', copy.deepcopy(self.init_cpo_dfs_to))
         self.rcpo_df_norm_by_outg_nSNs = input_dict.get('rcpo_df_norm_by_outg_nSNs', copy.deepcopy(self.init_cpo_dfs_to))
         self.rcpo_df_norm_by_prim_nSNs = input_dict.get('rcpo_df_norm_by_prim_nSNs', copy.deepcopy(self.init_cpo_dfs_to))
         #-------------------------    
-        self.icpo_df_raw = input_dict.get('icpo_df_raw', copy.deepcopy(self.init_cpo_dfs_to))
-        self.icpo_df_norm = input_dict.get('icpo_df_norm', copy.deepcopy(self.init_cpo_dfs_to))
+        self.icpo_df_raw               = input_dict.get('icpo_df_raw', copy.deepcopy(self.init_cpo_dfs_to))
+        self.icpo_df_norm              = input_dict.get('icpo_df_norm', copy.deepcopy(self.init_cpo_dfs_to))
         self.icpo_df_norm_by_xfmr_nSNs = input_dict.get('icpo_df_norm_by_xfmr_nSNs', copy.deepcopy(self.init_cpo_dfs_to))
         self.icpo_df_norm_by_outg_nSNs = input_dict.get('icpo_df_norm_by_outg_nSNs', copy.deepcopy(self.init_cpo_dfs_to))
         self.icpo_df_norm_by_prim_nSNs = input_dict.get('icpo_df_norm_by_prim_nSNs', copy.deepcopy(self.init_cpo_dfs_to))
@@ -1046,13 +1047,13 @@ class MECPOAn:
             assert(self.grp_by==tuple(self.icpo_df_norm_by_prim_nSNs.index.names))
         
     def read_and_load_all_pickles(
-        self, 
-        base_dir, 
-        days_min_max_outg_td_window=None,
-        sub_dir=None, 
-        naming_tag=None, 
-        normalize_by_time_interval=False, 
-        is_no_outg=False
+        self                        , 
+        base_dir                    , 
+        days_min_max_outg_td_window = None,
+        sub_dir                     = None, 
+        naming_tag                  = None, 
+        normalize_by_time_interval  = False, 
+        is_no_outg                  = False
     ):
         r"""
         """
@@ -1267,7 +1268,7 @@ class MECPOAn:
         Note: drop_duplicates will remove rows if indices are different (but all columns equal)
               Therefore, if make_addtnl_groupby_idx==True, this should only be done AFTER drop duplicates
               This explains why make_addtnl_groupby_idx=False in the call to MECPOAn.get_bsln_time_interval_infos_df_from_summary_file
-        Note: The reason for drop duplicates if for the case where a collection is split over mulitple
+        Note: The reason for drop duplicates is for the case where a collection is split over mulitple
               files/runs (i.e., the asynchronous case)
         """
         return_df = pd.DataFrame()
@@ -1310,7 +1311,7 @@ class MECPOAn:
             addtnl_groupby_cols = [x for x in return_df.columns 
                                    if x not in [output_prem_nbs_col, output_t_min_col, output_t_max_col, 'summary_path']]
             return_df=return_df.set_index(addtnl_groupby_cols)
-        return return_df    
+        return return_df
     
     
     @staticmethod
@@ -1404,9 +1405,9 @@ class MECPOAn:
         
     @staticmethod
     def build_outg_time_infos_df_w_dovs(
-        rcpx_df, 
-        outg_rec_nb_idfr=('index', 'outg_rec_nb'), 
-        dummy_col_levels_prefix='dummy_lvl_',     
+        rcpx_df                 , 
+        outg_rec_nb_idfr        = ('index', 'outg_rec_nb'), 
+        dummy_col_levels_prefix = 'dummy_lvl_',     
     ):
         r"""
         Could use build_baseline_time_infos_df, but would need to adjust by the window collection width to find the actual event start
@@ -1415,10 +1416,10 @@ class MECPOAn:
         tmp_og_cols = rcpx_df.columns.tolist()
         #-------------------------
         time_infos_df_outg = DOVSOutages.append_outg_dt_off_ts_full_to_df(
-            df=rcpx_df.copy(), 
-            outg_rec_nb_idfr=outg_rec_nb_idfr, 
-            dummy_col_levels_prefix=dummy_col_levels_prefix, 
-            include_dt_on_ts=True
+            df                      = rcpx_df.copy(), 
+            outg_rec_nb_idfr        = outg_rec_nb_idfr, 
+            dummy_col_levels_prefix = dummy_col_levels_prefix, 
+            include_dt_on_ts        = True
         )
         #-------------------------
         time_info_cols = list(set(time_infos_df_outg.columns.tolist()).difference(set(tmp_og_cols)))
@@ -1462,7 +1463,7 @@ class MECPOAn:
     
     def build_time_infos_df(
         self, 
-        save_to_pkl=False
+        save_to_pkl = False
     ):
         r"""
         !!!!!!!!!!!!!!!!!!!!!!!!!

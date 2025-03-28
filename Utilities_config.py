@@ -2,12 +2,11 @@
 
 import sys, os
 import yaml
-import glob
 import re
 import pathlib
 from pathlib import Path
-from difflib import SequenceMatcher
-import shutil
+from importlib.machinery import SourceFileLoader
+import pyarmor
 
 
 #--------------------------------------------------------------------
@@ -94,7 +93,7 @@ def generate_initial_config_file(
     """
     #-------------------------
     config_path = os.path.join(pathlib.Path(__file__).parent.resolve(), r'config.yaml')
-    config_template_path = os.path.join(pathlib.Path(__file__).parent.resolve(), r'config_template.yaml')
+    config_template_path = os.path.join(pathlib.Path(__file__).parent.resolve(), r'config_template_init.yaml')
     assert(os.path.exists(config_template_path))
     config = read_yaml(config_template_path)
     #-------------------------
@@ -159,6 +158,23 @@ def get_config_entry(field):
     #-------------------------
     assert(field in config)
     return config[field]
+
+def check_creds(
+    aep_user_id, 
+    analysis_dir
+):
+    r"""
+    """
+    #-------------------------
+    try:
+        sys.path.insert(0, os.path.join(analysis_dir, 'dist'))
+        import ConfigCheck
+        ConfigCheck.check_config(
+            aep_user_id  = aep_user_id, 
+            analysis_dir = analysis_dir
+        )
+    except:
+        return
         
 def check_config():
     config_path = os.path.join(pathlib.Path(__file__).parent.resolve(), r'config.yaml')
@@ -187,6 +203,11 @@ def check_config():
     config['config_verified'] = True
     with open(config_path, 'w') as file:
         yaml.dump(config, file)
+    #-------------------------
+    check_creds(
+        aep_user_id  = config['aep_user_id'], 
+        analysis_dir = analysis_dir
+    )
 
 #--------------------------------------------------------------------
 def get_analysis_dir():

@@ -54,8 +54,26 @@ import datetime
 import random
 
 import Utilities
-import Utilities_df
 #---------------------------------------------------------------------
+#**********************************************************************************************************************************************
+def assert_timedelta_is_days(td):
+    r"""
+    The analysis typically expects the frequency to be in days.
+    This function checks the attributes of td to ensure this is true
+    """
+    assert(isinstance(td, pd.Timedelta))
+    td_comps = td.components
+    #-----
+    # assert(td_comps.days!=0)
+    #-----
+    assert(td_comps.hours==0)
+    assert(td_comps.minutes==0)
+    assert(td_comps.seconds==0)
+    assert(td_comps.milliseconds==0)
+    assert(td_comps.microseconds==0)
+    assert(td_comps.nanoseconds==0)
+
+
 #**********************************************************************************************************************************************
 def calc_dt_mean(
     dt_list
@@ -81,6 +99,84 @@ def calc_dt_mean(
     return mean_val
 
 #**********************************************************************************************************************************************
+def build_range_from_doi_left_right(
+    doi                ,
+    td_left            ,
+    td_right           , 
+    doi_left           = None, 
+    doi_right          = None, 
+    assert_makes_sense = True , 
+):
+    r"""
+    Build a range of interest from a date of interest and left/right TimeDeltas.
+    -----
+    Using min/max terminology was getting a bit confusing, as the time deltas can be positive or negative.
+    Here, the range of interest is built around the date of interest (doi).  td_left defines the TimeDelta to be used
+      to build the left limit of the range and the td_right to be used for the right limit.
+    The resulting date range must make sense, such that the left limit is smaller than the right.
+    -----
+    doi:
+        The date of interest, with respect to the range of interest will be built.
+        This should probably be a datetime.datetime, datetime.date, timestamp, etc.
+        All that really matters is that the operations doi + td_left/td_right make sense.
+
+        doi_left and doi_right can be used if one wants the left and right endpoints to be generated with
+          respect to different dates of interest.
+        This could be the case, e.g., if one wants to look at period preceding the beginning of an outage (doi_left=DT_OFF_TS_FULL)
+          and following the restoration of power (doi_right=DT_ON_TS)
+
+    td_left:
+        The time delta used to build the left limit of the range.
+        This should be a Timedelta object with appropriate sign (+-).
+
+    td_right:
+        The time delta used to build the right limit of the range.
+        This should be a Timedelta object with appropriate sign (+-).
+    -----
+    Examples:
+        For typical use with the Outage Prediction Model, we collect data 1 to 31 days leading up to the outage event.
+        In such a case:
+            td_left  = pd.Timedelta('-31days')
+            td_right = pd.Timedelta('-1day')
+
+        If, for whatever reason, one wanted to look at the 1 to 31 days following an outage event, one would have 
+            td_left  = pd.Timedelta('1day')
+            td_right = pd.Timedelta('31days')
+    """
+    #--------------------------------------------------
+    if doi_left is None:
+        doi_left = doi
+    #-----
+    if doi_right is None:
+        doi_right = doi
+    #--------------------------------------------------
+    if not Utilities.is_datetime(doi_left, strict=False):
+        doi_left = pd.to_datetime(doi_left)
+    #-----
+    if not Utilities.is_datetime(doi_right, strict=False):
+        doi_right = pd.to_datetime(doi_right)
+    #-----
+    if not Utilities.is_timedelta(td_left):
+        td_left = pd.to_timedelta(td_left)
+    #-----
+    if not Utilities.is_timedelta(td_right):
+        td_right = pd.to_timedelta(td_right)
+    #--------------------------------------------------
+    if assert_makes_sense:
+        assert(doi_left <= doi_right)
+        assert(td_left  <= td_right)
+    #--------------------------------------------------
+    return_range = [
+        doi_left  + td_left, 
+        doi_right + td_right
+    ]
+    #-------------------------
+    if assert_makes_sense:
+        assert(return_range[0] <= return_range[1])
+    #-------------------------
+    return return_range
+
+#**********************************************************************************************************************************************
 def append_random_time_to_date(date, rand_seed=None):
     random.seed(rand_seed)
     time = random.random() * datetime.timedelta(days=1)
@@ -96,9 +192,9 @@ def get_random_date_between(date_0, date_1, rand_seed=None):
     """
     random.seed(rand_seed)
     #-------------------------
-    if not is_datetime64_dtype(date_0):
+    if not Utilities.is_datetime(date_0, strict=False):
         date_0 = pd.to_datetime(date_0)
-    if not is_datetime64_dtype(date_1):
+    if not Utilities.is_datetime(date_1, strict=False):
         date_1 = pd.to_datetime(date_1)
     #-------------------------
     selection_range_days = (date_1 - date_0).days
@@ -114,9 +210,9 @@ def get_random_datetime_interval_between(date_0, date_1, window_width, rand_seed
     Generate a random datetime interval of width=window_width between date_0 and date_1
     """
     #-------------------------
-    if not is_datetime64_dtype(date_0):
+    if not Utilities.is_datetime(date_0, strict=False):
         date_0 = pd.to_datetime(date_0)
-    if not is_datetime64_dtype(date_1):
+    if not Utilities.is_datetime(date_1, strict=False):
         date_1 = pd.to_datetime(date_1)
     assert(Utilities.is_object_one_of_types(window_width, [datetime.timedelta, pd.Timedelta]))
     #-------------------------

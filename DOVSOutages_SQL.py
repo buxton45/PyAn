@@ -9,43 +9,26 @@ __status__ = "Personal"
 
 #--------------------------------------------------
 import Utilities_config
-import sys, os
+import sys
 import re
 import copy
 
-import pandas as pd
-import numpy as np
-from pandas.api.types import is_numeric_dtype, is_datetime64_dtype, is_timedelta64_dtype
-from scipy import stats
-import datetime
-import time
-from natsort import natsorted, ns
+from natsort import natsorted
 #--------------------------------------------------
-import CommonLearningMethods as clm
-from MeterPremise import MeterPremise
 from AMI_SQL import AMI_SQL
 #--------------------------------------------------
 sys.path.insert(0, Utilities_config.get_sql_aids_dir())
 import Utilities_sql
 import TableInfos
-from TableInfos import TableInfo
-from SQLElement import SQLElement
-from SQLElementsCollection import SQLElementsCollection
 from SQLSelect import SQLSelectElement, SQLSelect
 from SQLFrom import SQLFrom
 from SQLWhere import SQLWhereElement, SQLWhere
 from SQLJoin import SQLJoin, SQLJoinCollection
-from SQLGroupBy import SQLGroupByElement, SQLGroupBy
-from SQLHaving import SQLHaving
-from SQLOrderBy import SQLOrderByElement, SQLOrderBy
+from SQLGroupBy import SQLGroupBy
 from SQLQuery import SQLQuery
-from SQLQueryGeneric import SQLQueryGeneric
 #--------------------------------------------------
 sys.path.insert(0, Utilities_config.get_utilities_dir())
 import Utilities
-import Utilities_df
-from Utilities_df import DFConstructType
-import Utilities_dt
 #--------------------------------------------------
 
 class DOVSOutages_SQL:
@@ -954,7 +937,8 @@ class DOVSOutages_SQL:
         return DOVSOutages_SQL.build_sql_outage(
             cols_of_interest=kwargs.pop('cols_of_interest', None), 
             addtnl_cols_of_interest=kwargs.pop('addtnl_cols_of_interest', None), 
-            **kwargs)
+            **kwargs
+        )
     
     #--------------------------------------------------
     @staticmethod

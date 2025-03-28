@@ -21,7 +21,6 @@ import time
 from natsort import natsorted, ns, natsort_keygen
 import copy
 #--------------------------------------------------
-import CommonLearningMethods as clm
 from MeterPremise import MeterPremise
 from AMI_SQL import AMI_SQL
 from GenAn import GenAn

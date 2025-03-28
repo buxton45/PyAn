@@ -11,13 +11,12 @@ __status__ = "Personal"
 import Utilities_config
 import sys
 import re
-
 import copy
-
 import pandas as pd
 import numpy as np
 from pandas.api.types import is_datetime64_dtype
 import datetime
+import warnings
 #--------------------------------------------------
 from GenAn import GenAn
 #--------------------------------------------------
@@ -27,6 +26,7 @@ import TableInfos
 from SQLSelect import SQLSelect
 from SQLFrom import SQLFrom
 from SQLWhere import SQLWhereElement, SQLWhere
+from SQLGroupBy import SQLGroupBy
 from SQLQuery import SQLQuery
 #--------------------------------------------------
 sys.path.insert(0, Utilities_config.get_utilities_dir())
@@ -168,6 +168,56 @@ class MeterPremise(GenAn):
         )
         #-------------------------
         return sql_where  
+    
+
+    @staticmethod
+    def add_inst_rmvl_ts_where_statements(
+        sql_where        , 
+        datetime_ranges  , 
+        from_table_alias = None, 
+        inst_ts_col      = 'inst_ts', 
+        rmvl_ts_col      = 'rmvl_ts', 
+        datetime_pattern = r"([0-9]{2})/([0-9]{2})/([0-9]{4}) ([0-9]{2}:[0-9]{2}:[0-9]{2}).*", 
+        datetime_replace = r"$3-$1-$2 $4"
+    ):
+        r"""
+        Just add_inst_rmvl_ts_where_statement expanded to accept multiple datetime ranges!
+        """
+        #--------------------------------------------------
+        assert(Utilities.is_object_one_of_types(datetime_ranges, [list, tuple]))
+        assert(Utilities.is_list_nested(lst=datetime_ranges, enforce_if_one_all=True))
+        assert(Utilities.are_list_elements_lengths_homogeneous(lst=datetime_ranges, length=2))
+        #--------------------------------------------------
+        for datetime_range_i in datetime_ranges:
+            n_where = len(sql_where.collection_dict)
+            #-----
+            sql_where = MeterPremise.add_inst_rmvl_ts_where_statement(
+                sql_where        = sql_where, 
+                datetime_range   = datetime_range_i, 
+                from_table_alias = from_table_alias, 
+                inst_ts_col      = inst_ts_col, 
+                rmvl_ts_col      = rmvl_ts_col, 
+                datetime_pattern = datetime_pattern, 
+                datetime_replace = datetime_replace
+            )
+            #-----
+            # Two elements should have been added to sql_where at each iteration
+            assert(len(sql_where.collection_dict) - n_where == 2)
+            #-----
+            sql_where.combine_last_n_where_elements(
+                last_n             = 2, 
+                join_operator      = 'AND', 
+                close_gaps_in_keys = True
+            )
+        
+        #--------------------------------------------------
+        sql_where.combine_last_n_where_elements(
+            last_n             = len(datetime_ranges), 
+            join_operator      = 'OR', 
+            close_gaps_in_keys = True
+        )
+        #--------------------------------------------------
+        return sql_where
         
         
     @staticmethod
@@ -211,8 +261,32 @@ class MeterPremise(GenAn):
           OR
             active_SNs_at_time = df_mp_hist[(df_mp_hist[df_mp_install_time_col]<=pd.to_datetime(dt_0)) & 
                                             ((df_mp_hist[df_mp_removal_time_col].isna()) | (df_mp_hist[df_mp_removal_time_col]>pd.to_datetime(dt_1)))]
+
+        datetime_range:
+            This should typically be a list/tuple of length-2 defining the range.
+            HOWEVER, functionality has been expanded to accept a list of such ranges. 
         """
-        #-------------------------
+        #--------------------------------------------------
+        # If datetime_range is actually a list of such object, ship off to add_inst_rmvl_ts_where_statements
+        assert(Utilities.is_object_one_of_types(datetime_range, [list, tuple]))
+        if Utilities.is_list_nested(lst=datetime_range, enforce_if_one_all=True) and len(datetime_range)>1:
+            sql_where = MeterPremise.add_inst_rmvl_ts_where_statements(
+                sql_where        = sql_where, 
+                datetime_ranges  = datetime_range, 
+                from_table_alias = from_table_alias, 
+                inst_ts_col      = inst_ts_col, 
+                rmvl_ts_col      = rmvl_ts_col, 
+                datetime_pattern = datetime_pattern, 
+                datetime_replace = datetime_replace
+            )
+            return sql_where
+
+        #--------------------------------------------------
+        if Utilities.is_list_nested(lst=datetime_range, enforce_if_one_all=True):
+            assert(len(datetime_range)==1)
+            datetime_range = datetime_range[0]
+        assert(len(datetime_range)==2)
+        #--------------------------------------------------
         if from_table_alias:
             inst_ts_col = f'{from_table_alias}.{inst_ts_col}'
             rmvl_ts_col = f'{from_table_alias}.{rmvl_ts_col}'
@@ -255,12 +329,6 @@ class MeterPremise(GenAn):
             is_timestamp        = False, 
             idx                 = None
         )
-        #-----
-        sql_where.combine_last_n_where_elements(
-            last_n             = 2, 
-            join_operator      = 'OR', 
-            close_gaps_in_keys = True
-        )
         #-------------------------
         # rmvl_ts 2
         sql_where.add_where_statement(
@@ -274,7 +342,7 @@ class MeterPremise(GenAn):
         )
         #-----
         sql_where.combine_last_n_where_elements(
-            last_n             = 2, 
+            last_n             = 3, 
             join_operator      = 'OR', 
             close_gaps_in_keys = True
         )
@@ -663,7 +731,8 @@ class MeterPremise(GenAn):
                          
         #**************************************************
         #**************************************************
-        opcos = kwargs.get('opcos', None)
+        assert(not('opcos' in kwargs and 'opco' in kwargs))
+        opcos = kwargs.get('opcos', kwargs.get('opco', None))
         if opcos is not None:
             sql_stmnt = MeterPremise.add_opco_nm_to_mp_sql(
                 mp_sql     = mp_sql, 
@@ -685,7 +754,6 @@ class MeterPremise(GenAn):
         df_mp_prem_nb_col       = 'prem_nb', 
         df_mp_install_time_col  = 'inst_ts', 
         df_mp_removal_time_col  = 'rmvl_ts', 
-        df_mp_trsf_pole_nb_col  = 'trsf_pole_nb'
     ):
         r"""
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -2960,7 +3028,8 @@ class MeterPremise(GenAn):
         # At the time of updating this code (20240405), including opcos in build_sql_meter_premise will cause the returned object to 
         #   collapse down from a SQLQuery object to a string (through the use of MeterPremise.add_opco_nm_to_mp_sql)
         # At this point in the code, we need sql to remain a SQLQuery object, so we pop off opcos and include it manually later
-        opcos = kwargs.pop('opcos', None)
+        assert(not('opcos' in kwargs and 'opco' in kwargs))
+        opcos = kwargs.pop('opcos', kwargs.pop('opco', None))
         
         #--------------------------------------------------
         sql = MeterPremise.build_sql_meter_premise(
@@ -3032,7 +3101,11 @@ class MeterPremise(GenAn):
         )
         assert(isinstance(sql, str))
         #-------------------------
-        df = pd.read_sql_query(sql, conn_aws)
+        # filterwarnings call to eliminate annoying "UserWarning: pandas only supports SQLAlchemy connectable..."
+        # If one wants to get rid of this functionality, remove "with warnings.catch_warnings()" and  "warnings.filterwarnings" call
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            df = pd.read_sql_query(sql, conn_aws)
         #-------------------------
         if return_sql:
             return df, sql
@@ -3649,3 +3722,157 @@ class MeterPremise(GenAn):
             return trsf_pole_df
         else:
             return trsf_pole_df[trsf_pole_nb_col].unique().tolist()
+        
+
+    @staticmethod
+    def get_xfmr_meter_cnt_sql_stmnt(
+        trsf_pole_nbs , 
+        return_PN_cnt = False, 
+        **kwargs
+    ):
+        r"""
+        Returns a string containing the SQL statement to be used by MeterPremise.get_xfmr_meter_cnt
+    
+        kwargs:
+            If user supplies the following keyword arguments, they will be ignore:
+                [cols_of_interest, trsf_pole_nb(s), serial_number(s)\mfr_devc_ser_nbr(s), premise_nb(s)\aep_premise_nb(s), 'groupby_cols']
+        """
+        #--------------------------------------------------
+        # opcos will be handled after, since including in call to MeterPremise.build_sql_meter_premise
+        #   could collapse it down to a string instead of SQLQuery object
+        opcos = kwargs.pop('opcos', None)
+        #--------------------------------------------------
+        kwargs['from_table_alias']  = kwargs.get('from_table_alias', None)
+        kwargs['trsf_pole_nb_col']  = kwargs.get('trsf_pole_nb_col', 'trsf_pole_nb')
+        kwargs['serial_number_col'] = kwargs.get('serial_number_col', 'mfr_devc_ser_nbr')
+        kwargs['premise_nb_col']    = kwargs.get('premise_nb_col', 'prem_nb')
+        #-------------------------
+        keys_to_ignore = [
+            'cols_of_interest', 
+            'trsf_pole_nb',  'trsf_pole_nbs', 
+            'serial_number', 'serial_numbers', 'mfr_devc_ser_nbr', 'mfr_devc_ser_nbrs', 
+            'premise_nb',    'premise_nbs',    'aep_premise_nb',   'aep_premise_nbs', 
+            'groupby_cols'
+        ]
+        sql_kwargs =  {k:v for k,v in kwargs.items() if k not in keys_to_ignore}
+        #-------------------------
+        sql_kwargs['trsf_pole_nbs'] = trsf_pole_nbs
+        
+        #--------------------------------------------------
+        cols_of_interest = [
+            kwargs['trsf_pole_nb_col'], 
+            dict(
+                field_desc         = (f"COUNT(DISTINCT {kwargs['serial_number_col']})" if kwargs['from_table_alias'] is None else
+                                      f"COUNT(DISTINCT {kwargs['from_table_alias']}.{kwargs['serial_number_col']})"), 
+                alias              = 'xfmr_SN_cnt', 
+                table_alias_prefix = None
+            )
+        ]
+        #-----
+        if return_PN_cnt:
+            cols_of_interest.append(
+                dict(
+                    field_desc         = (f"COUNT(DISTINCT {kwargs['premise_nb_col']})" if kwargs['from_table_alias'] is None else
+                                          f"COUNT(DISTINCT {kwargs['from_table_alias']}.{kwargs['premise_nb_col']})"), 
+                    alias              = 'xfmr_PN_cnt', 
+                    table_alias_prefix = None
+                )
+            )
+        
+        #--------------------------------------------------
+        mp_sql = MeterPremise.build_sql_meter_premise(
+            cols_of_interest = cols_of_interest, 
+            **sql_kwargs
+        )
+        
+        #--------------------------------------------------
+        sql_groupby = SQLGroupBy(
+            field_descs               = [kwargs['trsf_pole_nb_col']], 
+            global_table_alias_prefix = None, 
+            idxs                      = None, 
+            run_check                 = True
+        )
+        mp_sql.set_sql_groupby(sql_groupby)
+        
+        #--------------------------------------------------
+        if opcos is not None:
+            sql_stmnt = MeterPremise.add_opco_nm_to_mp_sql(
+                mp_sql     = mp_sql, 
+                opcos      = opcos, 
+                comp_cols  = ['opco_nm'], 
+                comp_alias = 'COMP', 
+                join_type  = 'LEFT', 
+            )
+        else:
+            sql_stmnt = mp_sql.get_sql_statement()
+        #-------------------------
+        return sql_stmnt
+    
+    
+    @staticmethod
+    def get_xfmr_meter_cnt(
+        trsf_pole_nbs , 
+        return_PN_cnt = False, 
+        batch_size    = 1000, 
+        verbose       = True, 
+        n_update      = 10, 
+        conn_aws      = None, 
+        return_sql    = False, 
+        **kwargs
+    ):
+        r"""
+        Returns a pd.DataFrame containing trsf_pole_nb and the number of meters connected to it (xfmr_SN_cnt)
+        If return_PN_cnt == True, xfmr_PN_cnt will also be included.
+    
+        kwargs:
+            If user supplies the following keyword arguments, they will be ignore:
+                [cols_of_interest, trsf_pole_nb(s), serial_number(s)\mfr_devc_ser_nbr(s), premise_nb(s)\aep_premise_nb(s), 'groupby_cols']
+        """
+        #--------------------------------------------------
+        if conn_aws is None:
+            conn_aws = Utilities.get_athena_prod_aws_connection()
+        #--------------------------------------------------
+        batch_idxs = Utilities.get_batch_idx_pairs(
+            n_total              = len(trsf_pole_nbs), 
+            batch_size           = batch_size, 
+            absorb_last_pair_pct = None
+        )
+        n_batches = len(batch_idxs)
+        #--------------------------------------------------
+        return_df = pd.DataFrame()
+        #--------------------------------------------------
+        if verbose:
+            print(f'n_coll     = {len(trsf_pole_nbs)}')
+            print(f'batch_size = {batch_size}')
+            print(f'n_batches  = {n_batches}')
+        #--------------------------------------------------
+        sql_stmnts = []
+        for i, batch_i in enumerate(batch_idxs):
+            if verbose and (i+1)%n_update==0:
+                print(f'{i+1}/{n_batches}')
+            i_beg = batch_i[0]
+            i_end = batch_i[1]
+            #-----
+            sql_stmnt_i = MeterPremise.get_xfmr_meter_cnt_sql_stmnt(
+                trsf_pole_nbs = trsf_pole_nbs[i_beg:i_end], 
+                return_PN_cnt = return_PN_cnt, 
+                **kwargs
+            )
+            assert(isinstance(sql_stmnt_i, str))
+            #-------------------------
+            # filterwarnings call to eliminate annoying "UserWarning: pandas only supports SQLAlchemy connectable..."
+            # If one wants to get rid of this functionality, remove "with warnings.catch_warnings()" and  "warnings.filterwarnings" call
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                df_i = pd.read_sql_query(sql_stmnt_i, conn_aws)
+            #-------------------------
+            sql_stmnts.append(sql_stmnt_i)
+            #-----
+            if return_df.shape[0]>0:
+                assert(all(df_i.columns==return_df.columns))
+            return_df = pd.concat([return_df, df_i], axis=0, ignore_index=False)
+        #--------------------------------------------------
+        if return_sql:
+            return return_df, sql_stmnts
+        else:
+            return return_df

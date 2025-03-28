@@ -5,44 +5,27 @@ Utilities specifically for plotting histograms
 """
 
 #---------------------------------------------------------------------
-import sys, os
-import re
+import sys
 
 import pandas as pd
 import numpy as np
-from pandas.api.types import is_numeric_dtype
-from scipy import stats
-import datetime
-import time
-from natsort import natsorted, ns, natsort_keygen
 from copy import deepcopy
 #---------------------------------------------------------------------
-import matplotlib as mpl
-import matplotlib.pyplot as plt
 import seaborn as sns
-from matplotlib.backends.backend_pdf import PdfPages
-import matplotlib.patches as mpatches
-from matplotlib.lines import Line2D
-import matplotlib.ticker as ticker
-from matplotlib import dates
 import matplotlib.colors as mcolors
-import matplotlib.cm as cm #e.g. for cmap=cm.jet
 #---------------------------------------------------------------------
 import Utilities
-import Utilities_xml
-import Utilities_df
-import Utilities_dt
 import Plot_General
 #---------------------------------------------------------------------
 
 #**************************************************
 def adjust_patch_positions_and_widths(
-    ax, 
-    div_width_by, 
-    position_idx, 
-    i_patch_beg=None, 
-    i_patch_end=None, 
-    orient='v'
+    ax           , 
+    div_width_by , 
+    position_idx , 
+    i_patch_beg  = None, 
+    i_patch_end  = None, 
+    orient       = 'v'
 ):
     r"""
     This is intended to shrink the width of histogram bins and shift them to allow multiple histograms
@@ -79,15 +62,15 @@ def adjust_patch_positions_and_widths(
     # Note: the original x-position of the bar is defined as the left edge (top edge if horizontal orientation)
     patches = ax.patches[i_patch_beg:i_patch_end]
     for patch in patches:
-        if orient=='v':
+        if orient == 'v':
             new_width = patch.get_width()/div_width_by
-            new_x = patch.get_x() + position_idx*new_width
+            new_x     = patch.get_x() + position_idx*new_width
             #-----
             patch.set_x(new_x)
             patch.set_width(new_width)
         else:
             new_height = patch.get_height()/div_width_by
-            new_y = patch.get_y() + position_idx*new_height
+            new_y      = patch.get_y() + position_idx*new_height
             #-----
             patch.set_y(new_y)
             patch.set_height(new_height)
@@ -96,10 +79,10 @@ def adjust_patch_positions_and_widths(
     
 #**************************************************
 def get_bins_clip_minmax(
-    min_max_and_bin_size, 
-    include_overflow, 
-    include_underflow, 
-    allow_max_to_expand_to_fit_int_n_bins=True
+    min_max_and_bin_size                  , 
+    include_overflow                      , 
+    include_underflow                     , 
+    allow_max_to_expand_to_fit_int_n_bins = True
 ):
     r"""
     NOTES ABOUT BINNING----------------------------------------------
@@ -288,25 +271,27 @@ def set_box_color_attributes(plot_kwargs, keep_edges_opaque=True):
 
 #**************************************************
 def plot_hist(
-    ax, 
-    df, 
-    x_col, 
-    min_max_and_bin_size, 
-    include_over_underflow=False, 
-    stat='count', 
-    plot_sns=False, 
-    hist_plot_kwargs=None, 
-    keep_edges_opaque=True, 
-    div_drawn_width_by=None, 
-    relative_position_idx=None, 
-    run_set_general_plotting_args=True, 
-    orient='v', 
+    ax                            , 
+    df                            , 
+    x_col                         , 
+    min_max_and_bin_size          , 
+    include_over_underflow        = False, 
+    stat                          = 'count', 
+    plot_sns                      = False, 
+    hist_plot_kwargs              = None, 
+    keep_edges_opaque             = True, 
+    div_drawn_width_by            = None, 
+    relative_position_idx         = None, 
+    run_set_general_plotting_args = True, 
+    orient                        = 'v', 
     **kwargs
 ):
     r"""
     Either uses:
        pandas.hist if plot_sns==False
        seaborn.histplot if plot_sns==True
+
+    NOTE: Use of hue kwarg in hist_plot_kwargs ONLY works with plot_sns==True
     
     NOTE: Using Seaborn (i.e., plot_sns=True) allows many more parameters to be utilized
           in hist_plot_kwargs
@@ -436,6 +421,13 @@ def plot_hist(
     #---------------------------
     allow_max_to_expand_to_fit_int_n_bins = kwargs.get('allow_max_to_expand_to_fit_int_n_bins', True)
     #---------------------------
+    if hist_plot_kwargs is None:
+        hist_plot_kwargs = dict()
+    #-----
+    if 'hue' in hist_plot_kwargs:
+        hist_plot_kwargs['palette']  = hist_plot_kwargs.get('palette', 'colorblind')
+        hist_plot_kwargs['multiple'] = hist_plot_kwargs.get('multiple', 'dodge')
+    #-----
     hist_plot_kwargs = set_box_color_attributes(
         plot_kwargs=hist_plot_kwargs, 
         keep_edges_opaque=keep_edges_opaque
@@ -448,25 +440,40 @@ def plot_hist(
     elif isinstance(min_max_and_bin_size, int):
         bins = min_max_and_bin_size
     else:
-        bins_clip_minmax_dict = get_bins_clip_minmax(min_max_and_bin_size, 
-                                                     include_overflow, include_underflow, 
-                                                     allow_max_to_expand_to_fit_int_n_bins)
+        bins_clip_minmax_dict = get_bins_clip_minmax(
+            min_max_and_bin_size, 
+            include_overflow, include_underflow, 
+            allow_max_to_expand_to_fit_int_n_bins
+        )
         bins     = bins_clip_minmax_dict['bins']
         clip_min = bins_clip_minmax_dict['clip_min']
         clip_max = bins_clip_minmax_dict['clip_max']            
     #------------------------------------------------------
     #******************************************************
+    tmp_x_col     = Utilities.generate_random_string(letters='letters_only')
+    df[tmp_x_col] = df[x_col].copy()
+    df[x_col]     = df[x_col].clip(clip_min, clip_max)
+    #-------------------------
     if plot_sns:
         if orient=='v':
             hist_plot_kwargs['x'] = x_col
         else:
             hist_plot_kwargs['y'] = x_col
-        sns.histplot(ax=ax, data=df[[x_col]].clip(clip_min, clip_max), 
+        #-----
+        sns.histplot(ax=ax, data=df, 
                      bins=bins, stat=stat, **hist_plot_kwargs);
     else:
         density = True if stat=='density' else False
         hist_plot_kwargs['orientation'] = 'vertical' if orient=='v' else 'horizontal'
-        df[x_col].clip(clip_min, clip_max).hist(ax=ax, bins=bins, density=density, **hist_plot_kwargs);
+        df.hist(
+            ax      = ax, 
+            column  = x_col, 
+            bins    = bins, 
+            density = density, 
+            **hist_plot_kwargs
+        );
+    #-------------------------
+    df = df.drop(columns=[x_col]).rename(columns={tmp_x_col:x_col})
     #******************************************************
     #------------------------------------------------------
     if run_set_general_plotting_args:
@@ -500,30 +507,31 @@ def plot_hist(
         if relative_position_idx is None:
             relative_position_idx = 0
         ax = adjust_patch_positions_and_widths(
-            ax, 
-            div_drawn_width_by, 
-            relative_position_idx, 
-            i_patch_beg=n_patches_beg, 
-            i_patch_end=n_patches_end, 
-            orient=orient
+            ax           = ax, 
+            div_width_by = div_drawn_width_by, 
+            position_idx = relative_position_idx, 
+            i_patch_beg  = n_patches_beg, 
+            i_patch_end  = n_patches_end, 
+            orient       = orient
         )
     #---------------------------
     return ax
 
 #**************************************************
 def plot_multiple_hists(
-    ax, 
-    dfs_w_args, 
-    x_col, 
-    min_max_and_bin_size, 
-    include_over_underflow=False, 
-    stat='count', 
-    plot_sns=False, 
-    keep_edges_opaque=True, 
-    include_hatches=False, 
-    draw_side_by_side=False, 
-    draw_single_idx_full_width=None, 
-    orient='v', 
+    ax                         , 
+    dfs_w_args                 , 
+    x_col                      , 
+    min_max_and_bin_size       , 
+    include_over_underflow     = False, 
+    stat                       = 'count', 
+    plot_sns                   = False, 
+    keep_edges_opaque          = True, 
+    include_hatches            = False, 
+    draw_side_by_side          = False, 
+    space_between_sbs          = True, 
+    draw_single_idx_full_width = None, 
+    orient                     = 'v', 
     **kwargs
 ):
     r"""
@@ -570,6 +578,8 @@ def plot_multiple_hists(
     #---------------------------
     if draw_side_by_side:
         div_drawn_width_by = len(dfs_w_args)+1 # +1 so there is empty space between groupings
+        if not space_between_sbs:
+            div_drawn_width_by -= 1
         if draw_single_idx_full_width is not None:
             assert(draw_single_idx_full_width>=0 and draw_single_idx_full_width<len(dfs_w_args))
             div_drawn_width_by = len(dfs_w_args)-1 # -1 because one of histograms will be wide and behind all others
@@ -622,19 +632,19 @@ def plot_multiple_hists(
             run_set_general_plotting_args=False
         #----------------------------
         ax = plot_hist(
-            ax=ax, 
-            df=dfs_w_args[i][0], 
-            x_col=x_col, 
-            min_max_and_bin_size=min_max_and_bin_size, 
-            include_over_underflow=include_over_underflow, 
-            stat=stat, 
-            plot_sns=plot_sns, 
-            hist_plot_kwargs=dfs_w_args[i][1], 
-            keep_edges_opaque=keep_edges_opaque, 
-            div_drawn_width_by=div_drawn_width_by_i, 
-            relative_position_idx=relative_position_idx, 
-            run_set_general_plotting_args=run_set_general_plotting_args, 
-            orient=orient, 
+            ax                            = ax, 
+            df                            = dfs_w_args[i][0], 
+            x_col                         = x_col, 
+            min_max_and_bin_size          = min_max_and_bin_size, 
+            include_over_underflow        = include_over_underflow, 
+            stat                          = stat, 
+            plot_sns                      = plot_sns, 
+            hist_plot_kwargs              = dfs_w_args[i][1], 
+            keep_edges_opaque             = keep_edges_opaque, 
+            div_drawn_width_by            = div_drawn_width_by_i, 
+            relative_position_idx         = relative_position_idx, 
+            run_set_general_plotting_args = run_set_general_plotting_args, 
+            orient                        = orient, 
             **kwargs
         )
             

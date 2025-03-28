@@ -439,9 +439,11 @@ class SQLWhere(SQLElementsCollection):
         assert(Utilities_sql.are_all_list_elements_one_of_types(lst=els_to_combine, types=[SQLWhereElement, CombinedSQLWhereElements]))
         #-------------------------
         # Make sure they are no repeat entries through the set operation below.
-        # NOTE: The set operation may change the order of els_to_combine, but this shouldn't matter, as any decent query optimizer
-        #       will rearrange the WHERE clause anyway.
-        els_to_combine = list(set(els_to_combine))
+        # NOTE: Instead of using list(set(els_to_combine)) which usually changes the order of els_to_combine, the new method should preserve order.
+        #       First introduced in PyPy 2.5.0, and adopted in CPython 3.6 as an implementation detail, before being made a language guarantee in Python 3.7, plain dict is 
+        #         insertion-ordered, and even more efficient than the (also C implemented as of CPython 3.5) collections.OrderedDict. So the fastest solution, by far, is also the simplest:
+        #       list(dict.fromkeys(items))
+        els_to_combine = list(dict.fromkeys(els_to_combine))
         #-------------------------
         assert(len(els_to_combine)>0)
         if len(els_to_combine)==1:

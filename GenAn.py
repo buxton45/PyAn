@@ -15,30 +15,12 @@ from pathlib import Path
 
 import pandas as pd
 import numpy as np
-from pandas.api.types import is_numeric_dtype, is_datetime64_dtype, is_timedelta64_dtype
-from scipy import stats
-import datetime
-import time
-from natsort import natsorted, ns, natsort_keygen
+from natsort import natsorted, natsort_keygen
 import copy
 import json
-import jsonpickle
-#--------------------------------------------------
-import CommonLearningMethods as clm
+import warnings
 #--------------------------------------------------
 sys.path.insert(0, Utilities_config.get_sql_aids_dir())
-import Utilities_sql
-import TableInfos
-from TableInfos import TableInfo
-from SQLElement import SQLElement
-from SQLElementsCollection import SQLElementsCollection
-from SQLSelect import SQLSelectElement, SQLSelect
-from SQLFrom import SQLFrom
-from SQLWhere import SQLWhereElement, SQLWhere
-from SQLJoin import SQLJoin, SQLJoinCollection
-from SQLGroupBy import SQLGroupByElement, SQLGroupBy
-from SQLHaving import SQLHaving
-from SQLOrderBy import SQLOrderByElement, SQLOrderBy
 from SQLQuery import SQLQuery
 from SQLQueryGeneric import SQLQueryGeneric
 #--------------------------------------------------
@@ -46,9 +28,8 @@ sys.path.insert(0, Utilities_config.get_utilities_dir())
 import Utilities
 import Utilities_df
 from Utilities_df import DFConstructType
-import Utilities_dt
 #--------------------------------------------------
-from CustomJSON import CustomEncoder, CustomWriter
+from CustomJSON import CustomWriter
 
 class GenAn:
     r"""
@@ -56,14 +37,13 @@ class GenAn:
     GenAn stands for GeneralAnalysis
     """
     def __init__(
-        self, 
-        df_construct_type=None, 
-        contstruct_df_args=None, 
-        init_df_in_constructor=True, 
-        build_sql_function=None, 
-        build_sql_function_kwargs=None, 
-        save_args=False, 
-        **kwargs
+        self                      , 
+        df_construct_type         = None, 
+        contstruct_df_args        = None, 
+        init_df_in_constructor    = True, 
+        build_sql_function        = None, 
+        build_sql_function_kwargs = None, 
+        save_args                 = False, 
     ):
         r"""
         if df_construct_type==DFConstructType.kReadCsv or DFConstructType.kReadCsv:
@@ -72,21 +52,23 @@ class GenAn:
           contstruct_df_args needs at least 'conn_db'      
         """
         #--------------------------------------------------
-        self.build_sql_function=build_sql_function
-        self.build_sql_function_kwargs=build_sql_function_kwargs
-        self.save_args = save_args
+        self.build_sql_function             = build_sql_function
+        self.build_sql_function_kwargs      = build_sql_function_kwargs
+        self.save_args                      = save_args
         #--------------------------------------------------
-        self.df = pd.DataFrame()
+        self.df                             = pd.DataFrame()
         
-        self.df_construct_type = df_construct_type
-        self.contstruct_df_args = contstruct_df_args
+        self.df_construct_type              = df_construct_type
+        self.contstruct_df_args             = contstruct_df_args
         if self.contstruct_df_args is None:
             self.contstruct_df_args = {}
         #--------------------------------------------------
-        self.cols_and_types_to_convert_dict = self.contstruct_df_args.pop('cols_and_types_to_convert_dict', 
-                                                                          self.get_default_cols_and_types_to_convert_dict()) 
-        self.to_numeric_errors = self.contstruct_df_args.pop('to_numeric_errors', 'coerce')
-        self.read_sql_args = self.contstruct_df_args.pop('read_sql_args', {})
+        self.cols_and_types_to_convert_dict = self.contstruct_df_args.pop(
+            'cols_and_types_to_convert_dict', 
+            self.get_default_cols_and_types_to_convert_dict()
+        ) 
+        self.to_numeric_errors              = self.contstruct_df_args.pop('to_numeric_errors', 'coerce')
+        self.read_sql_args                  = self.contstruct_df_args.pop('read_sql_args', {})
         #--------------------------------------------------
         if init_df_in_constructor:
             assert(self.build_sql_function is not None)
@@ -109,10 +91,19 @@ class GenAn:
     def get_df(self):
         return self.df
 
-    def write_df_to_csv(self, save_path, index=False):
+    def write_df_to_csv(
+        self, 
+        save_path, 
+        index=False
+    ):
         self.df.to_csv(save_path, index=index)
     
-    def df_equals(self, df_2, sort_by=None, cols_to_compare=None):
+    def df_equals(
+        self            , 
+        df_2            , 
+        sort_by         = None, 
+        cols_to_compare = None
+    ):
         if isinstance(df_2, self.__class__):
             df_2 = df_2.get_df()
         #-------------------------
@@ -120,30 +111,45 @@ class GenAn:
             full_default_sort_by = self.get_full_default_sort_by()
             sort_by = Utilities_df.get_default_sort_by_cols_for_comparison(
                 full_default_sort_by_for_comparison = full_default_sort_by, 
-                df_1=self.get_df(), 
-                df_2=df_2
+                df_1                                = self.get_df(), 
+                df_2                                = df_2
             )
-        return Utilities_df.are_sorted_dfs_equal(self.get_df(), df_2, sort_by, cols_to_compare)
+        return Utilities_df.are_sorted_dfs_equal(
+            df1             = self.get_df(), 
+            df2             = df_2, 
+            sort_by         = sort_by, 
+            cols_to_compare = cols_to_compare
+        )
     
     #****************************************************************************************************
     @staticmethod
     def read_df_from_csv(
-        read_path, 
-        cols_and_types_to_convert_dict=None, 
-        to_numeric_errors='coerce', 
-        drop_na_rows_when_exception=True, 
-        drop_unnamed0_col=True, 
-        pd_read_csv_kwargs=None
+        read_path                      , 
+        cols_and_types_to_convert_dict = None, 
+        to_numeric_errors              = 'coerce', 
+        drop_na_rows_when_exception    = True, 
+        drop_unnamed0_col              = True, 
+        pd_read_csv_kwargs             = None
     ):
         #-------------------------
         if pd_read_csv_kwargs is None:
             pd_read_csv_kwargs = {}
         #-------------------------
         try:
-            df = pd.read_csv(read_path, dtype=str, **pd_read_csv_kwargs)
+            df = pd.read_csv(
+                read_path , 
+                dtype     = str, 
+                **pd_read_csv_kwargs
+            )
         except:
             print(f"Error reading: {read_path}\nTrying again with encoding_errors='ignore' and on_bad_lines='skip'\n")
-            df = pd.read_csv(read_path, dtype=str, encoding_errors='replace', on_bad_lines='skip', **pd_read_csv_kwargs)
+            df = pd.read_csv(
+                read_path, 
+                dtype           = str, 
+                encoding_errors = 'replace', 
+                on_bad_lines    = 'skip', 
+                **pd_read_csv_kwargs
+            )
             # Using encoding_errors='replace' above causes any errors to be replaced by U+FFFD, the official REPLACEMENT CHARACTER
             #  (this is essentially a question mark within a black diamond, print u'\uFFFD' if interested)
             # When these errors occur, it is best to simply remove the entire rows containing errors, which the following lines achieve
@@ -157,41 +163,48 @@ class GenAn:
             if drop_na_rows_when_exception:
                 df = df.dropna(subset=[x for x in df.columns if x!='Unnamed: 0'], how='all')
         #-------------------------    
-        df = clm.remove_table_aliases(df)
+        df = Utilities_df.remove_table_aliases(df)
         #-------------------------
         if drop_unnamed0_col:
-            df = Utilities_df.drop_col_case_insensitive(df=df, col='Unnamed: 0', inplace=True)
+            df = Utilities_df.drop_unnamed_columns(
+                df            = df, 
+                regex_pattern = r'Unnamed.*', 
+                ignore_case   = True, 
+                inplace       = True, 
+            )
         #-------------------------
         if cols_and_types_to_convert_dict is not None:
-            cols_and_types_to_convert_dict = {k:v for k,v in cols_and_types_to_convert_dict.items() 
-                                              if k in df.columns}
+            cols_and_types_to_convert_dict = {
+                k:v for k,v in cols_and_types_to_convert_dict.items() 
+                if k in df.columns
+            }
         df = Utilities_df.convert_col_types(
-            df=df, 
-            cols_and_types_dict=cols_and_types_to_convert_dict, 
-            to_numeric_errors=to_numeric_errors, 
-            inplace=True
+            df                  = df, 
+            cols_and_types_dict = cols_and_types_to_convert_dict, 
+            to_numeric_errors   = to_numeric_errors, 
+            inplace             = True
         )
         if 'outg_rec_nb' in df.columns:
             df = Utilities_df.convert_col_type(
-                df=df, 
-                column='outg_rec_nb', 
-                to_type=np.int32, 
-                to_numeric_errors=to_numeric_errors, 
-                inplace=True
+                df                = df, 
+                column            = 'outg_rec_nb', 
+                to_type           = np.int32, 
+                to_numeric_errors = to_numeric_errors, 
+                inplace           = True
             )
         return df
         
     @staticmethod
     def read_df_from_csv_batch(
-        paths, 
-        cols_and_types_to_convert_dict=None, 
-        to_numeric_errors='coerce', 
-        drop_na_rows_when_exception=True, 
-        drop_unnamed0_col=True, 
-        pd_read_csv_kwargs=None, 
-        make_all_columns_lowercase=False, 
-        assert_all_cols_equal=True, 
-        min_fsize_MB=None
+        paths                          , 
+        cols_and_types_to_convert_dict = None, 
+        to_numeric_errors              = 'coerce', 
+        drop_na_rows_when_exception    = True, 
+        drop_unnamed0_col              = True, 
+        pd_read_csv_kwargs             = None, 
+        make_all_columns_lowercase     = False, 
+        assert_all_cols_equal          = True, 
+        min_fsize_MB                   = None
     ):
         r"""
         assert_all_cols_equal:
@@ -216,12 +229,12 @@ class GenAn:
                     continue
             #-----
             df_i = GenAn.read_df_from_csv(
-                read_path=path, 
-                cols_and_types_to_convert_dict=cols_and_types_to_convert_dict, 
-                to_numeric_errors=to_numeric_errors, 
-                drop_na_rows_when_exception=drop_na_rows_when_exception, 
-                drop_unnamed0_col=drop_unnamed0_col, 
-                pd_read_csv_kwargs=pd_read_csv_kwargs
+                read_path                      = path, 
+                cols_and_types_to_convert_dict = cols_and_types_to_convert_dict, 
+                to_numeric_errors              = to_numeric_errors, 
+                drop_na_rows_when_exception    = drop_na_rows_when_exception, 
+                drop_unnamed0_col              = drop_unnamed0_col, 
+                pd_read_csv_kwargs             = pd_read_csv_kwargs
             )
             if df_i.shape[0]==0:
                 continue
@@ -249,14 +262,14 @@ class GenAn:
         
     @staticmethod
     def read_df_from_csv_dir_batches(
-        files_dir, 
-        file_path_glob, 
-        file_path_regex=None, 
-        cols_and_types_to_convert_dict=None, 
-        to_numeric_errors='coerce', 
-        drop_unnamed0_col=True, 
-        pd_read_csv_kwargs=None, 
-        assert_all_cols_equal=True
+        files_dir                      , 
+        file_path_glob                 , 
+        file_path_regex                = None, 
+        cols_and_types_to_convert_dict = None, 
+        to_numeric_errors              = 'coerce', 
+        drop_unnamed0_col              = True, 
+        pd_read_csv_kwargs             = None, 
+        assert_all_cols_equal          = True
     ):
         r"""
         assert_all_cols_equal:
@@ -265,24 +278,30 @@ class GenAn:
         """
         #-------------------------
         paths = Utilities.find_all_paths(
-            base_dir=files_dir, 
-            glob_pattern=file_path_glob, 
-            regex_pattern=file_path_regex
+            base_dir      = files_dir, 
+            glob_pattern  = file_path_glob, 
+            regex_pattern = file_path_regex
         )
         paths=natsorted(paths)
         #-------------------------
         return GenAn.read_df_from_csv_batch(
-            paths=paths, 
-            cols_and_types_to_convert_dict=cols_and_types_to_convert_dict, 
-            to_numeric_errors=to_numeric_errors, 
-            drop_unnamed0_col=drop_unnamed0_col, 
-            pd_read_csv_kwargs=pd_read_csv_kwargs, 
-            assert_all_cols_equal=assert_all_cols_equal
+            paths                          = paths, 
+            cols_and_types_to_convert_dict = cols_and_types_to_convert_dict, 
+            to_numeric_errors              = to_numeric_errors, 
+            drop_unnamed0_col              = drop_unnamed0_col, 
+            pd_read_csv_kwargs             = pd_read_csv_kwargs, 
+            assert_all_cols_equal          = assert_all_cols_equal
         )
     
     #****************************************************************************************************
     @staticmethod
-    def build_sql_general(build_sql_function, build_sql_function_kwargs={}):
+    def build_sql_general(
+        build_sql_function        , 
+        build_sql_function_kwargs = None
+    ):
+        #-------------------------
+        if build_sql_function_kwargs is None:
+            build_sql_function_kwargs = dict()
         #-------------------------
         # Some special kwargs are popped off before feeding into sql function.
         # Replicate that here
@@ -305,7 +324,10 @@ class GenAn:
         return sql
         
     @staticmethod
-    def reduce_dtypes_in_read_sql_args(sql, read_sql_args):
+    def reduce_dtypes_in_read_sql_args(
+        sql           , 
+        read_sql_args , 
+    ):
         r"""
         When running pd.read_sql_query with dtype argument equal to a dict, the method fails if columns are included
         in dtypes which are not found in the query.  The error code is:
@@ -335,31 +357,45 @@ class GenAn:
                           if sql.sql_select.find_idx_of_approx_element_in_collection_dict(k)>-1}
         elif isinstance(sql, SQLQueryGeneric):
             sql = sql.get_sql_statement()
-            return GenAn.reduce_dtypes_in_read_sql_args(sql, read_sql_args)
+            return GenAn.reduce_dtypes_in_read_sql_args(
+                sql           = sql, 
+                read_sql_args = read_sql_args
+            )
         else:
             assert(isinstance(sql, str))
             #----------
             beg_search = sql.find('SELECT')
             assert(beg_search>-1)
-            beg_search+=len('SELECT')
+            beg_search += len('SELECT')
             #----------
             end_search = sql.find('\nFROM')
             assert(end_search>-1 and end_search>beg_search)
             end_search += len('\nFROM')
             #----------
-            dtype_args = {k:v for k,v in dtype_args.items() 
-                          if sql.find(k, beg_search, end_search)>-1}
+            dtype_args = {
+                k:v for k,v in dtype_args.items() 
+                if sql.find(k, beg_search, end_search)>-1
+            }
         #-------------------------
         read_sql_args['dtype'] = dtype_args
         return read_sql_args
 
     @staticmethod
-    def build_sql_statement_general(build_sql_function, build_sql_function_kwargs={}, read_sql_args={}):
-        sql = GenAn.build_sql_general(build_sql_function=build_sql_function, 
-                                      build_sql_function_kwargs=build_sql_function_kwargs)
+    def build_sql_statement_general(
+        build_sql_function        , 
+        build_sql_function_kwargs = None, 
+        read_sql_args             = None
+    ):
+        sql = GenAn.build_sql_general(
+            build_sql_function        = build_sql_function, 
+            build_sql_function_kwargs = build_sql_function_kwargs
+        )
         #-----
         if read_sql_args:
-            read_sql_args = GenAn.reduce_dtypes_in_read_sql_args(sql, read_sql_args)
+            read_sql_args = GenAn.reduce_dtypes_in_read_sql_args(
+                sql           = sql, 
+                read_sql_args = read_sql_args
+            )
         else:
             # In case read_sql_args was None, set to {}
             read_sql_args = {}
@@ -371,7 +407,10 @@ class GenAn:
 
     #****************************************************************************************************        
     @staticmethod
-    def prepare_save_args(save_args, make_save_dir_if_dne=True):
+    def prepare_save_args(
+        save_args            , 
+        make_save_dir_if_dne = True
+    ):
         r"""
         Prepare save_args to be used in build_df_general_batches
         
@@ -431,7 +470,7 @@ class GenAn:
                 if save_args['save_ext'][0] != '.':
                     save_args['save_ext'] = '.'+save_args['save_ext']
                 #----------
-                save_args['save_path'] = os.path.join(save_args['save_dir'], save_args['save_name']+save_args['save_ext'])
+                save_args['save_path']         = os.path.join(save_args['save_dir'], save_args['save_name']+save_args['save_ext'])
                 save_args['save_summary_path'] = os.path.join(save_args['save_dir'], 'summary_files', save_args['save_name']+'_summary.json')
                 #----------
                 if not os.path.exists(save_args['save_dir']) and make_save_dir_if_dne:
@@ -443,26 +482,31 @@ class GenAn:
             
     @staticmethod
     def prepare_summary(        
-        build_sql_function, 
-        sql_statement, 
-        build_sql_function_kwargs={}, 
-        cols_and_types_to_convert_dict=None, 
-        to_numeric_errors='coerce',        
-        field_to_split=None, 
-        field_to_split_location_in_kwargs=None, 
-        collection_i=None
+        build_sql_function                , 
+        sql_statement                     , 
+        build_sql_function_kwargs         = None, 
+        cols_and_types_to_convert_dict    = None, 
+        to_numeric_errors                 = 'coerce',        
+        field_to_split                    = None, 
+        field_to_split_location_in_kwargs = None, 
+        collection_i                      = None
     ):
-        
+        r"""
+        """
+        #-------------------------
+        if build_sql_function_kwargs is None:
+            build_sql_function_kwargs = dict()
+        #-------------------------
         if field_to_split is not None:
             assert(field_to_split_location_in_kwargs is not None)
             assert(collection_i is not None)
         #----------
         return_dict = {
-            'build_sql_function':build_sql_function, 
-            'sql_statement':sql_statement, 
-            'build_sql_function_kwargs':build_sql_function_kwargs, 
-            'cols_and_types_to_convert_dict':cols_and_types_to_convert_dict, 
-            'to_numeric_errors':to_numeric_errors
+            'build_sql_function'             : build_sql_function, 
+            'sql_statement'                  : sql_statement, 
+            'build_sql_function_kwargs'      : build_sql_function_kwargs, 
+            'cols_and_types_to_convert_dict' : cols_and_types_to_convert_dict, 
+            'to_numeric_errors'              : to_numeric_errors
         }
         if field_to_split is not None:
             return_dict = {
@@ -477,25 +521,25 @@ class GenAn:
 
     @staticmethod
     def output_summary(
-        output_path, 
-        build_sql_function, 
-        sql_statement, 
-        build_sql_function_kwargs={}, 
-        cols_and_types_to_convert_dict=None, 
-        to_numeric_errors='coerce',        
-        field_to_split=None, 
-        field_to_split_location_in_kwargs=None, 
-        collection_i=None
+        output_path                       , 
+        build_sql_function                , 
+        sql_statement                     , 
+        build_sql_function_kwargs         = None, 
+        cols_and_types_to_convert_dict    = None, 
+        to_numeric_errors                 = 'coerce',        
+        field_to_split                    = None, 
+        field_to_split_location_in_kwargs = None, 
+        collection_i                      = None
     ):
         summary_dict = GenAn.prepare_summary(    
-            build_sql_function=build_sql_function, 
-            sql_statement=sql_statement, 
-            build_sql_function_kwargs=build_sql_function_kwargs, 
-            cols_and_types_to_convert_dict=cols_and_types_to_convert_dict, 
-            to_numeric_errors=to_numeric_errors,        
-            field_to_split=field_to_split, 
-            field_to_split_location_in_kwargs=field_to_split_location_in_kwargs, 
-            collection_i=collection_i
+            build_sql_function                = build_sql_function, 
+            sql_statement                     = sql_statement, 
+            build_sql_function_kwargs         = build_sql_function_kwargs, 
+            cols_and_types_to_convert_dict    = cols_and_types_to_convert_dict, 
+            to_numeric_errors                 = to_numeric_errors,        
+            field_to_split                    = field_to_split, 
+            field_to_split_location_in_kwargs = field_to_split_location_in_kwargs, 
+            collection_i                      = collection_i
         )
         CustomWriter.output_dict_to_json(output_path, summary_dict)
         
@@ -522,16 +566,19 @@ class GenAn:
                 file_path_regex = None
         """
         save_args = copy.deepcopy(save_args)
-        save_args = GenAn.prepare_save_args(save_args, make_save_dir_if_dne=False)
+        save_args = GenAn.prepare_save_args(
+            save_args            = save_args, 
+            make_save_dir_if_dne = False
+        )
         #-----
         files_dir       = Path(save_args['save_summary_path']).parent
         file_path_glob  = save_args['save_name']+'*_summary.json'
         file_path_regex = save_args['save_name']+'(_[0-9]*)|()_summary.json'
         #-----
         paths = Utilities.find_all_paths(
-            base_dir=files_dir, 
-            glob_pattern=file_path_glob, 
-            regex_pattern=file_path_regex
+            base_dir      = files_dir, 
+            glob_pattern  = file_path_glob, 
+            regex_pattern = file_path_regex
         )
         #-----
         return paths
@@ -541,11 +588,13 @@ class GenAn:
         with open(summary_path, 'r') as f:
             summary_dict = json.load(f)
         #----------
-        if ('build_sql_function_kwargs' not in summary_dict or 
-            'field_to_split_location_in_kwargs' not in summary_dict):
+        if (
+            'build_sql_function_kwargs' not in summary_dict or 
+            'field_to_split_location_in_kwargs' not in summary_dict
+        ):
             return []
         #----------
-        assert('build_sql_function_kwargs' in summary_dict)
+        assert('build_sql_function_kwargs'         in summary_dict)
         assert('field_to_split_location_in_kwargs' in summary_dict)
         #----------
         coll_i = Utilities.get_from_nested_dict(
@@ -579,7 +628,10 @@ class GenAn:
         summary_paths = GenAn.find_summary_files(save_args=save_args)
         #----------
         save_args = copy.deepcopy(save_args)
-        save_args = GenAn.prepare_save_args(save_args, make_save_dir_if_dne=False)
+        save_args = GenAn.prepare_save_args(
+            save_args            = save_args, 
+            make_save_dir_if_dne = False
+        )
         #-----
         file_path_regex = save_args['save_name']+r'_(\d*)_summary.json'
         #---------- 
@@ -589,7 +641,7 @@ class GenAn:
         # Should have only been one tag found per path
         assert(all([len(x)==1 for x in tags]))
         tags = [x[0] for x in tags]
-        tags=natsorted(tags)
+        tags = natsorted(tags)
         #----------
         if len(tags)==0:
             return 0
@@ -599,15 +651,14 @@ class GenAn:
     #****************************************************************************************************
     @staticmethod
     def build_df_general(
-        conn_db, 
-        build_sql_function, 
-        build_sql_function_kwargs={}, 
-        cols_and_types_to_convert_dict=None, 
-        to_numeric_errors='coerce', 
-        save_args=False, 
-        return_sql=False, 
-        read_sql_args={}, 
-        **kwargs
+        conn_db                        , 
+        build_sql_function             , 
+        build_sql_function_kwargs      = None, 
+        cols_and_types_to_convert_dict = None, 
+        to_numeric_errors              = 'coerce', 
+        save_args                      = False, 
+        return_sql                     = False, 
+        read_sql_args                  = None, 
     ):
         r"""
         NOTE: Presence of (non-None valued) 'field_to_split' in build_sql_function_kwargs determines
@@ -619,6 +670,11 @@ class GenAn:
         # of GenAn or classes derived from it), copy it.
         build_sql_function_kwargs = copy.deepcopy(build_sql_function_kwargs)
         #-------------------------
+        if build_sql_function_kwargs is None:
+            build_sql_function_kwargs = dict()
+        if read_sql_args is None:
+            read_sql_args = dict()
+        #-------------------------
         # Run in batches???
         # If field_to_split is not None, yes.
         field_to_split                    = build_sql_function_kwargs.pop('field_to_split', None)
@@ -629,54 +685,64 @@ class GenAn:
         verbose                           = build_sql_function_kwargs.pop('verbose', True)
         n_update                          = build_sql_function_kwargs.pop('n_update', 10)
         ignore_index                      = build_sql_function_kwargs.pop('ignore_index', False)
-        save_args = GenAn.prepare_save_args(save_args, make_save_dir_if_dne=True)
+        save_args                         = GenAn.prepare_save_args(
+            save_args            = save_args, 
+            make_save_dir_if_dne = True
+        )
         if field_to_split is not None:
             # GenAn.build_df_general_batches essentially splits up the batches and sends them
             # right back to GenAn.build_df_general
             return GenAn.build_df_general_batches(
-                conn_db=conn_db, 
-                build_sql_function=build_sql_function, 
-                build_sql_function_kwargs=build_sql_function_kwargs, 
-                field_to_split=field_to_split, 
-                field_to_split_location_in_kwargs=field_to_split_location_in_kwargs, 
-                save_and_dump=save_and_dump, 
-                sort_coll_to_split=sort_coll_to_split, 
-                batch_size=batch_size, 
-                verbose=verbose, 
-                n_update=n_update, 
-                cols_and_types_to_convert_dict=cols_and_types_to_convert_dict, 
-                to_numeric_errors=to_numeric_errors, 
-                save_args=save_args, 
-                read_sql_args=read_sql_args, 
-                exclude_previously_recorded=True, 
-                ignore_index=ignore_index, 
-                **kwargs
+                conn_db                           = conn_db, 
+                build_sql_function                = build_sql_function, 
+                build_sql_function_kwargs         = build_sql_function_kwargs, 
+                field_to_split                    = field_to_split, 
+                field_to_split_location_in_kwargs = field_to_split_location_in_kwargs, 
+                save_and_dump                     = save_and_dump, 
+                sort_coll_to_split                = sort_coll_to_split, 
+                batch_size                        = batch_size, 
+                verbose                           = verbose, 
+                n_update                          = n_update, 
+                cols_and_types_to_convert_dict    = cols_and_types_to_convert_dict, 
+                to_numeric_errors                 = to_numeric_errors, 
+                save_args                         = save_args, 
+                read_sql_args                     = read_sql_args, 
+                exclude_previously_recorded       = True, 
+                ignore_index                      = ignore_index, 
             )
         #-------------------------
         sql, read_sql_args = GenAn.build_sql_statement_general(
-            build_sql_function=build_sql_function, 
-            build_sql_function_kwargs=build_sql_function_kwargs, 
-            read_sql_args=read_sql_args
+            build_sql_function        = build_sql_function, 
+            build_sql_function_kwargs = build_sql_function_kwargs, 
+            read_sql_args             = read_sql_args
         )
         assert(isinstance(sql, str))
-        df = pd.read_sql_query(sql, conn_db, **read_sql_args) 
-        df = clm.remove_table_aliases(df)
+        #-------------------------
+        # filterwarnings call to eliminate annoying "UserWarning: pandas only supports SQLAlchemy connectable..."
+        # If one wants to get rid of this functionality, remove "with warnings.catch_warnings()" and  "warnings.filterwarnings" call
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            df = pd.read_sql_query(sql, conn_db, **read_sql_args) 
+        #-------------------------
+        df = Utilities_df.remove_table_aliases(df)
         if cols_and_types_to_convert_dict is not None:
-            cols_and_types_to_convert_dict = {k:v for k,v in cols_and_types_to_convert_dict.items() 
-                                              if k in df.columns}
+            cols_and_types_to_convert_dict = {
+                k:v for k,v in cols_and_types_to_convert_dict.items() 
+                if k in df.columns
+            }
         df = Utilities_df.convert_col_types(
-            df=df, 
-            cols_and_types_dict=cols_and_types_to_convert_dict, 
-            to_numeric_errors=to_numeric_errors, 
-            inplace=True
+            df                  = df, 
+            cols_and_types_dict = cols_and_types_to_convert_dict, 
+            to_numeric_errors   = to_numeric_errors, 
+            inplace             = True
         )
         if 'outg_rec_nb' in df.columns:
             df = Utilities_df.convert_col_type(
-                df=df, 
-                column='outg_rec_nb', 
-                to_type=np.int32, 
-                to_numeric_errors=to_numeric_errors, 
-                inplace=True
+                df                = df, 
+                column            = 'outg_rec_nb', 
+                to_type           = np.int32, 
+                to_numeric_errors = to_numeric_errors, 
+                inplace           = True
             )
         #-------------------------
         if save_args['save_to_file']:
@@ -685,15 +751,15 @@ class GenAn:
             df.to_csv(save_args['save_path'], index=save_args['index'])
             if save_args['save_summary']:
                 GenAn.output_summary(
-                    output_path=save_args['save_summary_path'], 
-                    build_sql_function=build_sql_function, 
-                    sql_statement=sql, 
-                    build_sql_function_kwargs=build_sql_function_kwargs, 
-                    cols_and_types_to_convert_dict=cols_and_types_to_convert_dict, 
-                    to_numeric_errors=to_numeric_errors,        
-                    field_to_split=None, 
-                    field_to_split_location_in_kwargs=None, 
-                    collection_i=None
+                    output_path                       = save_args['save_summary_path'], 
+                    build_sql_function                = build_sql_function, 
+                    sql_statement                     = sql, 
+                    build_sql_function_kwargs         = build_sql_function_kwargs, 
+                    cols_and_types_to_convert_dict    = cols_and_types_to_convert_dict, 
+                    to_numeric_errors                 = to_numeric_errors,        
+                    field_to_split                    = None, 
+                    field_to_split_location_in_kwargs = None, 
+                    collection_i                      = None
                 )
         #-------------------------
         if not return_sql:
@@ -716,10 +782,9 @@ class GenAn:
         cols_and_types_to_convert_dict    = None, 
         to_numeric_errors                 = 'coerce', 
         save_args                         = False, 
-        read_sql_args                     = {}, 
+        read_sql_args                     = None, 
         exclude_previously_recorded       = True, 
         ignore_index                      = False, 
-        **kwargs
     ):
         r"""
         This essentially splits up the batches and sends them back to GenAn.build_df_general
@@ -744,20 +809,26 @@ class GenAn:
         # of GenAn or classes derived from it), copy it.
         build_sql_function_kwargs = copy.deepcopy(build_sql_function_kwargs)
         #-------------------------
-        save_args = GenAn.prepare_save_args(save_args, make_save_dir_if_dne=True)
+        save_args = GenAn.prepare_save_args(
+            save_args            = save_args, 
+            make_save_dir_if_dne = True
+        )
         #-------------------------
         # If save_and_dump==True, the DFs must be set to save!
         if save_and_dump:
-            assert(save_args['save_to_file'] and save_args['save_individual_batches'])
+            assert(
+                save_args['save_to_file'] and 
+                save_args['save_individual_batches']
+            )
             save_args['save_full_final'] = False
         #-------------------------
         if field_to_split_location_in_kwargs is None:
             field_to_split_location_in_kwargs = [field_to_split]
-        if field_to_split!=field_to_split_location_in_kwargs[-1]:
+        if field_to_split != field_to_split_location_in_kwargs[-1]:
             field_to_split_location_in_kwargs.append(field_to_split)
         coll_to_split = Utilities.pop_from_nested_dict(
-            nested_dict=build_sql_function_kwargs, 
-            keys_path_list=field_to_split_location_in_kwargs
+            nested_dict    = build_sql_function_kwargs, 
+            keys_path_list = field_to_split_location_in_kwargs
         )
         if sort_coll_to_split:
             if isinstance(coll_to_split, pd.DataFrame):
@@ -767,19 +838,21 @@ class GenAn:
         #-------------------------
         if exclude_previously_recorded and save_args['save_to_file']:
             # If coll_to_split is pd.DataFrame, prev_rec_coll will be list of indices (see CustomJSON.CustomEncoder)
-            prev_rec_coll = GenAn.get_split_collection_from_all_summary_files(save_args)
+            prev_rec_coll           = GenAn.get_split_collection_from_all_summary_files(save_args)
             save_args['offset_int'] = GenAn.get_next_summary_file_tag_int(save_args)
             if verbose:
                 print(f'BEFORE EXCLUDE PREVIOUSLY RECORDED: n_coll = {len(coll_to_split)}')
             if isinstance(coll_to_split, pd.DataFrame):
                 coll_to_split = coll_to_split[~coll_to_split.index.isin(prev_rec_coll)]
             else:
-                coll_to_split = [x for x in coll_to_split 
-                                 if x not in prev_rec_coll]
+                coll_to_split = [
+                    x for x in coll_to_split 
+                    if x not in prev_rec_coll
+                ]
         #-------------------------
-        return_df = pd.DataFrame()
+        return_df  = pd.DataFrame()
         batch_idxs = Utilities.get_batch_idx_pairs(len(coll_to_split), batch_size)
-        n_batches = len(batch_idxs)
+        n_batches  = len(batch_idxs)
         if verbose:
             print(f'n_coll     = {len(coll_to_split)}')
             print(f'batch_size = {batch_size}')
@@ -790,59 +863,70 @@ class GenAn:
                 print(f'{i+1}/{n_batches}')
             i_beg = batch_i[0]
             i_end = batch_i[1]
-            #-----
+            #-------------------------
             save_args_i = copy.deepcopy(save_args)
             if save_args['save_to_file'] and save_args['save_individual_batches']:
                 batch_int = i
                 if save_args_i['offset_int'] is not None:
                     assert(isinstance(save_args_i['offset_int'], int))
                     batch_int += save_args_i['offset_int']
-                save_args_i['save_name'] = Utilities.append_to_path(save_args_i['save_name'], appendix=f'_{batch_int}', 
-                                                                    ext_to_find=save_args_i['save_ext'], append_to_end_if_ext_no_found=True)
+                save_args_i['save_name'] = Utilities.append_to_path(
+                    save_path                     = save_args_i['save_name'], 
+                    appendix                      = f'_{batch_int}', 
+                    ext_to_find                   = save_args_i['save_ext'], 
+                    append_to_end_if_ext_no_found = True
+                )
                 # Call prepare_save_args again to compile save_path, save_summary_path, etc.                                          
-                save_args_i = GenAn.prepare_save_args(save_args_i, make_save_dir_if_dne=True)
+                save_args_i = GenAn.prepare_save_args(
+                    save_args            = save_args_i, 
+                    make_save_dir_if_dne = True
+                )
             else:
                 save_args_i['save_to_file'] = False
             #-----
             save_args_i['save_summary'] = False # Never want build_df_general to handle output of summary for batches
                                                 # as the batch collection needs to be included
-            #-----
+            #-------------------------
             if isinstance(coll_to_split, pd.DataFrame):
                 value = coll_to_split.iloc[i_beg:i_end]
             else:
                 value = coll_to_split[i_beg:i_end]
+            #-----
             df_i, sql_i = GenAn.build_df_general(
-                conn_db=conn_db, 
-                build_sql_function=build_sql_function, 
-                build_sql_function_kwargs = Utilities.set_in_nested_dict(
-                    nested_dict=build_sql_function_kwargs, 
-                    keys_path_list=field_to_split_location_in_kwargs, 
-                    value=value, 
-                    inplace=False
+                conn_db                        = conn_db, 
+                build_sql_function             = build_sql_function, 
+                build_sql_function_kwargs      = Utilities.set_in_nested_dict(
+                    nested_dict    = build_sql_function_kwargs, 
+                    keys_path_list = field_to_split_location_in_kwargs, 
+                    value          = value, 
+                    inplace        = False
                 ), 
-                cols_and_types_to_convert_dict=cols_and_types_to_convert_dict, 
-                to_numeric_errors=to_numeric_errors, 
-                save_args=save_args_i, 
-                return_sql=True, 
-                read_sql_args=read_sql_args, 
-                **kwargs
+                cols_and_types_to_convert_dict = cols_and_types_to_convert_dict, 
+                to_numeric_errors              = to_numeric_errors, 
+                save_args                      = save_args_i, 
+                return_sql                     = True, 
+                read_sql_args                  = read_sql_args, 
             )
-            if save_args['save_to_file'] and save_args['save_individual_batches'] and save_args['save_summary']:
+            if(
+                save_args['save_to_file'] and 
+                save_args['save_individual_batches'] and 
+                save_args['save_summary']
+            ):
                 GenAn.output_summary(
-                    output_path=save_args_i['save_summary_path'], 
-                    build_sql_function=build_sql_function, 
-                    sql_statement=sql_i, 
-                    build_sql_function_kwargs = Utilities.set_in_nested_dict(
-                        nested_dict=build_sql_function_kwargs, 
-                        keys_path_list=field_to_split_location_in_kwargs, 
-                        value=value, 
-                        inplace=False
+                    output_path                       = save_args_i['save_summary_path'], 
+                    build_sql_function                = build_sql_function, 
+                    sql_statement                     = sql_i, 
+                    build_sql_function_kwargs         = Utilities.set_in_nested_dict(
+                        nested_dict    = build_sql_function_kwargs, 
+                        keys_path_list = field_to_split_location_in_kwargs, 
+                        value          = value, 
+                        inplace        = False
                     ), 
-                    cols_and_types_to_convert_dict=cols_and_types_to_convert_dict, 
-                    to_numeric_errors=to_numeric_errors,        
-                    field_to_split=field_to_split, 
-                    field_to_split_location_in_kwargs=field_to_split_location_in_kwargs, 
-                    collection_i=value
+                    cols_and_types_to_convert_dict    = cols_and_types_to_convert_dict, 
+                    to_numeric_errors                 = to_numeric_errors,        
+                    field_to_split                    = field_to_split, 
+                    field_to_split_location_in_kwargs = field_to_split_location_in_kwargs, 
+                    collection_i                      = value
                 )
             #-----
             if not save_and_dump:
@@ -859,34 +943,36 @@ class GenAn:
     
     #****************************************************************************************************
     def init_df(self):
-        assert(self.df_construct_type is not None and 
-               self.df_construct_type<DFConstructType.kUnset and 
-               self.df_construct_type>-1 and 
-               self.contstruct_df_args is not None)
-        if self.df_construct_type==DFConstructType.kReadCsv:
+        assert(
+            self.df_construct_type is not None and 
+            self.df_construct_type < DFConstructType.kUnset and 
+            self.df_construct_type > -1 and 
+            self.contstruct_df_args is not None
+        )
+        if self.df_construct_type == DFConstructType.kReadCsv:
             assert('file_path' in self.contstruct_df_args)
             file_path = self.contstruct_df_args['file_path']
             #-----
             self.df = GenAn.read_df_from_csv( 
-                file_path, 
-                cols_and_types_to_convert_dict=self.cols_and_types_to_convert_dict, 
-                to_numeric_errors=self.to_numeric_errors, 
-                drop_unnamed0_col=True, 
-                pd_read_csv_kwargs=None
+                read_path                      = file_path, 
+                cols_and_types_to_convert_dict = self.cols_and_types_to_convert_dict, 
+                to_numeric_errors              = self.to_numeric_errors, 
+                drop_unnamed0_col              = True, 
+                pd_read_csv_kwargs             = None
             )
-        elif self.df_construct_type==DFConstructType.kRunSqlQuery:
+        elif self.df_construct_type == DFConstructType.kRunSqlQuery:
             # contstruct_df_args SHOULD HAVE build_sql_function and build_sql_function_kwargs, 
             #   but doesn't necessarily need to
             conn_db = self.contstruct_df_args.pop('conn_db', self.get_conn_db())
             #-----
             self.df = GenAn.build_df_general(
-                conn_db, 
-                build_sql_function=self.build_sql_function, 
-                build_sql_function_kwargs=self.build_sql_function_kwargs, 
-                cols_and_types_to_convert_dict=self.cols_and_types_to_convert_dict, 
-                to_numeric_errors=self.to_numeric_errors, 
-                save_args=self.save_args, 
-                read_sql_args=self.read_sql_args
+                conn_db                        = conn_db, 
+                build_sql_function             = self.build_sql_function, 
+                build_sql_function_kwargs      = self.build_sql_function_kwargs, 
+                cols_and_types_to_convert_dict = self.cols_and_types_to_convert_dict, 
+                to_numeric_errors              = self.to_numeric_errors, 
+                save_args                      = self.save_args, 
+                read_sql_args                  = self.read_sql_args
             )
         elif self.df_construct_type==DFConstructType.kImportPickle:
             # TODO !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -898,15 +984,20 @@ class GenAn:
     #****************************************************************************************************            
     def get_sql(self):
         if self.build_sql_function:
-            return GenAn.build_sql_general(self.build_sql_function, 
-                                           self.build_sql_function_kwargs)
+            return GenAn.build_sql_general(
+                build_sql_function        = self.build_sql_function, 
+                build_sql_function_kwargs = self.build_sql_function_kwargs
+            )
         else:
             return None
 
     def get_sql_statement(self):
         if self.build_sql_function:
-            sql_statement, _ = GenAn.build_sql_statement_general(self.build_sql_function, 
-                                                                 self.build_sql_function_kwargs)
+            sql_statement, _ = GenAn.build_sql_statement_general(
+                build_sql_function        = self.build_sql_function, 
+                build_sql_function_kwargs = self.build_sql_function_kwargs, 
+                read_sql_args             = None
+            )
             return sql_statement
         else:
             return None

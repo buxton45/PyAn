@@ -19,7 +19,7 @@ import re
 import copy
 import pandas as pd
 import numpy as np
-from pandas.api.types import is_numeric_dtype, is_datetime64_dtype, is_object_dtype
+from pandas.api.types import is_numeric_dtype, is_datetime64_dtype, is_object_dtype, is_timedelta64_dtype
 from pandas.testing import assert_frame_equal
 from scipy import stats
 import statistics
@@ -28,14 +28,15 @@ from enum import IntEnum
 import datetime
 from sklearn.model_selection import GroupShuffleSplit
 from ast import literal_eval
+from functools import reduce
 
 import Utilities
 #----------------------------------------------------------------------------------------------------
 class DFConstructType(IntEnum):
-    kReadCsv = 0
-    kRunSqlQuery = 1
+    kReadCsv      = 0
+    kRunSqlQuery  = 1
     kImportPickle = 2
-    kUnset = 3
+    kUnset        = 3
 
 
 #----------------------------------------------------------------------------------------------------
@@ -84,6 +85,23 @@ def prepend_to_series_indices(
     return series
 
 #----------------------------------------------------------------------------------------------------
+def find_columns_with_list_element(
+    df
+):
+    r"""
+    """
+    cols_with_lists = df.map(lambda x: isinstance(x, list)).any()
+    cols_with_lists = df.columns[cols_with_lists].tolist()
+    return cols_with_lists
+
+#--------------------------------------------------
+def does_df_contain_any_column_elements(
+    df
+):
+    cols_with_lists = find_columns_with_list_element(df=df)
+    return len(cols_with_lists)>0
+
+#----------------------------------------------------------------------------------------------------
 def get_shared_columns(
         dfs                , 
         maintain_df0_order = True
@@ -106,12 +124,53 @@ def get_shared_columns(
         return cols_shared_ordered
     return cols_shared
 
+
+#----------------------------------------------------------------------------------------------------
+def remove_prepend_from_columns_in_df(
+    df                       , 
+    end_of_prepend_indicator = '.', 
+    inplace                  = True
+):
+    # Intended to change e.g. a column named inst_msr_consume.read_type to read_type
+    # Somewhat similar to remove_longest_substring_shared_by_all_columns_in_df, but more simple minded.
+    # However, this works better for case where e.g. joins have occurred and therefore not all columns share
+    # the same prepdended value
+    # This simply finds the first occurrence of end_of_prepend_indicator and chops off
+    # end_of_prepend_indicator and preceding it.
+    columns_org = df.columns.tolist()
+    columns_new = []
+    for col in columns_org:
+        found_idx = col.find(end_of_prepend_indicator)
+        if found_idx > -1:
+            columns_new.append(col[found_idx+len(end_of_prepend_indicator):])
+        else:
+            columns_new.append(col)
+    cols_rename_dict = dict(zip(columns_org, columns_new))
+    if inplace:
+        df.rename(columns=cols_rename_dict, inplace=True)
+    else:
+        df = df.rename(columns=cols_rename_dict, inplace=False)
+    return df
+    
+def remove_table_aliases(
+    df                       , 
+    end_of_prepend_indicator = '.', 
+    inplace                  = True
+):
+    #I kept forgetting the name of remove_table_aliases
+    # So, this is simply an easier name to remember
+    return remove_prepend_from_columns_in_df(
+        df                       = df, 
+        end_of_prepend_indicator = end_of_prepend_indicator, 
+        inplace                  = inplace
+    )
+
 #----------------------------------------------------------------------------------------------------
 def move_cols_to_either_end(
-        df           , 
-        cols_to_move , 
-        to_front     = True
-    ):
+    df           , 
+    cols_to_move , 
+    to_front     = True
+):
     r"""
     Moves the columns in cols_to_move to the front or back of the df
     The order of the other columns is maintained
@@ -136,9 +195,9 @@ def move_cols_to_either_end(
         
 #--------------------------------------------------
 def move_cols_to_front(
-        df, 
-        cols_to_move
-    ):
+    df, 
+    cols_to_move
+):
     return move_cols_to_either_end(
         df           = df, 
         cols_to_move = cols_to_move, 
@@ -147,9 +206,9 @@ def move_cols_to_front(
 
 #--------------------------------------------------
 def move_cols_to_back(
-        df, 
-        cols_to_move
-    ):
+    df, 
+    cols_to_move
+):
     return move_cols_to_either_end(
         df           = df, 
         cols_to_move = cols_to_move, 
@@ -158,17 +217,17 @@ def move_cols_to_back(
 
 #--------------------------------------------------
 def make_all_column_names_lowercase(
-        df
-    ):
+    df
+):
     rename_dict = {x:x.lower() for x in df.columns}
     df          = df.rename(columns=rename_dict)
     return df
 
 #--------------------------------------------------
 def make_all_column_names_uppercase(
-        df, 
-        cols_to_exclude = None
-    ):
+    df, 
+    cols_to_exclude = None
+):
     rename_dict = {x:x.upper() for x in df.columns}
     if cols_to_exclude is not None:
         assert(isinstance(cols_to_exclude, list))
@@ -179,11 +238,11 @@ def make_all_column_names_uppercase(
 
 #--------------------------------------------------
 def drop_col_case_insensitive(
-        df        , 
-        col       , 
-        inplace   = True, 
-        drop_dups = True
-    ):
+    df        , 
+    col       , 
+    inplace   = True, 
+    drop_dups = True
+):
     r"""
     In a case-insensitive manner, look for col in df.  If found, drop.
     """
@@ -373,12 +432,12 @@ def make_df_col_dtypes_equal(
 # !!!!!!!!!!!!!! Probably want to look into pd.convert_dtypes for use in (or possibly to replace) the following functions!
 #----------------------------------------------------------------------------------------------------
 def convert_col_type_with_to_numeric(
-        df      , 
-        column  , 
-        to_type , 
-        errors  = 'coerce', 
-        inplace = True
-    ):
+    df      , 
+    column  , 
+    to_type , 
+    errors  = 'coerce', 
+    inplace = True
+):
     r"""
     Documentation
     """
@@ -457,13 +516,13 @@ def convert_col_type_w_pd_to_datetime(
 
 #--------------------------------------------------
 def change_empty_entries_in_col_and_convert_to_type(
-        df           , 
-        column       , 
-        empty_entry  = '', 
-        replace_with = np.nan, 
-        col_to_type  = float, 
-        inplace      = True
-    ):
+    df           , 
+    column       , 
+    empty_entry  = '', 
+    replace_with = np.nan, 
+    col_to_type  = float, 
+    inplace      = True
+):
     r"""
     NOTE: The method convert_col_type_with_to_numeric now handles the original intention of this function.
           However, this function is kept as it still may be useful in the future.
@@ -497,12 +556,12 @@ def change_empty_entries_in_col_and_convert_to_type(
 
 #--------------------------------------------------
 def convert_col_type(
-        df                ,  
-        column            , 
-        to_type           , 
-        to_numeric_errors = 'coerce', 
-        inplace           = True
-    ):
+    df                ,  
+    column            , 
+    to_type           , 
+    to_numeric_errors = 'coerce', 
+    inplace           = True
+):
     r"""
     Convert the type of column in df to to_type
     If:
@@ -557,9 +616,9 @@ def convert_col_type(
     elif isinstance(to_type, dict):
         df = change_empty_entries_in_col_and_convert_to_type(
             df=df, 
-            column=col_i, 
+            column=column, 
             inplace=True, 
-            **type_i
+            **to_type
         )
     else:
         df = convert_col_type_with_astype(
@@ -571,7 +630,12 @@ def convert_col_type(
     return df
 
 #--------------------------------------------------
-def convert_col_types(df, cols_and_types_dict, to_numeric_errors='coerce', inplace=True):
+def convert_col_types(
+    df                  , 
+    cols_and_types_dict , 
+    to_numeric_errors   = 'coerce', 
+    inplace             = True
+):
     r"""
     Documentation
     """
@@ -636,8 +700,123 @@ def ensure_dt_cols(
     return df
 
 #----------------------------------------------------------------------------------------------------
+def build_range_from_doi_left_right(
+    df                 , 
+    doi_col            ,
+    td_left            ,
+    td_right           , 
+    placement_cols     = ['t_search_min', 't_search_max'], 
+    doi_col_left       = None, 
+    doi_col_right      = None, 
+    assert_makes_sense = True , 
+):
+    r"""
+    Build a range of interest from a date of interest and left/right TimeDeltas.
+    -----
+    Using min/max terminology was getting a bit confusing, as the time deltas can be positive or negative.
+    Here, the range of interest is built around the date of interest (doi).  td_left defines the TimeDelta to be used
+      to build the left limit of the range and the td_right to be used for the right limit.
+    The resulting date range must make sense, such that the left limit is smaller than the right.
+    -----
+    doi_col:
+        The column housing the dates of interest, with respect to the range of interest will be built.
+        This should probably be a datetime.datetime, datetime.date, timestamp, etc.
+        All that really matters is that the operations doi + td_left/td_right make sense.
+
+        doi_col_left and doi_col_right can be used if one wants the left and right endpoints to be generated with
+          respect to different dates of interest.
+        This could be the case, e.g., if one wants to look at period preceding the beginning of an outage (doi_col_left=DT_OFF_TS_FULL)
+          and following the restoration of power (doi_col_right=DT_ON_TS)
+
+    td_left:
+        The time delta used to build the left limit of the range.
+        This should be a Timedelta object with appropriate sign (+-).
+        This can either be a single value to be used for the entire DF, or it can be a column in the DF (for specific values)
+
+    td_right:
+        The time delta used to build the right limit of the range.
+        This should be a Timedelta object with appropriate sign (+-).
+        This can either be a single value to be used for the entire DF, or it can be a column in the DF (for specific values)
+    -----
+    Examples:
+        For typical use with the Outage Prediction Model, we collect data 1 to 31 days leading up to the outage event.
+        In such a case:
+            td_left  = pd.Timedelta('-31days')
+            td_right = pd.Timedelta('-1day')
+
+        If, for whatever reason, one wanted to look at the 1 to 31 days following an outage event, one would have 
+            td_left  = pd.Timedelta('1day')
+            td_right = pd.Timedelta('31days')
+    """
+    #--------------------------------------------------
+    assert(isinstance(placement_cols, list) and len(placement_cols)==2)
+    #--------------------------------------------------
+    if doi_col_left is None:
+        doi_col_left = doi_col
+    #-----
+    if doi_col_right is None:
+        doi_col_right = doi_col
+    #-------------------------
+    assert(set([doi_col_left, doi_col_right]).difference(set(df.columns.tolist()))==set())
+    #-------------------------
+    if not is_datetime64_dtype(df[doi_col_left]):
+        df[doi_col_left] = pd.to_datetime(df[doi_col_left])
+    #-----
+    if not is_datetime64_dtype(df[doi_col_right]):
+        df[doi_col_right] = pd.to_datetime(df[doi_col_right])
+    #--------------------------------------------------
+    tds_in_df = False
+    if(
+        td_left  in df.columns.tolist() or 
+        td_right in df.columns.tolist()
+    ):
+        assert(
+            td_left  in df.columns.tolist() and 
+            td_right in df.columns.tolist()
+        )
+        tds_in_df = True
+    #-------------------------
+    if tds_in_df:
+        if not is_timedelta64_dtype(df[td_left]):
+            df[td_left] = pd.to_timedelta(df[td_left])
+        #-----
+        if not is_timedelta64_dtype(df[td_right]):
+            df[td_right] = pd.to_timedelta(df[td_right])
+    else:
+        if not Utilities.is_timedelta(td_left):
+            td_left = pd.to_timedelta(td_left)
+        #-----
+        if not Utilities.is_timedelta(td_right):
+            td_right = pd.to_timedelta(td_right)
+    #--------------------------------------------------
+    if assert_makes_sense:
+        assert((df[doi_col_left] <= df[doi_col_right]).all())
+        if tds_in_df:
+            assert((df[td_left] <= df[td_right]).all())
+        else:
+            assert(td_left <= td_right)
+    #--------------------------------------------------
+    if tds_in_df:
+        df[placement_cols[0]] = df[doi_col_left]  + df[td_left]
+        df[placement_cols[1]] = df[doi_col_right] + df[td_right]
+    else:
+        df[placement_cols[0]] = df[doi_col_left]  + td_left
+        df[placement_cols[1]] = df[doi_col_right] + td_right
+    #--------------------------------------------------
+    if assert_makes_sense:
+        assert((df[placement_cols[0]] <= df[placement_cols[1]]).all())
+    #--------------------------------------------------
+    return df
+
+
 #----------------------------------------------------------------------------------------------------
-def prepend_level_to_MultiIndex(df, level_val, level_name=None, axis=0):
+#----------------------------------------------------------------------------------------------------
+def prepend_level_to_MultiIndex(
+    df, 
+    level_val, 
+    level_name=None, 
+    axis=0
+):
     r"""
     Prepend a level to a MultiIndex; i.e., add a new lowest level.
     axis=0:
@@ -674,7 +853,10 @@ def prepend_levels_to_MultiIndex(
     return df
 
 #--------------------------------------------------
-def flatten_multiindex_index(df, inplace=True):
+def flatten_multiindex_index(
+    df, 
+    inplace=True
+):
     # This basically just calls reset_index on all levels of df except for the 0th level
     # The motivation for this development was for use after creating an aggregate df with 
     #   df.groupby(...).agg(...)
@@ -697,7 +879,12 @@ def flatten_multiindex_index(df, inplace=True):
     return df
 
 #--------------------------------------------------
-def get_flattened_multiindex_columns(df_columns, join_str = ' ', reverse_order=True, to_ignore=['first']):
+def get_flattened_multiindex_columns(
+    df_columns, 
+    join_str = ' ', 
+    reverse_order=True, 
+    to_ignore=['first']
+):
     # The level=0 value is always kept, as this is typically e.g. the measurement
     # For all other levels, if any element in to_ignore is found, that level is ignored
     #   e.g., col_1 = ('prem_nb',  'first_mtrs',  'first_TRS') and to_ignore=['first']
@@ -725,12 +912,12 @@ def get_flattened_multiindex_columns(df_columns, join_str = ' ', reverse_order=T
 
 #--------------------------------------------------
 def flatten_multiindex_columns(
-        df            , 
-        join_str      = ' ', 
-        reverse_order = True, 
-        to_ignore     = ['first'], 
-        inplace       = True
-    ):
+    df            , 
+    join_str      = ' ', 
+    reverse_order = True, 
+    to_ignore     = ['first'], 
+    inplace       = True
+):
     # The level=0 value is always kept, as this is typically e.g. the measurement
     # For all other levels, if any element in to_ignore is found, that level is ignored
     #   e.g., col_1 = ('prem_nb',  'first_mtrs',  'first_TRS') and to_ignore=['first']
@@ -759,8 +946,14 @@ def flatten_multiindex_columns(
     return df
 
 #--------------------------------------------------
-def flatten_multiindex(df, flatten_index=False, flatten_columns=False, inplace=True, 
-                       index_args={}, column_args={}):
+def flatten_multiindex(
+    df, 
+    flatten_index=False, 
+    flatten_columns=False, 
+    inplace=True, 
+    index_args={}, 
+    column_args={}
+):
     # column_args can be any arguments in flatten_multiindex_columns except for df and inplace (as those are handled explicitly)
     # Same goes for index_args an flatten_multiindex_index
     # e.g.
@@ -829,7 +1022,12 @@ def change_idx_names_andor_order(
     
   
 #----------------------------------------------------------------------------------------------------
-def find_idxs_in_highest_order_of_columns(df, col, exact_match=True, assert_single=False):
+def find_idxs_in_highest_order_of_columns(
+    df, 
+    col, 
+    exact_match=True, 
+    assert_single=False
+):
     r"""
     Find where col occurs in highest order of MultiIndex columns
     This will work with normal columns as well
@@ -846,7 +1044,10 @@ def find_idxs_in_highest_order_of_columns(df, col, exact_match=True, assert_sing
         return tagged_idxs
     
 #--------------------------------------------------
-def find_single_col_in_multiindex_cols(df, col):
+def find_single_col_in_multiindex_cols(
+    df, 
+    col
+):
     r"""
     Find where col occurs in highest order of MultiIndex columns, assert only one instance
       and return the full column (instead of index, as is done in find_idxs_in_highest_order_of_columns).
@@ -900,9 +1101,9 @@ def find_col_idxs_with_regex(
 
 #--------------------------------------------------
 def find_cols_with_regex(
-    df, 
-    regex_pattern, 
-    ignore_case=False
+    df            , 
+    regex_pattern , 
+    ignore_case   = False
 ):
     r"""
     Identify columns using the regular expression regex_pattern.
@@ -917,6 +1118,30 @@ def find_cols_with_regex(
         ignore_case   = ignore_case
     )
     return df.columns[found_idxs].tolist()
+
+
+#--------------------------------------------------
+def drop_unnamed_columns(
+    df            , 
+    regex_pattern = r'Unnamed.*', 
+    ignore_case   = True, 
+    inplace       = True, 
+):
+    r"""
+    Sometimes when reading in DF from csv, columns such as 'Unnamed: 0' are included to house the index.
+    Purpose of this function is to drop such columns
+    """
+    #-------------------------
+    unnamed_cols = find_cols_with_regex(
+        df            = df, 
+        regex_pattern = regex_pattern, 
+        ignore_case   = ignore_case
+    )
+    if len(unnamed_cols)>0:
+        if not inplace:
+            df = df.copy()
+        df = df.drop(columns = unnamed_cols)
+    return df
     
 
 #--------------------------------------------------
@@ -1149,7 +1374,11 @@ def get_idfr_loc(
     return (idfr_idx_lvl, True) 
 
 #--------------------------------------------------    
-def get_vals_from_df(df, idfr, unique=False):
+def get_vals_from_df(
+    df, 
+    idfr, 
+    unique=False
+):
     r"""
     Extract the values from a df.
       
@@ -1277,6 +1506,8 @@ def is_df_index_simple(
     r"""
     A simple index is single-leveled with values between 0 and df.shape[0]-1 AND no repeat indices
     If assert_normal==True, then index must be 0, 1, 2, 3, ..., df.shape[0]-2, df.shape[0]-1 or else False will be returned
+
+    SEE is_df_index_simple_v2, I think I like it better
     """
     #-------------------------
     if df.index.nlevels>1:
@@ -1292,6 +1523,25 @@ def is_df_index_simple(
         return False
     #-------------------------
     return True
+
+
+#-------------------------
+def is_df_index_simple_v2(
+    df
+):
+    r"""
+    A simple index is single-leveled with increasing integer values
+    This is different from is_df_index_simple in that this allows the index to start at non-zero values,
+      whereas in is_df_index_simple the first index must be zero!
+    """
+    #-------------------------
+    if df.index.nlevels>1:
+        return False
+    #-------------------------
+    if not is_numeric_dtype(df.index):
+        return False
+    #-------------------------
+    return pd.Index(range(df.index[0], df.index[0]+df.shape[0])).equals(df.index)
 
 #--------------------------------------------------    
 def merge_dfs(
@@ -1356,8 +1606,7 @@ def merge_dfs(
         inplace                 = True, 
         return_reset_idx_called = True
     )
-    if reset_idx_called_1:
-        idx_names_1 = [find_single_col_in_multiindex_cols(df=df_1, col=x) for x in idx_names_1]
+
     #-----
     df_2, merge_on_2, reset_idx_called_2 = prep_df_for_merge(
         df       = df_2, 
@@ -1365,8 +1614,22 @@ def merge_dfs(
         inplace  = True, 
         return_reset_idx_called=True
     )
+
+    #--------------------------------------------------
+    # When two pd.DataFrames are merged, apparently the indices are lost.
+    # So, if one has final_index set to, e.g., '1', this will only work if reset_idx_called_1 was called!
+    if (final_index==1 or final_index=='1') and not reset_idx_called_1:
+        df_1               = df_1.reset_index(drop=False)
+        reset_idx_called_1 = True
+    if (final_index==2 or final_index=='2') and not reset_idx_called_2:
+        df_2               = df_2.reset_index(drop=False)
+        reset_idx_called_2 = True
+
+    #--------------------------------------------------
+    if reset_idx_called_1:
+        idx_names_1 = [find_single_col_in_multiindex_cols(df=df_1, col=x) for x in idx_names_1]
     if reset_idx_called_2:
-        idx_names_2 = [find_single_col_in_multiindex_cols(df=df_2, col=x) for x in idx_names_2]    
+        idx_names_2 = [find_single_col_in_multiindex_cols(df=df_2, col=x) for x in idx_names_2]  
 
     #----------------------------------------------------------------------------------------------------
     # Prep the dfs (2)
@@ -1494,6 +1757,39 @@ def merge_dfs(
     
     #----------------------------------------------------------------------------------------------------
     return return_df
+
+
+#----------------------------------------------------------------------------------------------------
+def merge_list_of_dfs(
+    dfs         , 
+    how         = 'inner', 
+    on          = None, 
+    left_on     = None, 
+    right_on    = None, 
+    left_index  = False, 
+    right_index = False
+):
+    r"""
+    """
+    #--------------------------------------------------
+    assert(Utilities.is_object_one_of_types(dfs, [list, tuple]))
+    assert(Utilities.are_all_list_elements_of_type(lst=dfs, typ=pd.DataFrame))
+    #-------------------------
+    merged_df = reduce(
+        lambda left, right: pd.merge(
+            left, 
+            right, 
+            how         = how, 
+            on          = on, 
+            left_on     = left_on, 
+            right_on    = right_on, 
+            left_index  = left_index, 
+            right_index = right_index, 
+        ), 
+        dfs
+    )
+    #-------------------------
+    return merged_df
     
     
 #----------------------------------------------------------------------------------------------------
@@ -1520,6 +1816,9 @@ def concat_dfs(
         x for x in dfs 
         if x is not None and x.shape[0]>0
     ]
+    #-------------------------
+    if len(dfs_to_concat)==1:
+        return dfs_to_concat[0]
     #-------------------------
     if make_col_types_equal:
         # I don't think this necessarily guarantees all will have the same dtypes,
@@ -1549,13 +1848,11 @@ def concat_dfs(
 
 
 #----------------------------------------------------------------------------------------------------
-def concat_dfs_in_dir(
+def get_df_files_in_dir(
     dir_path             , 
     regex_pattern        = None, 
     ignore_case          = False, 
     ext                  = '.pkl', 
-    make_col_types_equal = False, 
-    return_paths         = False
 ):
     r"""
     """
@@ -1584,13 +1881,48 @@ def concat_dfs_in_dir(
             ignore_case   = ignore_case    
         )
         assert(len(files_in_dir) > 0)
+    #-------------------------
+    return files_in_dir
+
+#----------------------------------------------------------------------------------------------------
+def concat_dfs_in_dir(
+    dir_path             , 
+    regex_pattern        = None, 
+    ignore_case          = False, 
+    ext                  = '.pkl', 
+    make_col_types_equal = False, 
+    index_col            = None, 
+    return_paths         = False
+):
+    r"""
+    index_col:
+        Only has effect if ext==.csv (i.e., obviously, no effect on pickle file)
+    """
+    #--------------------------------------------------
+    files_in_dir = get_df_files_in_dir(
+        dir_path             = dir_path, 
+        regex_pattern        = regex_pattern, 
+        ignore_case          = ignore_case, 
+        ext                  = ext, 
+    )
     #--------------------------------------------------
     dfs = []
     for path_i in files_in_dir:
         if ext=='.pkl':
             df_i = pd.read_pickle(path_i)
+            #-----
+            if df_i is None or df_i.shape[0]==0:
+                continue
         elif ext=='.csv':
+            # NOTE: Using index_col if csv at path_i is empty will throw an error.
+            #       Hence the need to split out into steps instead of simply feeding index_col to read_csv
             df_i = pd.read_csv(path_i)
+            #-----
+            if df_i is None or df_i.shape[0]==0:
+                continue
+            #-----
+            if index_col in df_i.columns.tolist() or set(index_col).difference(set(df_i.columns.tolist()))==set():
+                df_i = df_i.set_index(index_col)
         else:
             assert(0)
         #-------------------------
@@ -2221,7 +2553,11 @@ def determine_freq_in_df_col(
     
     
 #----------------------------------------------------------------------------------------------------
-def build_avgs_series(df, cols_of_interest=None, avg_type='normal'):
+def build_avgs_series(
+    df, 
+    cols_of_interest=None, 
+    avg_type='normal'
+):
     # Intended for use on nrc_df from a single NISTResultContainer
     assert(avg_type=='normal' or avg_type=='trim')
     if cols_of_interest is None:
@@ -2238,7 +2574,12 @@ def build_avgs_series(df, cols_of_interest=None, avg_type='normal'):
     return None
 
 #--------------------------------------------------
-def build_avgs_df(agg_df, groupby_col, cols_of_interest=None, avg_type='normal'):
+def build_avgs_df(
+    agg_df, 
+    groupby_col, 
+    cols_of_interest=None, 
+    avg_type='normal'
+):
     # Intended for use on a aggregate of nrc_dfs from multiple NISTResultContainers
     assert(avg_type=='normal' or avg_type=='trim')
     if cols_of_interest is None:
@@ -2256,8 +2597,11 @@ def build_avgs_df(agg_df, groupby_col, cols_of_interest=None, avg_type='normal')
     return avgs_df
 
 #----------------------------------------------------------------------------------------------------
-def get_default_sort_by_cols_for_comparison(full_default_sort_by_for_comparison, 
-                                            df_1=None, df_2=None):
+def get_default_sort_by_cols_for_comparison(
+    full_default_sort_by_for_comparison, 
+    df_1=None, 
+    df_2=None
+):
     if df_1 is None and df_2 is None:
         return full_default_sort_by_for_comparison
     #-------------------------
@@ -2443,7 +2787,13 @@ def do_dfs_overlap(
 
 
 #----------------------------------------------------------------------------------------------------
-def simple_sort_df(df, sort_by, ignore_index=True, inplace=False, use_natsort=True):
+def simple_sort_df(
+    df, 
+    sort_by, 
+    ignore_index=True, 
+    inplace=False, 
+    use_natsort=True
+):
     # If df's index is named:
     #   one can include the index in the sorting simply by including
     #     the index name in sort_by.
@@ -2477,7 +2827,7 @@ def simple_sort_df(df, sort_by, ignore_index=True, inplace=False, use_natsort=Tr
         # match any of the column names already present in df
         tmp_idx_col_for_srt = None
         while tmp_idx_col_for_srt is None:
-            rndm_str = generate_random_string()
+            rndm_str = Utilities.generate_random_string()
             if rndm_str not in df.columns:
                 tmp_idx_col_for_srt = rndm_str
         #-----
@@ -2497,7 +2847,12 @@ def simple_sort_df(df, sort_by, ignore_index=True, inplace=False, use_natsort=Tr
         df.drop(columns=[tmp_idx_col_for_srt], inplace=True)
     return df    
     
-def are_sorted_dfs_equal(df1, df2, sort_by, cols_to_compare=None):
+def are_sorted_dfs_equal(
+    df1             , 
+    df2             , 
+    sort_by         , 
+    cols_to_compare = None
+):
     # Just as in simple_sort_dfs...
     #   If df's index is named:
     #     one can include the index in the sorting simply by including
@@ -2522,12 +2877,18 @@ def are_sorted_dfs_equal(df1, df2, sort_by, cols_to_compare=None):
     return result
     
 #----------------------------------------------------------------------------------------------------
-def assert_dfs_equal(df1, df2):
+def assert_dfs_equal(
+    df1, 
+    df2
+):
     assert_frame_equal(df1, df2) #from pandas.util.testing
 
 #--------------------------------------------------
 #TODO get_dfs_diff methods don't work with MultiIndex (indices or columns, probably)
-def get_dfs_diff(df1, df2):
+def get_dfs_diff(
+    df1, 
+    df2
+):
     #df1 and df2 must be identically labelled!
     #  i.e. must have same shape, indices, and columns!
     
@@ -2565,7 +2926,11 @@ def get_dfs_diff(df1, df2):
     return diff_df
     
 #--------------------------------------------------    
-def get_dfs_diff_WEIRD(df1, df2, stack_level=-1):
+def get_dfs_diff_WEIRD(
+    df1, 
+    df2, 
+    stack_level=-1
+):
     # LOOK INTO THIS!!!!!
     #
     #
@@ -2612,7 +2977,12 @@ def get_dfs_diff_WEIRD(df1, df2, stack_level=-1):
     return diff_df
     
 #--------------------------------------------------    
-def get_dfs_diff_approx_ok_OLD(df_1, df_2, precision=0.00001, cols_to_compare=None):
+def get_dfs_diff_approx_ok_OLD(
+    df_1, 
+    df_2, 
+    precision=0.00001, 
+    cols_to_compare=None
+):
     # WARNING: for large dfs this can take a decent amount of time.
     # Get the difference between two DataFrames, 
     # but if values are approximately equal (as decided by precision)
@@ -2665,7 +3035,13 @@ def get_dfs_diff_approx_ok_OLD(df_1, df_2, precision=0.00001, cols_to_compare=No
     return diff_df
 
 #--------------------------------------------------    
-def get_dfs_diff_approx_ok_numeric(df_1, df_2, precision=0.00001, cols_to_compare=None, sort_by=None):
+def get_dfs_diff_approx_ok_numeric(
+    df_1, 
+    df_2, 
+    precision=0.00001, 
+    cols_to_compare=None, 
+    sort_by=None
+):
     # Get the difference between two DataFrames, 
     # but if values are approximately equal (as decided by precision)
     # then the values are considered equal
@@ -2701,7 +3077,15 @@ def get_dfs_diff_approx_ok_numeric(df_1, df_2, precision=0.00001, cols_to_compar
 
 #--------------------------------------------------
 #TODO probably use get_shared_columns
-def get_dfs_diff_approx_ok(df_1, df_2, precision=0.00001, cols_to_compare=None, sort_by=None, return_df_only=False, inplace=False):
+def get_dfs_diff_approx_ok(
+    df_1, 
+    df_2, 
+    precision=0.00001, 
+    cols_to_compare=None, 
+    sort_by=None, 
+    return_df_only=False, 
+    inplace=False
+):
     # Get the difference between two DataFrames, 
     # but if values are approximately equal (as decided by precision)
     # then the values are considered equal
@@ -2763,7 +3147,14 @@ def get_dfs_diff_approx_ok(df_1, df_2, precision=0.00001, cols_to_compare=None, 
     
 
 #--------------------------------------------------    
-def get_dfs_diff_approx_ok_WEIRD(df_1, df_2, precision=0.00001, cols_to_compare=None, sort_by=None, stack_level=-1):
+def get_dfs_diff_approx_ok_WEIRD(
+    df_1, 
+    df_2, 
+    precision=0.00001, 
+    cols_to_compare=None, 
+    sort_by=None, 
+    stack_level=-1
+):
     # TODO ELIMINATE THIS ONCE get_dfs_diff_WEIRD is resolved
     #
     #
@@ -2803,7 +3194,10 @@ def get_dfs_diff_approx_ok_WEIRD(df_1, df_2, precision=0.00001, cols_to_compare=
     return diff_df
     
 #--------------------------------------------------
-def get_nan_rows_and_columns(df, metrics_of_interest):
+def get_nan_rows_and_columns(
+    df, 
+    metrics_of_interest
+):
     # returns a list of dicts 
     #   where each dict has keys   = 'index' (row index in df)
     #                       values = 'metrics' (list of nan metrics)
@@ -2822,7 +3216,10 @@ def get_nan_rows_and_columns(df, metrics_of_interest):
     return nans_info
 
 #--------------------------------------------------
-def print_nan_rows_and_columns(df, metrics_of_interest):
+def print_nan_rows_and_columns(
+    df, 
+    metrics_of_interest
+):
     nans_info = get_nan_rows_and_columns(df, metrics_of_interest)
     for nan_row in nans_info:
         print('-'*50)
@@ -2834,7 +3231,11 @@ def print_nan_rows_and_columns(df, metrics_of_interest):
         print()
         
 #----------------------------------------------------------------------------------------------------
-def w_avg_df_col(df, w_col, x_col):
+def w_avg_df_col(
+    df, 
+    w_col, 
+    x_col
+):
     r"""
     Compute weighted average of x_col weighted by values in w_col
     NOTE: Parentheses are important here.  Without them, df[x_col] returned trivially
@@ -2848,7 +3249,12 @@ def w_avg_df_col(df, w_col, x_col):
     return (df[x_col]*df[w_col]).sum()/df[w_col].sum()
 
 #--------------------------------------------------
-def w_avg_df_cols(df, w_col, x_cols=None, include_sum_of_weights=True):
+def w_avg_df_cols(
+    df, 
+    w_col, 
+    x_cols=None, 
+    include_sum_of_weights=True
+):
     r"""
     Returns a series.
     Compute weighted average of x_cols (multiple columns) weighted by values in w_col.
@@ -2872,7 +3278,12 @@ def w_avg_df_cols(df, w_col, x_cols=None, include_sum_of_weights=True):
     return return_series
 
 #--------------------------------------------------
-def w_sum_df_cols(df, w_col, x_cols=None, include_sum_of_weights=True):
+def w_sum_df_cols(
+    df, 
+    w_col, 
+    x_cols=None, 
+    include_sum_of_weights=True
+):
     r"""
     Returns a series.
     Compute weighted sum of x_cols (multiple columns) weighted by values in w_col.
@@ -2898,8 +3309,10 @@ def w_sum_df_cols(df, w_col, x_cols=None, include_sum_of_weights=True):
 #--------------------------------------------------    
 def sum_and_weighted_average_of_df_cols(
     df, 
-    sum_x_cols, sum_w_col, 
-    wght_x_cols, wght_w_col, 
+    sum_x_cols, 
+    sum_w_col, 
+    wght_x_cols, 
+    wght_w_col, 
     include_sum_of_weights=True
 ):
     r"""
@@ -2971,8 +3384,10 @@ def sum_and_weighted_average_of_df_cols(
 #--------------------------------------------------
 def sum_and_weighted_sum_of_df_cols(
     df, 
-    sum_x_cols, sum_w_col, 
-    wght_x_cols, wght_w_col, 
+    sum_x_cols, 
+    sum_w_col, 
+    wght_x_cols, 
+    wght_w_col, 
     include_sum_of_weights=True
 ):
     r"""
@@ -3051,7 +3466,14 @@ def sum_and_weighted_sum_of_df_cols(
     
 
 #----------------------------------------------------------------------------------------------------
-def consolidate_column_of_lists(df, col, sort=False, include_None=True, batch_size=None, verbose=False):
+def consolidate_column_of_lists(
+    df, 
+    col, 
+    sort=False, 
+    include_None=True, 
+    batch_size=None, 
+    verbose=False
+):
     r"""
     Purpose is to reduce the serial numbers column (typically '_SNs') down to the unique SNs.
     Each element in the serial numbers column contains a list of SNs.
@@ -3454,7 +3876,7 @@ def read_consolidated_df_from_csv(
         df.index.name='idx'
     #-------------------------
     if convert_cols_and_types_dict is not None:
-        df = Utilities_df.convert_col_types(
+        df = convert_col_types(
             df=df, 
             cols_and_types_dict=convert_cols_and_types_dict, 
             to_numeric_errors=to_numeric_errors, 
@@ -3469,8 +3891,8 @@ def read_consolidated_df_from_csv(
 def consolidate_df(
     df                                  , 
     groupby_cols                        , 
-    cols_shared_by_group                , 
-    cols_to_collect_in_lists            , 
+    cols_shared_by_group                = None, 
+    cols_to_collect_in_lists            = None, 
     cols_to_drop                        = None, 
     as_index                            = True, 
     include_groupby_cols_in_output_cols = False, 
@@ -4404,7 +4826,10 @@ def consolidate_df_according_to_fuzzy_overlap_intervals(
 
 
 #----------------------------------------------------------------------------------------------------
-def are_all_series_elements_one_of_types(srs, types):
+def are_all_series_elements_one_of_types(
+    srs, 
+    types
+):
     r"""
     Checks if all list elements are one of the types listed in types.
     NOTE: This will return True even when there are multiple types of elements in srs, so long
@@ -4420,9 +4845,12 @@ def are_all_series_elements_one_of_types(srs, types):
     return all(bool_mask)
 
 #--------------------------------------------------
-def are_all_series_elements_one_of_types_and_homogeneous(lst, types):
+def are_all_series_elements_one_of_types_and_homogeneous(
+    srs, 
+    types
+):
     r"""
-    Checks if all elements in lst are of a single type, and that single type is one of those found in types.
+    Checks if all elements in srs are of a single type, and that single type is one of those found in types.
     """
     for typ in types:
         bool_mask = (srs.apply(type)==typ)
@@ -4431,7 +4859,9 @@ def are_all_series_elements_one_of_types_and_homogeneous(lst, types):
     return False
 
 #--------------------------------------------------
-def get_list_elements_mask_for_series(srs):
+def get_list_elements_mask_for_series(
+    srs
+):
     r"""
     Returns a series (mask) with boolean values identifying which elements are lists.
     Note, as columns are DFs are simply series, this function applies for those as well (e.g., one may pass srs = df[col])
@@ -4517,8 +4947,12 @@ def train_test_split_df_group(
 
 #----------------------------------------------------------------------------------------------------
 #---------------------------------------------------------------------
-def set_kit_ids(df, col_for_extraction, 
-                col_for_placement='kit_id', gold_standard='S002'):
+def set_kit_ids(
+    df, 
+    col_for_extraction, 
+    col_for_placement='kit_id', 
+    gold_standard='S002'
+):
     # col_for_extraction is which column to be used to extract the kit id.
     #   This should typically be the nist or spca xml path
     # col_for_placement will be the new column created housing the kit id
@@ -4526,9 +4960,12 @@ def set_kit_ids(df, col_for_extraction,
     return df
 
 #--------------------------------------------------
-def set_kit_ids_parent_ids_dates(df, col_for_extraction, 
-                                 cols_for_placement=['kit_id', 'parent_kit_id', 'date'], 
-                                 gold_standard='S002'):
+def set_kit_ids_parent_ids_dates(
+    df, 
+    col_for_extraction, 
+    cols_for_placement=['kit_id', 'parent_kit_id', 'date'], 
+    gold_standard='S002'
+):
     # see set_kit_ids for info
     assert(len(cols_for_placement)==3)
     df[cols_for_placement[0]], df[cols_for_placement[1]], df[cols_for_placement[2]] = zip(*df[col_for_extraction].apply(lambda x: Utilities.get_kit_id(x, gold_standard=gold_standard)))

@@ -173,6 +173,7 @@ class AMIEndEvents_SQL(AMI_SQL):
         max_n_prem_per_outg        = None, 
         join_mp_args               = False, 
         date_only                  = False, 
+        output_t_minmax            = False, 
         df_args                    = {}
     ):
         r"""
@@ -208,6 +209,7 @@ class AMIEndEvents_SQL(AMI_SQL):
             max_n_prem_per_outg        = max_n_prem_per_outg, 
             join_mp_args               = join_mp_args, 
             date_only                  = date_only, 
+            output_t_minmax            = output_t_minmax, 
             df_args                    = df_args
         )
         
@@ -229,6 +231,7 @@ class AMIEndEvents_SQL(AMI_SQL):
         max_n_prem_per_outg       = None, 
         join_mp_args              = False, 
         date_only                 = False, 
+        output_t_minmax           = False, 
         df_args                   = {}
     ):
         return AMIEndEvents_SQL.build_sql_end_events_for_df_with_search_time_window(
@@ -240,6 +243,7 @@ class AMIEndEvents_SQL(AMI_SQL):
             max_n_prem_per_outg        = max_n_prem_per_outg, 
             join_mp_args               = join_mp_args, 
             date_only                  = date_only, 
+            output_t_minmax            = output_t_minmax, 
             df_args                    = df_args
         )
    
@@ -255,6 +259,7 @@ class AMIEndEvents_SQL(AMI_SQL):
         max_n_prem_per_outg       = None, 
         join_mp_args              = False, 
         date_only                 = False,
+        output_t_minmax           = False, 
         df_args                   = {}
     ):
         r"""
@@ -278,6 +283,7 @@ class AMIEndEvents_SQL(AMI_SQL):
             max_n_prem_per_outg        = max_n_prem_per_outg, 
             join_mp_args               = join_mp_args, 
             date_only                  = date_only, 
+            output_t_minmax            = output_t_minmax, 
             df_args                    = df_args
         )
         

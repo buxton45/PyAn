@@ -73,6 +73,7 @@ class MECPODf:
         return AMIEndEvents.std_nSNs_cols()
 
     #****************************************************************************************************
+    # MOVED TO CPXDf
     @staticmethod
     def project_level_0_columns_from_rcpo_wide(rcpo_df_wide, level_0_val, droplevel=False):
         r"""
@@ -683,7 +684,7 @@ class MECPODf:
         #-------------------------
         return rcpo_df
         
-        
+    # MOVED TO CPXDfBuilder    
     @staticmethod
     def remove_SNs_cols_from_rcpo_df(
         rcpo_df, 
@@ -719,7 +720,8 @@ class MECPODf:
         cols_to_keep = rcpo_df.columns[untagged_idxs]
         #-------------------------
         return rcpo_df[cols_to_keep]
-     
+
+    # MOVED TO CPXDf 
     @staticmethod
     def find_SNs_cols_idxs_from_cpo_df(
         cpo_df, 
@@ -761,7 +763,8 @@ class MECPODf:
             tags=SNs_tags)
         #-------------------------
         return tagged_idxs
-        
+
+    # MOVED TO CPXDf
     @staticmethod
     def get_non_SNs_cols_from_cpo_df(
         cpo_df, 
@@ -1529,7 +1532,8 @@ class MECPODf:
         icpo_df.columns.name=return_columns_name
         #-------------------------
         return icpo_df
-        
+
+    # MOVED TO CPXDf
     @staticmethod    
     def combine_cpo_df_reasons_explicit(
         rcpo_df, 
@@ -1703,6 +1707,7 @@ class MECPODf:
         #-------------------------
         return rcpo_df
     
+    # MOVED TO CPXDf
     @staticmethod
     def combine_degenerate_columns(
         rcpo_df
@@ -1734,7 +1739,7 @@ class MECPODf:
         #-------------------------
         return rcpo_df
     
-        
+    # MOVED TO CPXDf    
     @staticmethod
     def combine_cpo_df_reasons(
         rcpo_df, 
@@ -1959,7 +1964,7 @@ class MECPODf:
         #-------------------------
         return rcpo_df
         
-        
+    # MOVED TO CPXDf    
     @staticmethod    
     def remove_reasons_explicit_from_rcpo_df(
         rcpo_df, 
@@ -1984,7 +1989,7 @@ class MECPODf:
         rcpo_df = rcpo_df.drop(columns=reasons_to_remove)
         return rcpo_df
         
-        
+    # MOVED TO CPXDf    
     @staticmethod
     def remove_reasons_from_rcpo_df(
         rcpo_df, 
@@ -2016,7 +2021,7 @@ class MECPODf:
         return rcpo_df
 
         
-        
+    # Moved to CPXDf
     @staticmethod
     def delta_cpo_df_reasons(
         rcpo_df, 
@@ -2159,7 +2164,7 @@ class MECPODf:
         #-------------------------
         return rcpo_df
         
-        
+    # MOVED TO CPXDfBuilder
     @staticmethod  
     def normalize_rcpo_df_by_time_interval(
         rcpo_df, 
@@ -2206,7 +2211,8 @@ class MECPODf:
         rcpo_df[cols_to_adjust] = rcpo_df[cols_to_adjust]/window_widths_days
         #-------------------------
         return rcpo_df
-        
+
+    # MOVED TO CPXDf    
     @staticmethod
     def get_total_event_counts(
         cpo_df, 
@@ -2409,7 +2415,8 @@ class MECPODf:
         cpo_df = cpo_df.drop(columns=cols_to_drop)
         #-------------------------
         return cpo_df
-        
+
+    # MOVED TO CPXDf       
     @staticmethod
     def get_top_reasons_subset_from_cpo_df(
         cpo_df, 
@@ -2567,6 +2574,7 @@ class MECPODf:
 
     # TODO: SHOULD be able to use get_reasons_subset_from_cpo_df in get_top_reasons_subset_from_cpo_df
     #       However, I don't really trust either all that much at this point, both need cleaned
+    # MOVED TO CPXDf
     @staticmethod
     def get_reasons_subset_from_cpo_df(
         cpo_df                       , 

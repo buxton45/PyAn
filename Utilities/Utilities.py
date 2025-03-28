@@ -290,6 +290,26 @@ def copyanything(src, dst):
         else: raise
 
 #--------------------------------------------------------------------
+def general_copy(
+    attr
+):
+    r"""
+    """
+    #-------------------------
+    if attr is None:
+        return None
+    #-------------------------
+    # pd.DataFrame, pd.Series, and others have their own, built-in, .copy methods
+    try:
+        cpy = attr.copy()
+        return cpy
+    except:
+        pass
+    #-------------------------
+    cpy = copy.deepcopy(attr)
+    return cpy
+
+#--------------------------------------------------------------------
 def is_hashable(input_obj):
     r"""
     Returns true of input_obj is hashable, else False
@@ -323,6 +343,25 @@ def join_list_w_quotes(
         quotes_needed = True, 
         join_str      = join_str
     )
+
+#--------------------------------------------------------------------
+def print_dict_align_keys(
+    dct        , 
+    left_align = True
+):
+    r"""
+    """
+    #--------------------------------------------------
+    assert(isinstance(dct, dict))
+    width = np.max([len(x) for x in dct.keys()])
+    #-------------------------
+    if left_align:
+        txt = "{{:<{}}} : {{}}".format(width)
+    else:
+        txt = "{{:>{}}} : {{}}".format(width)
+    #-------------------------
+    for k,v in dct.items():
+        print(txt.format(k,v))
 
 #--------------------------------------------------------------------
 def are_all_list_elements_of_type(lst, typ):
@@ -365,7 +404,7 @@ def are_all_list_elements_one_of_types_and_homogeneous(lst, types):
             return True
     return False
 
-def is_object_one_of_types(obj, types):
+def is_object_one_of_types(obj, types): 
     return are_all_list_elements_one_of_types([obj], types)
     
 def are_list_elements_lengths_homogeneous(lst, length=None):
@@ -376,6 +415,24 @@ def are_list_elements_lengths_homogeneous(lst, length=None):
         if len(el) != len_0:
             return False
     return True
+
+def is_datetime(
+    obj    , 
+    strict = False
+):
+    r"""
+    """
+    if strict:
+        return isinstance(obj, datetime.datetime)
+    else:
+        return is_object_one_of_types(obj, [datetime.datetime, datetime.date])
+    
+def is_timedelta(
+    obj
+):
+    r"""
+    """
+    return is_object_one_of_types(obj, [datetime.timedelta, pd.Timedelta])
     
 #--------------------------------------------------------------------
 def are_all_lists_eq(list_of_lists):
@@ -410,6 +467,7 @@ def melt_list_of_lists(lol):
     melted = list(itertools.chain.from_iterable(lol))
     return melted
 
+
 def melt_list_of_lists_2(lol):
     r"""
     This allows non-list/tuple members of lol.
@@ -421,6 +479,59 @@ def melt_list_of_lists_2(lol):
     #-----
     lol = [x if is_object_one_of_types(x, [list,tuple]) else [x] for x in lol]
     return melt_list_of_lists(lol)
+
+
+def melt_list_of_lists_and_return_unique(
+    lol  , 
+    sort = None
+):
+    r"""
+    sort"
+        Can be None, 'ascending', or 'descending'
+    """
+    #-------------------------
+    assert(sort is None or sort in ['ascending', 'descending'])
+    #-------------------------
+    melted = melt_list_of_lists(lol=lol)
+    melted = np.unique(melted).tolist()
+    #-------------------------
+    if sort is None:
+        return melted
+    elif sort == 'ascending':
+        return natsorted(melted, reverse=False)
+    elif sort == 'descending':
+        return natsorted(melted, reverse=True)
+    else:
+        assert(0)
+
+#--------------------------------------------------------------------
+def get_intersection_of_lists(
+    lol  , 
+    sort = 'ascending'
+):
+    r"""
+    lol:
+        The list of lists to be intersected
+        Can be list/tuple of lists/tuples
+    """
+    #-------------------------
+    # Make sure lol is, in fact, a list of lists (or a list of tuples)
+    assert(is_object_one_of_types(lol, [list, tuple]))
+    assert(are_all_list_elements_one_of_types(lol, [list, tuple]))
+    #-------------------------
+    assert(sort is None or sort in ['ascending', 'descending'])
+    #-------------------------
+    intrsctn = list(set.intersection(*map(set, lol)))
+    #-------------------------
+    if sort is None:
+        return intrsctn
+    elif sort == 'ascending':
+        return natsorted(intrsctn, reverse=False)
+    elif sort == 'descending':
+        return natsorted(intrsctn, reverse=True)
+    else:
+        assert(0)
+
     
 #--------------------------------------------------------------------
 def is_list_nested(
@@ -589,76 +700,6 @@ def generate_random_string(str_len=10, letters=string.ascii_letters + string.dig
     if letters=='letters_only':
         letters = string.ascii_letters
     return ''.join(random.choice(letters) for i in range(str_len))
-#--------------------------------------------------------------------
-class PhantomType(Enum):
-    kA=0 
-    kB=1 
-    kFAT=2 
-    kSAT=3 
-    kORT=4 
-    kUnsetPhantomType=5
-
-cPhantomTypeNames = {PhantomType.kA:"A", 
-                     PhantomType.kB:"B", 
-                     PhantomType.kFAT:"FAT", 
-                     PhantomType.kSAT:"SAT", 
-                     PhantomType.kORT:"ORT", 
-                     PhantomType.kUnsetPhantomType:"UnsetPhantomType"}
-                     
-def get_phantom_type_str(phantom_type):
-    return cPhantomTypeNames[phantom_type]
-                     
-#--------------------------------------------------------------------                     
-class TTestResultColorType(Enum):
-    kGreen=0 
-    kYellow=1 
-    kRed=2 
-    kUnsetTTestResultColorType=3
-
-cTTestResultColorTypeNames = {TTestResultColorType.kGreen:"green", 
-                              TTestResultColorType.kYellow:"yellow", 
-                              TTestResultColorType.kRed:"red", 
-                              TTestResultColorType.kUnsetTTestResultColorType:"UnsetTTestResultColorType"}
-def get_color_type_str(t_test_result_color_type):
-    return cTTestResultColorTypeNames[t_test_result_color_type]
-    
-def str_to_color_type(color_str, accept_unset=False):
-    if CompStrings_CaseInsensitive(color_str, "green"):
-        return TTestResultColorType.kGreen;
-    elif CompStrings_CaseInsensitive(color_str, "yellow"):
-        return TTestResultColorType.kYellow;
-    elif CompStrings_CaseInsensitive(color_str, "red"):
-        return TTestResultColorType.kRed;
-    else:
-        if(accept_unset):
-            return TTestResultColorType.kUnsetTTestResultColorType
-        else:
-            assert(0)
-            
-#--------------------------------------------------------------------
-class EDSType(Enum):
-    k6000 = 0
-    k6040CTiX = 1
-    k6700 = 2
-    k6700ES = 3
-    k9800_DCMS = 4
-    k9800_EDM = 5
-    k9800_SCMS = 6
-    kCT_80 = 7
-    kUnsetEDSType = 8
-    
-cEDSTypeNames = {EDSType.k6000        : '6000',
-                 EDSType.k6040CTiX    : '6040CTiX',
-                 EDSType.k6700        : '6700', 
-                 EDSType.k6700ES      : '6700ES', 
-                 EDSType.k9800_DCMS   : '9800_DCMS', 
-                 EDSType.k9800_EDM    : '9800_EDM', 
-                 EDSType.k9800_SCMS   : '9800_SCMS', 
-                 EDSType.kCT_80       : 'CT-80', 
-                 EDSType.kUnsetEDSType: 'UnsetEDSType'}
-
-def get_eds_type_str(eds_type):
-    return cEDSTypeNames[eds_type]
 
 #--------------------------------------------------------------------
 def convert_passfail_string_to_bool(pass_fail):
@@ -671,44 +712,6 @@ def convert_passfail_string_to_bool(pass_fail):
 #--------------------------------------------------------------------
 def CompStrings_CaseInsensitive(aStr1, aStr2):
     return aStr1.strip().casefold()==aStr2.strip().casefold()
-
-def StringToPhantomType(aPhantomString, aAcceptUnset=True):
-    if aPhantomString is None:
-        if aAcceptUnset:
-            return PhantomType.kUnsetPhantomType
-        else:
-            assert(0)
-    if CompStrings_CaseInsensitive(aPhantomString, "FAT"):
-        return PhantomType.kFAT;
-    elif CompStrings_CaseInsensitive(aPhantomString, "SAT"):
-        return PhantomType.kSAT;
-    elif CompStrings_CaseInsensitive(aPhantomString, "ORT"):
-        return PhantomType.kORT;
-    elif CompStrings_CaseInsensitive(aPhantomString, "A"):
-        return PhantomType.kA;
-    elif CompStrings_CaseInsensitive(aPhantomString, "B"):
-        return PhantomType.kB;
-    else:
-        if(aAcceptUnset):
-            return PhantomType.kUnsetPhantomType
-        print(f"In StringToPhantomType\nCannot find appropriate PhantomType for input aPhantomString = {aPhantomString}\n");
-        print("Kill program or return kUnsetPhantomType?\n\t0=Kill\n\t1=return kUnsetPhantomType\n");
-        tResponse = None
-        while tResponse is None:
-            try:
-                tResponse = int(input())
-            except ValueError:
-                print('Not a number')
-                continue
-                
-            if(tResponse!=0 and tResponse!=1):
-                print('Please enter 0 or 1')
-                tResponse=None
-        if(tResponse):
-            return PhantomType.kUnsetPhantomType
-        else:
-            assert(0);
-    return PhantomType.kUnsetPhantomType
 
 def StringFind_CaseInsensitive(aStrA, aStrB):
     tStrA = aStrA.strip().casefold()
@@ -776,6 +779,68 @@ def find_and_replace_in_string(strng, pattern, replace, count=0, flags=0):
     except:
         print(strng)
     return re.sub(pattern, replace, strng, count=count, flags=flags)
+
+def replace_if_found_else_None(
+    pattern , 
+    repl    ,
+    string  , 
+    count   = 0, 
+    flags   = 0
+):
+    r"""
+    Replace if the pattern is found, else return None
+    Designed originally as a helper function.
+    """
+    #-------------------------
+    new_string, number_of_subs_made = re.subn(
+        pattern = pattern, 
+        repl    = repl, 
+        string  = string, 
+        count   = count, 
+        flags   = flags
+    )
+    if number_of_subs_made>0:
+        return new_string
+    else:
+        return None
+    
+def replace_if_found_in_list_else_omit(
+    lst     , 
+    pattern , 
+    repl    ,
+    count   = 0, 
+    flags   = 0
+):
+    r"""
+    Iterates through list, tries to use pattern and repl on each item.
+    If the pattern is found and replaced, then the modified element is kept.
+    If the pattern is not found, the element is omitted.
+
+    NOTE: This could be completed more "pythonically" in a couple different ways
+        e.g., [re.subn(pattern, repl, x)[0] for x in lst if re.subn(pattern, repl, x)[1]==1]
+        e.g., [replace_if_found_else_None(pattern, repl, x) for x in lst if replace_if_found_else_None(pattern, repl, x) is not None]
+    HOWEVER, these each need re.subn to be called twice on each element.
+    Therefore, I go with this slightly less pythonic version
+    """
+    #-------------------------
+    assert(is_object_one_of_types(lst, [list, tuple]))
+    assert(are_all_list_elements_of_type(lst, str))
+    #-------------------------
+    return_lst = [
+        replace_if_found_else_None(
+            pattern = pattern, 
+            repl    = repl,
+            string  = x, 
+            count   = count, 
+            flags   = flags
+        ) 
+        for x in lst
+    ]
+    #-----
+    return_lst = [x for x in return_lst if x is not None]
+    #-------------------------
+    return return_lst
+        
     
 def are_approx_equal(val_1, val_2, precision=0.00001):
     if(val_1==0. and val_2==0.):
@@ -974,20 +1039,6 @@ def remove_multiple_items_from_list_by_idx(list_1, idxs_1):
 def remove_tagged_from_list(lst, tags_to_ignore):
     # Only return elements where none of the tags_to_ignore are found
     # Case insensitive!
-    # 20210914: 
-    #  Added functionality where if a tag within tags_to_ignore ends with '_EXACTMATCH'
-    #  then only elements exactly matching that tag will be removed (instead of the normal case where
-    #  an element is removed if it contains the tag.
-    #
-    #  This new functionality was added when working with AT Tray Phantom 11, where I did not want to keep
-    #  any of the 'Freq_x' columns or 'MTF_1' (as MTF_1=1 trivially for all).  
-    #  For this example, 
-    #  lst = ['Freq_1', 'MTF_1', 'Freq_2', 'MTF_2', 'Freq_3', 'MTF_3', 'Freq_4', 'MTF_4', 'Freq_5', 'MTF_5', 'Freq_6', 'MTF_6', 
-    #         'Freq_7', 'MTF_7', 'Freq_8', 'MTF_8', 'Freq_9', 'MTF_9', 'Freq_10', 'MTF_10', 'Freq_11', 'MTF_11']
-    #  Using the old method with tags_to_ignore = ['MTF_1', 'Freq_'], all 'Freq_x' and 'MTF_1' would be dropped, but
-    #  'MTF_10' and 'MTF_11' would be dropped as well!
-    #  Thus, for the desired effect with the new functionality, the input should be:
-    #  tags_to_ignore = ['MTF_1_EXACTMATCH', 'Freq_']
     assert(isinstance(lst, list) or isinstance(lst, tuple))
     assert(isinstance(tags_to_ignore, list) or isinstance(tags_to_ignore, tuple))
     exact_matches = [x for x in tags_to_ignore if x.endswith('_EXACTMATCH')]
@@ -1078,6 +1129,20 @@ def find_untagged_idxs_in_list(lst, tags):
     sub_list = remove_tagged_from_list(lst=lst, tags_to_ignore=tags)
     untagged_idxs = [i for i,x in enumerate(lst) if x in sub_list]
     return untagged_idxs
+
+def find_untagged_in_list(
+    lst, 
+    tags
+):
+    r"""
+    """
+    #-------------------------
+    untagged_idxs = find_untagged_idxs_in_list(
+        lst  = lst, 
+        tags = tags
+    )
+    untagged = (np.array(lst)[untagged_idxs]).tolist()
+    return untagged
     
     
 def get_two_lists_diff(li1, li2):
@@ -1899,9 +1964,10 @@ def clear_all_dir_contents(dir_path):
 
 #--------------------------------------------------------------------
 def make_tmp_save_dir(
-    base_dir_path,
-    tmp_dir_name, 
-    return_path   = False
+    base_dir_path           ,
+    tmp_dir_name            , 
+    assert_dir_dne_or_empty = True, 
+    return_path             = False
 ):
     r"""
     base_dir_path must already exist!
@@ -1916,9 +1982,10 @@ def make_tmp_save_dir(
         tmp_dir_paths = []
         for tmp_dir_name_i in tmp_dir_name:
             tmp_dir_path_i = make_tmp_save_dir(
-                base_dir_path = base_dir_path, 
-                tmp_dir_name  = tmp_dir_name_i, 
-                return_path   = True
+                base_dir_path           = base_dir_path, 
+                tmp_dir_name            = tmp_dir_name_i, 
+                assert_dir_dne_or_empty = assert_dir_dne_or_empty, 
+                return_path             = True
             )
             tmp_dir_paths.append(tmp_dir_path_i)
         if return_path:
@@ -1932,7 +1999,8 @@ def make_tmp_save_dir(
     tmp_dir_path = os.path.join(base_dir_path, tmp_dir_name)
     #-----
     if os.path.exists(tmp_dir_path):
-        assert(is_dir_empty(tmp_dir_path))
+        if assert_dir_dne_or_empty:
+            assert(is_dir_empty(tmp_dir_path))
     else:
         os.makedirs(tmp_dir_path)
     #-----
@@ -1962,8 +2030,8 @@ def del_tmp_save_dir(
     #--------------------------------------------------
     assert(isinstance(tmp_dir_name, str))
     tmp_dir_path = os.path.join(base_dir_path, tmp_dir_name)
-    assert(os.path.isdir(tmp_dir_path))
-    delete_dir(tmp_dir_path)
+    if os.path.isdir(tmp_dir_path):
+        delete_dir(tmp_dir_path)
 
 #--------------------------------------------------------------------
 def do_paths_share_ancestor(path_1, path_2, ancestor_level=1, use_max_in_comparison=False):
@@ -2112,8 +2180,9 @@ def search_backwards_for_file(starting_path, file_name_to_find,
 
 #--------------------------------------------------------------------
 def find_file_extension(
-    file_path_or_name, 
-    include_pd=False
+    file_path_or_name , 
+    include_pd        = False, 
+    assert_found      = True
 ):
     r"""
     Find the file extension given a file path or name.
@@ -2122,7 +2191,13 @@ def find_file_extension(
       If include_pd==True, the period is also returned.
     """
     pd_idx = file_path_or_name.rfind('.')
-    assert(pd_idx>-1)
+    #-------------------------
+    if assert_found:
+        assert(pd_idx>-1)
+    else:
+        if pd_idx==-1:
+            return None
+    #-------------------------
     if include_pd:
         return file_path_or_name[pd_idx:]
     else:
@@ -2130,7 +2205,12 @@ def find_file_extension(
 
 
 #--------------------------------------------------------------------
-def append_to_path(save_path, appendix, ext_to_find='.pdf', append_to_end_if_ext_no_found=False):
+def append_to_path(
+    save_path                     , 
+    appendix                      , 
+    ext_to_find                   = '.pdf', 
+    append_to_end_if_ext_no_found = False
+):
     # save_path can be single path or list of paths
     # No '_' included by default, so appendix should include it if desired
     # If ext_to_find=None, appendix added to end of save_path
@@ -2254,270 +2334,198 @@ def run_tryexceptwhile_process(
             print("Retrying ... ")
         counter += 1
     return False
+
+
+#----------------------------------------------------------------------------------------------------------------------------------------
+def offset_int_tagged_files_in_dir(
+    files_dir, 
+    file_name_regex, 
+    offset_int            = None, 
+    new_0_int             = None, 
+    new_dir               = None, 
+    file_name_glob        = None, 
+    copy_and_rename       = False, 
+    return_rename_summary = False
+):
+    r"""
+    Offset all of the files in files_dir by offset_int.
+    The directory files_dir is expected to contain files of the form [file_idx_0, file_idx_1, ..., file_idx_n] where
+        idx_0, idx_1, ..., idx_n are integers.
+    The files can either be renamed using the offset_int argument OR the new_0_int argument, BUT NOT BOTH.
+        For the case of offset_int:
+            The files in this directory will be renamed [file_{idx_0+offset_int}, file_{idx_1+offset_int}, ..., file_{idx_n+offset_int}]
+        For the case of new_0_int:
+            The files in this directory will be renamed [file_{new_0_int}, file_{new_0_int+1}, ..., file_{new_0_int+n_files-1}]
+    The files can simply be moved/renamed (copy_and_rename==False), or copied to the new directory (copy_and_rename==True and 
+        new_dir not None)
+    -------------------------
+    files_dir:
+        The directory housing the files to be renamed
         
-#--------------------------------------------------------------------
-def find_spca_contributors_csv(spca_xml, phantom_type, 
-                               find_top_5=False, max_levels_to_search = 5, nr_attribute=None, assert_found=True):
-    # If find_top_5==False, find FullContributors...csv
-    # If find_top_5==True, find Top5Contributors...csv
-    # set nr_attribute = e.g. 'CT-80 High Energy Row #0' for CT-80 
-    #-------------------------
-    if find_top_5:
-        file_name_to_find = 'Top5Contributors'
-    else:
-        file_name_to_find = 'FullContributors'
-    #-------------------------
-    if phantom_type == PhantomType.kSAT:
-        gold_standard = 'S002'
-        file_name_to_find += '*.csv'
-    elif phantom_type == PhantomType.kA or phantom_type == PhantomType.kB:
-        gold_standard = 'F004'
-        if phantom_type == PhantomType.kA:
-            file_name_to_find += '_PhantomA*.csv'
-        else:
-            file_name_to_find += '_PhantomB*.csv'
-    else:
-        assert(0)
+    file_name_regex:
+        A regex patten used to both identify the files to be renamed and to find the integer tag for each file.
+        NOTE: file_name_regex MUST have some sort of digit capture (e.g., contain '(\d*)')
+                e.g., for the case of end events, one would use file_name_regex = r'end_events_(\d*).csv'
+                
+    offset_int/new_0_int:
+        These direct how the files will be renamed.  
+        ONLY ONE OF THESE SHOULD BE USED ==> one should always be set to None and the other should be set to some int value
+        offset_int:
+            Take the identifier/tag ints, and simply shift them by offset_int.
+        new_0_int:
+            Start the identifier tags at new_0_int, and label from new_0_int to new_0_int + len(files in files_dir)-1
+            
+    new_dir:
+        The directory to which the renamed files will be saved.
+        Default value is None, which means the files will be saved in the input files_dir
+                
+    file_name_glob:
+        Used in Utilities.find_all_paths to help find the paths to be renamed.  By default this is set to None, which is then
+            changed to = '*', meaning the glob portion doesn't trim down the list of files at all, but returns all contained
+            in the directory.  Therefore, file_name_regex does all of the work, which is fine and really as designed
+            
+    copy_and_rename:
+        Directs whether to call rename or copy.
+        copy_and_rename=False:
+            Default behavior, which means the files will be renamed and replaced.
+        copy_and_rename=False:
+            The files will be copied and renamed, with the originals kept intact.  This is only possible if new_dir is not None
+            and new_dir != files_dir
         
-    if nr_attribute is not None:
-        file_name_to_find = append_to_path(save_path = file_name_to_find, 
-                                           appendix = nr_attribute.replace(" ", ""), 
-                                           ext_to_find = '.csv')
-    #---------------------------------------------------------------------------
-    # First, search for the file in its typical location
-    # If found, return
-    temp_result_dir_idx = spca_xml.find(os.sep+'temp_result_dir')
-    typical_dir = spca_xml[:temp_result_dir_idx]
-    return_path = glob_find_files_with_pattern(typical_dir, pattern=file_name_to_find, recursive=False)
-    assert(len(return_path)<2)
-    if len(return_path)==1:
-        assert(get_kit_id(return_path[0], gold_standard) == get_kit_id(spca_xml, gold_standard))
-        return return_path[0]
-    #---------------------------------------------------------------------------
-    # If path not found in typical location, search backwards for it
-    return_first_found = False
-    find_all = False
-    # First, try quick method not looking in subdirs on way back
-    search_subdirs_also = False
-    return_path = search_backwards_for_file(spca_xml, file_name_to_find, 
-                                            max_levels_to_search, search_subdirs_also=search_subdirs_also, 
-                                            return_first_found=return_first_found, find_all=find_all, 
-                                            assert_found=False)
-    assert(len(return_path)<2)
-    if len(return_path)==1:
-        assert(get_kit_id(return_path[0], gold_standard) == get_kit_id(spca_xml, gold_standard))
-        return return_path[0]
-    #---------------------------------------------------------------------------
-    # If not found, use longer method of searching subdirs also
-    search_subdirs_also = True
-    return_path = search_backwards_for_file(spca_xml, file_name_to_find, 
-                                            max_levels_to_search, search_subdirs_also=search_subdirs_also, 
-                                            return_first_found=return_first_found, find_all=find_all, 
-                                            assert_found=False)
-    assert(len(return_path)<2)
-    if len(return_path)==1:
-        assert(get_kit_id(return_path[0], gold_standard) == get_kit_id(spca_xml, gold_standard))
-        return return_path[0]
-    #---------------------------------------------------------------------------
-    # If still not found, either enforce assert_found or return empty string
-    if assert_found:
-        assert(0)
-    else:
-        return None
-    
-
-
-
-    #----------------------------------------------------------------------------------------------------------------------------------------
-    def offset_int_tagged_files_in_dir(
-        files_dir, 
-        file_name_regex, 
-        offset_int            = None, 
-        new_0_int             = None, 
-        new_dir               = None, 
-        file_name_glob        = None, 
-        copy_and_rename       = False, 
-        return_rename_summary = False
-    ):
-        r"""
-        Offset all of the files in files_dir by offset_int.
-        The directory files_dir is expected to contain files of the form [file_idx_0, file_idx_1, ..., file_idx_n] where
-            idx_0, idx_1, ..., idx_n are integers.
-        The files can either be renamed using the offset_int argument OR the new_0_int argument, BUT NOT BOTH.
-            For the case of offset_int:
-                The files in this directory will be renamed [file_{idx_0+offset_int}, file_{idx_1+offset_int}, ..., file_{idx_n+offset_int}]
-            For the case of new_0_int:
-                The files in this directory will be renamed [file_{new_0_int}, file_{new_0_int+1}, ..., file_{new_0_int+n_files-1}]
-        The files can simply be moved/renamed (copy_and_rename==False), or copied to the new directory (copy_and_rename==True and 
-            new_dir not None)
-        -------------------------
-        files_dir:
-            The directory housing the files to be renamed
-            
-        file_name_regex:
-            A regex patten used to both identify the files to be renamed and to find the integer tag for each file.
-            NOTE: file_name_regex MUST have some sort of digit capture (e.g., contain '(\d*)')
-                  e.g., for the case of end events, one would use file_name_regex = r'end_events_(\d*).csv'
-                  
-        offset_int/new_0_int:
-            These direct how the files will be renamed.  
-            ONLY ONE OF THESE SHOULD BE USED ==> one should always be set to None and the other should be set to some int value
-            offset_int:
-                Take the identifier/tag ints, and simply shift them by offset_int.
-            new_0_int:
-                Start the identifier tags at new_0_int, and label from new_0_int to new_0_int + len(files in files_dir)-1
-                
-        new_dir:
-            The directory to which the renamed files will be saved.
-            Default value is None, which means the files will be saved in the input files_dir
-                  
-        file_name_glob:
-            Used in Utilities.find_all_paths to help find the paths to be renamed.  By default this is set to None, which is then
-                changed to = '*', meaning the glob portion doesn't trim down the list of files at all, but returns all contained
-                in the directory.  Therefore, file_name_regex does all of the work, which is fine and really as designed
-                
-        copy_and_rename:
-            Directs whether to call rename or copy.
-            copy_and_rename=False:
-                Default behavior, which means the files will be renamed and replaced.
-            copy_and_rename=False:
-                The files will be copied and renamed, with the originals kept intact.  This is only possible if new_dir is not None
-                and new_dir != files_dir
-            
-        """
-        #-------------------------
-        # Exclusive or for offset_int and new_0_int (meaning, one but not both must not be None)
-        assert(    offset_int is not None or new_0_int is not None)
-        assert(not(offset_int is not None and new_0_int is not None))
-        #-------------------------
-        assert(os.path.isdir(files_dir))
-        if file_name_glob is None:
-            file_name_glob = '*'
-        if new_dir is None:
-            new_dir = files_dir
-        #-------------------------
-        if new_dir==files_dir:
-            copy_and_rename = False
-        #-------------------------
-        if not os.path.exists(new_dir):
-            os.makedirs(new_dir)
-        #-------------------------
-        paths = find_all_paths(
-            base_dir      = files_dir, 
-            glob_pattern  = file_name_glob, 
-            regex_pattern = file_name_regex
-        )
-        #-------------------------
-        paths_w_tags = []
-        for path in paths:
-            tag = re.findall(file_name_regex, path)
-            print(path)
-            print(file_name_regex)
+    """
+    #-------------------------
+    # Exclusive or for offset_int and new_0_int (meaning, one but not both must not be None)
+    assert(    offset_int is not None or new_0_int is not None)
+    assert(not(offset_int is not None and new_0_int is not None))
+    #-------------------------
+    assert(os.path.isdir(files_dir))
+    if file_name_glob is None:
+        file_name_glob = '*'
+    if new_dir is None:
+        new_dir = files_dir
+    #-------------------------
+    if new_dir==files_dir:
+        copy_and_rename = False
+    #-------------------------
+    if not os.path.exists(new_dir):
+        os.makedirs(new_dir)
+    #-------------------------
+    paths = find_all_paths(
+        base_dir      = files_dir, 
+        glob_pattern  = file_name_glob, 
+        regex_pattern = file_name_regex
+    )
+    #-------------------------
+    paths_w_tags = []
+    for path in paths:
+        tag = re.findall(file_name_regex, path)
+        print(path)
+        print(file_name_regex)
+        print(tag)
+        print()
+        # Should have only been one tag found per path
+        if len(tag)>1:
             print(tag)
-            print()
-            # Should have only been one tag found per path
-            if len(tag)>1:
-                print(tag)
-            assert(len(tag)==1)
-            tag = int(tag[0])
-            paths_w_tags.append((path, tag))
-        # NOTE: Want to sort in reverse so that highest is first.  This is so there are no naming issues when the rename occurs.  
-        #       E.g., imaging there are 10 members in paths, tagged 0 through nine, and they are to be offset by 1
-        #         If we started with the lowest tag, file_0, shifting it by 1 would make it file_1, which already exists!
-        #         If, instead, we start with the highest tag, file_9, it shifts by 1 to file_10, which is not an issue.
-        paths_w_tags = natsorted(paths_w_tags, key=lambda x: x[1], reverse=True)
-        #-------------------------
-        rename_summary = {}
-        for i,path_w_tag_i in enumerate(paths_w_tags):
-            path_i      = path_w_tag_i[0]
-            tag_i       = path_w_tag_i[1]
-            file_name_i = os.path.basename(path_i)
-            #-----
-            assert(str(tag_i) in file_name_i)
-            if offset_int is not None:
-                repl_int_i = str(tag_i+offset_int)
-            elif new_0_int is not None:
-                # Remember, sorted in descending order
-                repl_int_i = str(len(paths_w_tags)+new_0_int-(i+1))
-            else:
-                assert(0)
-            new_file_name_i = file_name_i.replace(str(tag_i), str(repl_int_i))
-            #-----
-            assert(new_file_name_i not in os.listdir(new_dir))
-            new_path_i = os.path.join(new_dir, new_file_name_i)
-            #-----
-            assert(path_i not in rename_summary.keys())
-            rename_summary[path_i] = new_path_i
-            #-----
-            if copy_and_rename:
-                shutil.copy(src=path_i, dst=new_path_i)
-            else:
-                os.rename(path_i, new_path_i)
-        #-------------------------
-        if return_rename_summary:
-            return rename_summary
-        
-        
-    #---------------------------------------------------------------------------    
-    def offset_int_tagged_files_w_summaries_in_dir(
-        files_dir, 
-        file_name_regex, 
-        offset_in               = None, 
-        new_0_int               = None, 
-        new_dir                 = None, 
-        file_name_glob          = None, 
+        assert(len(tag)==1)
+        tag = int(tag[0])
+        paths_w_tags.append((path, tag))
+    # NOTE: Want to sort in reverse so that highest is first.  This is so there are no naming issues when the rename occurs.  
+    #       E.g., imaging there are 10 members in paths, tagged 0 through nine, and they are to be offset by 1
+    #         If we started with the lowest tag, file_0, shifting it by 1 would make it file_1, which already exists!
+    #         If, instead, we start with the highest tag, file_9, it shifts by 1 to file_10, which is not an issue.
+    paths_w_tags = natsorted(paths_w_tags, key=lambda x: x[1], reverse=True)
+    #-------------------------
+    rename_summary = {}
+    for i,path_w_tag_i in enumerate(paths_w_tags):
+        path_i      = path_w_tag_i[0]
+        tag_i       = path_w_tag_i[1]
+        file_name_i = os.path.basename(path_i)
         #-----
-        summary_files_dir       = None,
-        summary_file_name_regex = None,
-        summary_file_name_glob  = None, 
-        summary_new_dir         = None, 
+        assert(str(tag_i) in file_name_i)
+        if offset_int is not None:
+            repl_int_i = str(tag_i+offset_int)
+        elif new_0_int is not None:
+            # Remember, sorted in descending order
+            repl_int_i = str(len(paths_w_tags)+new_0_int-(i+1))
+        else:
+            assert(0)
+        new_file_name_i = file_name_i.replace(str(tag_i), str(repl_int_i))
         #-----
-        copy_and_rename         = False, 
-        return_rename_summary   = False
-    ):
-        r"""
-        """
-        #-------------------------
-        if summary_files_dir is None:
-            summary_files_dir          = os.path.join(files_dir, 'summary_files')
-        if summary_file_name_regex is None:
-            summary_file_name_regex    = file_name_regex.replace('_(\d*).csv', '_([0-9]*)_summary.json')
-        if summary_file_name_glob is None:
-            if file_name_glob is None:
-                summary_file_name_glob = '*'
-            else:
-                summary_file_name_glob = file_name_glob.replace('_*.csv', '*_summary.json')
-        if summary_new_dir is None:
-            if new_dir is None:
-                summary_new_dir = os.path.join(files_dir, 'summary_files')
-            else:
-                summary_new_dir = os.path.join(new_dir, 'summary_files')
-        #-------------------------
-        files_rename_summary = offset_int_tagged_files_in_dir(
-            files_dir             = files_dir, 
-            file_name_regex       = file_name_regex, 
-            offset_int            = offset_int, 
-            new_0_int             = new_0_int, 
-            new_dir               = new_dir, 
-            file_name_glob        = file_name_glob, 
-            copy_and_rename       = copy_and_rename, 
-            return_rename_summary = True
-        )
-        #-------------------------
-        summaries_rename_summary = offset_int_tagged_files_in_dir(
-            files_dir             = summary_files_dir, 
-            file_name_regex       = summary_file_name_regex, 
-            offset_int            = offset_int, 
-            new_0_int             = new_0_int, 
-            new_dir               = summary_new_dir, 
-            file_name_glob        = summary_file_name_glob, 
-            copy_and_rename       = copy_and_rename, 
-            return_rename_summary = True
-        )
-        #-------------------------
-        assert(len(files_rename_summary)==len(summaries_rename_summary))
-        if return_rename_summary:
-            return (files_rename_summary, summaries_rename_summary)
+        assert(new_file_name_i not in os.listdir(new_dir))
+        new_path_i = os.path.join(new_dir, new_file_name_i)
+        #-----
+        assert(path_i not in rename_summary.keys())
+        rename_summary[path_i] = new_path_i
+        #-----
+        if copy_and_rename:
+            shutil.copy(src=path_i, dst=new_path_i)
+        else:
+            os.rename(path_i, new_path_i)
+    #-------------------------
+    if return_rename_summary:
+        return rename_summary
+    
+    
+#---------------------------------------------------------------------------    
+def offset_int_tagged_files_w_summaries_in_dir(
+    files_dir, 
+    file_name_regex, 
+    offset_in               = None, 
+    new_0_int               = None, 
+    new_dir                 = None, 
+    file_name_glob          = None, 
+    #-----
+    summary_files_dir       = None,
+    summary_file_name_regex = None,
+    summary_file_name_glob  = None, 
+    summary_new_dir         = None, 
+    #-----
+    copy_and_rename         = False, 
+    return_rename_summary   = False
+):
+    r"""
+    """
+    #-------------------------
+    if summary_files_dir is None:
+        summary_files_dir          = os.path.join(files_dir, 'summary_files')
+    if summary_file_name_regex is None:
+        summary_file_name_regex    = file_name_regex.replace('_(\d*).csv', '_([0-9]*)_summary.json')
+    if summary_file_name_glob is None:
+        if file_name_glob is None:
+            summary_file_name_glob = '*'
+        else:
+            summary_file_name_glob = file_name_glob.replace('_*.csv', '*_summary.json')
+    if summary_new_dir is None:
+        if new_dir is None:
+            summary_new_dir = os.path.join(files_dir, 'summary_files')
+        else:
+            summary_new_dir = os.path.join(new_dir, 'summary_files')
+    #-------------------------
+    files_rename_summary = offset_int_tagged_files_in_dir(
+        files_dir             = files_dir, 
+        file_name_regex       = file_name_regex, 
+        offset_int            = offset_int, 
+        new_0_int             = new_0_int, 
+        new_dir               = new_dir, 
+        file_name_glob        = file_name_glob, 
+        copy_and_rename       = copy_and_rename, 
+        return_rename_summary = True
+    )
+    #-------------------------
+    summaries_rename_summary = offset_int_tagged_files_in_dir(
+        files_dir             = summary_files_dir, 
+        file_name_regex       = summary_file_name_regex, 
+        offset_int            = offset_int, 
+        new_0_int             = new_0_int, 
+        new_dir               = summary_new_dir, 
+        file_name_glob        = summary_file_name_glob, 
+        copy_and_rename       = copy_and_rename, 
+        return_rename_summary = True
+    )
+    #-------------------------
+    assert(len(files_rename_summary)==len(summaries_rename_summary))
+    if return_rename_summary:
+        return (files_rename_summary, summaries_rename_summary)
 
 
 

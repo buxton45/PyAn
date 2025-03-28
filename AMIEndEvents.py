@@ -61,12 +61,12 @@ class AMIEndEvents(GenAn):
                                           else {})
         #--------------------------------------------------
         super().__init__(
-            df_construct_type=df_construct_type, 
-            contstruct_df_args=contstruct_df_args, 
-            init_df_in_constructor=init_df_in_constructor, 
-            build_sql_function=self.build_sql_function, 
-            build_sql_function_kwargs=self.build_sql_function_kwargs, 
-            save_args=save_args, 
+            df_construct_type         = df_construct_type, 
+            contstruct_df_args        = contstruct_df_args, 
+            init_df_in_constructor    = init_df_in_constructor, 
+            build_sql_function        = self.build_sql_function, 
+            build_sql_function_kwargs = self.build_sql_function_kwargs, 
+            save_args                 = save_args, 
             **kwargs
         )
         #--------------------------------------------------
@@ -133,7 +133,11 @@ class AMIEndEvents(GenAn):
     
     #****************************************************************************************************
     @staticmethod
-    def extract_reboot_counts_from_reason(reason_str, pattern=r'Reboot Count: (\d*)', flags=re.IGNORECASE):
+    def extract_reboot_counts_from_reason(
+        reason_str , 
+        pattern    = r'Reboot Count: (\d*)', 
+        flags      = re.IGNORECASE
+    ):
         # NOTE: Seems to be present only for Last Gasp reasons
         rbt_cnt = re.findall(pattern, reason_str, flags=flags)
         if rbt_cnt:
@@ -145,26 +149,30 @@ class AMIEndEvents(GenAn):
 
     @staticmethod
     def extract_reboot_counts_from_reasons_in_df(
-        df, 
-        reason_col='reason', 
-        placement_col='reboot_counts', 
-        pattern=r'Reboot Count: (\d*)', 
-        flags=re.IGNORECASE, 
-        inplace=True
+        df            , 
+        reason_col    = 'reason', 
+        placement_col = 'reboot_counts', 
+        pattern       = r'Reboot Count: (\d*)', 
+        flags         = re.IGNORECASE, 
+        inplace       = True
     ):
         if not inplace:
             df = df.copy()
         df[placement_col] = df[reason_col].apply(
             lambda x: AMIEndEvents.extract_reboot_counts_from_reason(
-                reason_str=x, 
-                pattern=pattern, 
-                flags=flags
+                reason_str = x, 
+                pattern    = pattern, 
+                flags      = flags
             )
         )
         return df
         
     @staticmethod
-    def extract_fail_reason_from_reason(reason_str, pattern=r'Fail Reason: (.*)$', flags=re.IGNORECASE):
+    def extract_fail_reason_from_reason(
+        reason_str , 
+        pattern    = r'Fail Reason: (.*)$', 
+        flags      = re.IGNORECASE
+    ):
         # NOTE: Fail reason appears to be last item in string, hence the use of $
         #       Also, seems to be present only for Last Gasp reasons
         fail_reason = re.findall(pattern, reason_str, flags=flags)
@@ -177,58 +185,33 @@ class AMIEndEvents(GenAn):
 
     @staticmethod
     def extract_fail_reasons_from_reasons_in_df(
-        df, 
-        reason_col='reason', 
-        placement_col='fail_reason', 
-        pattern=r'Fail Reason: (.*)$', 
-        flags=re.IGNORECASE, 
-        inplace=True
+        df            , 
+        reason_col    = 'reason', 
+        placement_col = 'fail_reason', 
+        pattern       = r'Fail Reason: (.*)$', 
+        flags         = re.IGNORECASE, 
+        inplace       = True
     ):
         if not inplace:
             df = df.copy()
         df[placement_col] = df[reason_col].apply(
             lambda x: AMIEndEvents.extract_fail_reason_from_reason(
-                reason_str=x, 
-                pattern=pattern, 
-                flags=flags
+                reason_str = x, 
+                pattern    = pattern, 
+                flags      = flags
             )
         )
         return df
  
-    @staticmethod
-    def reduce_end_event_reason_OLD(reason, patterns, count=0, flags=re.IGNORECASE):
-        r"""
-        Searches for pattern in reason, if found, replaced in string.
-          NOTE: Each pattern can be a single string, or a pair of strings.
-          If a single string:
-            the string represents the pattern and if found it is replaced by ''
-          If a pair of strings:
-            the first element is the pattern and the second element is the replacement
-            NOTE: The replacement can be a string, a pattern, or a function!
-        In this OLD version, all regexs in patterns are applied.
-            This is in contrast to the new version, which substitutes and exits after first match
-        """
-        for item in patterns:
-            if Utilities.is_object_one_of_types(item, [list, tuple]):
-                assert(len(item)==2)
-                pattern = item[0]
-                replace = item[1]
-            else:
-                assert(isinstance(item, str))
-                pattern = item
-                replace = ''
-            reason = Utilities.find_and_replace_in_string(strng=reason, pattern=pattern, replace=replace, count=count, flags=flags)
-        return reason
- 
         
     @staticmethod
     def reduce_end_event_reason(
-        reason, 
-        patterns, 
-        count=0, 
-        #flags=re.IGNORECASE, 
-        flags=0, 
-        verbose=True
+        reason   , 
+        patterns , 
+        count    = 0, 
+        #flags    = re.IGNORECASE, 
+        flags    = 0, 
+        verbose  = True
     ):
         r"""
         Searches for pattern in reason, if found, replaced in string.
@@ -252,7 +235,13 @@ class AMIEndEvents(GenAn):
                 pattern = item
                 replace = ''
             if re.search(pattern=pattern, string=reason, flags=flags):
-                reason = Utilities.find_and_replace_in_string(strng=reason, pattern=pattern, replace=replace, count=count, flags=flags)
+                reason = Utilities.find_and_replace_in_string(
+                    strng   = reason, 
+                    pattern = pattern, 
+                    replace = replace, 
+                    count   = count, 
+                    flags   = flags
+                )
                 return reason 
         if verbose:
             print(f'WARNING: reason="{reason}" not matched!')
@@ -260,9 +249,9 @@ class AMIEndEvents(GenAn):
         
     @staticmethod
     def remove_trailing_punctuation_from_reason(
-        reason, 
-        include_normal_strip=True, 
-        include_closing_brackets=True
+        reason                   , 
+        include_normal_strip     = True, 
+        include_closing_brackets = True
     ):
         r"""
         NOTE: Below, punctuation from string library.
@@ -356,7 +345,10 @@ class AMIEndEvents(GenAn):
         return return_str
         
     @staticmethod
-    def last_gasp_reduce_func(match_obj, include_fail_reason=True):
+    def last_gasp_reduce_func(
+        match_obj           , 
+        include_fail_reason = True
+    ):
         r"""
         """
         # When grabbing from match_obj.groups(), index from 0
@@ -367,150 +359,6 @@ class AMIEndEvents(GenAn):
             return f'{matches[0]}, {matches[-1]}'
         else:
             return matches[0]
-        
-
-    @staticmethod
-    def reduce_end_event_reasons_in_df_OLD(
-        df, 
-        reason_col='reason', 
-        patterns_to_replace=None, 
-        addtnl_patterns_to_replace=None, 
-        placement_col=None, 
-        count=0, 
-        flags=re.IGNORECASE, 
-        remove_trailing_punctuation=True, 
-        inplace=True
-    ):
-        r"""
-        Searches for each of patterns (= patterns_to_replace + addtnl_patterns_to_replace) in reason, if found, replaced in string.
-          NOTE: Each pattern can be a single string, or a pair of strings.
-          If a single string:
-            the string represents the pattern and if found it is replaced by ''
-          If a pair of strings:
-            the first element is the pattern and the second element is the replacement
-            NOTE: The replacement can be a string, a pattern, or a function!
-            NOTE: Needed to be a little creative with the treatment of AMIEndEvents.under_voltage_match_func and AMIEndEvents.last_gasp_reduce_func.
-                  Forward declaration is not possible in Python, and putting these directly into the default patterns_to_replace argument causes an error.
-                  Therefore, I use the strings 'AMIEndEvents.under_voltage_match_func' and 'AMIEndEvents.last_gasp_reduce_func' in the default argument, 
-                  and substitute within the body of the function.
-                  If one feeds in own patterns_to_replace in some outside call (e.g., Jupyter notebook, some other py file, etc.), using 
-                  AMIEndEvents.under_voltage_match_func and AMIEndEvents.last_gasp_reduce_func without quotes should work fine.
-
-
-        e.g., with default patterns:
-            i.  
-              'Under Voltage (CA000400) cleared for meter 00:13:50:01:00:a7:bc:52.'
-        ==>   'Under Voltage (CA000400) cleared'
-            ii.  
-              'Last Gasp - NIC power lost for device: 00:13:50:02:00:9c:8f:2b, Reboot Count: 194, NIC timestamp: Jan 1, 2018 - 
-               02:14:19 AM EST, Received timestamp: Jan 1, 2018 - 02:14:27 AM EST, Fail Reason: NIC power fail'
-        ==>   'Last Gasp - NIC power lost'
-            iii.  
-              'Under Voltage (CA000400) cleared for meter 00:13:50:01:00:a7:bc:52. for device 00:13:50:01:00:a7:bc:52.'
-        ==>   'Under Voltage (CA000400) cleared'
-        
-        ---------------------------------------------
-        Description/motivation for default patterns:
-        ---------------------------------------------
-        - r'\:?\s?([0-9a-zA-Z]{1,2})(\:[0-9a-zA-Z]{1,2})+'
-          Matches all MAC-esque meter/device IDs
-          NOTE: + used at end because want ONE OR MORE repetitions of (\:[0-9a-zA-Z]{1,2})
-                * matches ZERO OR MORE 
-                EXAMPLE: Assume strng = 'Demand Reset occurred for meter 00:13:50:01:00:17:c6:41.'
-                  If * used: match = 'De'
-                  If + used: match = ' 00:13:50:01:00:17:c6:41'
-          EX:
-                'Under Voltage (CA000400) cleared for meter 00:13:50:01:00:a7:bc:52.'
-            ==> 'Under Voltage (CA000400) cleared for meter.'
-        """
-        #-------------------------
-        if not inplace:
-            df = df.copy()
-        #-------------------------
-        if placement_col is None:
-            placement_col = reason_col
-        #-------------------------
-        dflt_patterns_to_replace=[
-            r'\:?\s*([0-9a-zA-Z]{1,2})(\:[0-9a-zA-Z]{1,2})+', 
-            (
-                (
-                    r'(Under Voltage)\s*'\
-                    r'([0-9a-zA-Z]*)?\s*'\
-                    r'(\([0-9a-zA-Z\s]*\))\s*'\
-                    r'([0-9a-zA-Z]*)?\s?'\
-                    r'(for meter\:?\s*)'\
-                    r'(?:(?:[0-9a-zA-Z]{1,2})(?:\:[0-9a-zA-Z]{1,2})+)?[\s:,.]*'\
-                    r'(?:Phase\s{1,2}[ABC](?:(?:\s*and\s*[ABC])|(?:,\s*[ABC])*))?\s*'\
-                    r'(Voltage out of tolerance)?'
-                ), 
-                'AMIEndEvents.under_voltage_match_func'
-            ), 
-            (
-                (
-                    r'(Last Gasp\s*-\s*[0-9a-zA-Z\s]*)[\s\:,.]*'\
-                    r'.*'\
-                    r'(Fail Reason: .*)$'
-                ), 
-                'AMIEndEvents.last_gasp_reduce_func'
-            ), 
-            (r'(Angle out of tolerance) \[.*\]', r'\1'), 
-            (r'(NIC Power Restore Trap Received from device).*', r'\1'), #TODO This has much info, like last gasp
-            (
-                (
-                    r'(Requested operation .* could not be applied to the given device type and firmware version.) '\
-                    r'Device, DeviceType: .*, Firmware Version: .*$'
-                ), 
-                r'\1'
-            ), 
-            ('meterN/A', 'meter'),
-            (r'(Meter needs explicit time sync.) Drift: -?\d* s, (Encountered Problems:\s*.*), Meter_Time', r'\1 \2'), 
-            (r'(Meter Program Seal mismatch for Device) \[Device ID, MAC Id\] = .*', r'\1'), 
-            (r'Device Time: .* Failed Device Reason: (.*) Reboot Counter: .* Refresh Counter: .*', r'\1'), 
-            (r'(Ignoring (?:Interval|Register) Read data for device as it has time in the future) .*', r'\1'), 
-            (r'(Secure association operation failed consecutively for 1 times for [0-9a-zA-Z]{4}.) .*', r'\1'), 
-            (r'Device, (Last Gasp State: .*), (Detector State: .*), Reboot Count: \d*', r'\1, \2'), 
-            (r'(Detected end of voltage sag on meter).*', r'\1'), 
-            (r'(Detected end of voltage swell on meter).*', r'\1'), 
-            r'N/A', 
-            (r'\s{2,}', ' ')
-        ]
-        if patterns_to_replace is None:
-            patterns_to_replace = dflt_patterns_to_replace
-        #-------------------------
-        if addtnl_patterns_to_replace is not None:
-            patterns_to_replace.extend(addtnl_patterns_to_replace)
-        #-------------------------
-        # Creative way of smuggling in AMIEndEvents.under_voltage_match_func and AMIEndEvents.last_gasp_reduce_func in 
-        # the patterns_to_replace default parameter.  See NOTE above.
-        for i in range(len(patterns_to_replace)):
-            if patterns_to_replace[i][1]=='AMIEndEvents.under_voltage_match_func':
-                patterns_to_replace[i] = (patterns_to_replace[i][0], AMIEndEvents.under_voltage_match_func)
-            if patterns_to_replace[i][1]=='AMIEndEvents.last_gasp_reduce_func':
-                patterns_to_replace[i] = (patterns_to_replace[i][0], AMIEndEvents.last_gasp_reduce_func)        
-        #-------------------------
-        # This would be handled in reduce_end_event_reason if not here, but doing it once here
-        # should save time, especially for large DFs, I believe.
-        for i in range(len(patterns_to_replace)):
-            pattern = patterns_to_replace[i]
-            if Utilities.is_object_one_of_types(pattern, [list, tuple]):
-                assert(len(pattern)==2)
-                continue
-            else:
-                assert(isinstance(pattern, str))
-                patterns_to_replace[i] = (pattern, '')
-        #-------------------------
-        df[placement_col] = df[reason_col].apply(
-            lambda x: AMIEndEvents.reduce_end_event_reason_OLD(
-                reason=x, 
-                patterns=patterns_to_replace, 
-                count=count, 
-                flags=flags
-            )
-        )
-        if remove_trailing_punctuation:
-            df[placement_col] = df[placement_col].apply(lambda x: AMIEndEvents.remove_trailing_punctuation_from_reason(x))
-        return df
-        
         
         
     @staticmethod
@@ -798,7 +646,7 @@ class AMIEndEvents(GenAn):
             # 'Universal event Unsupported Event(41) with priority Alarm. '
             '3.18.72.85':   [
                 #-----
-    #             (r'(Meter event (?:Nonvolatile Memory Failure Detected|Demand Reset Occurred|Reset List Pointers))\s*Time event occurred on meter\s*=.*\s*Sequence number\s*=.*\s*User id\s*=.*\s*Event argument\s*=.*', r'\1'),
+                # (r'(Meter event (?:Nonvolatile Memory Failure Detected|Demand Reset Occurred|Reset List Pointers))\s*Time event occurred on meter\s*=.*\s*Sequence number\s*=.*\s*User id\s*=.*\s*Event argument\s*=.*', r'\1'),
                 (r'(Meter event.*?)\s*Time event occurred on meter\s*=.*\s*Sequence number\s*=.*\s*User id\s*=.*\s*Event argument\s*=.*', r'\1'), 
                 #-----
                 # FAILSAFE in case Sequence number etc. not found above
@@ -1450,9 +1298,9 @@ class AMIEndEvents(GenAn):
         if addtnl_patterns_to_replace is not None:
             assert(isinstance(addtnl_patterns_to_replace, dict))
             patterns_to_replace_by_typeid = Utilities.supplement_dict_with_default_values(
-                to_supplmnt_dict=patterns_to_replace_by_typeid, 
-                default_values_dict=addtnl_patterns_to_replace,
-                extend_any_lists=True
+                to_supplmnt_dict    = patterns_to_replace_by_typeid, 
+                default_values_dict = addtnl_patterns_to_replace,
+                extend_any_lists    = True
             )
         #-------------------------
         if placement_col is None:
@@ -1490,10 +1338,10 @@ class AMIEndEvents(GenAn):
         #-------------------------
         df[placement_col] = df.apply(
             lambda x: AMIEndEvents.reduce_end_event_reason(
-                reason=x[reason_col], 
-                patterns=patterns_to_replace_by_typeid[x[edetypeid_col]], 
-                count=count, 
-                flags=flags
+                reason   = x[reason_col], 
+                patterns = patterns_to_replace_by_typeid[x[edetypeid_col]], 
+                count    = count, 
+                flags    = flags
             ), 
             axis=1
         )
@@ -1502,10 +1350,12 @@ class AMIEndEvents(GenAn):
         
     
     @staticmethod
-    def perform_std_initiation_and_cleaning(df, 
-                                            drop_na_values=True, 
-                                            inplace=True, 
-                                            **kwargs):
+    def perform_std_initiation_and_cleaning(
+        df             , 
+        drop_na_values = True, 
+        inplace        = True, 
+        **kwargs
+    ):
         kwargs['timestamp_col']      = kwargs.get('timestamp_col', None)
         kwargs['start_time_col']     = kwargs.get('start_time_col', 'valuesinterval')
         kwargs['start_time_utc_col'] = kwargs.get('start_time_utc_col', 'valuesinterval_utc')
@@ -1515,69 +1365,13 @@ class AMIEndEvents(GenAn):
         kwargs['set_index_col']      = kwargs.get('start_time_utc_col', 'valuesinterval_utc')
         #-------------------------
         df = AMINonVee.perform_std_initiation_and_cleaning(
-            df=df, 
-            drop_na_values=drop_na_values, 
-            inplace=inplace,
+            df             = df, 
+            drop_na_values = drop_na_values, 
+            inplace        = inplace,
             **kwargs
         )
         #-------------------------
         return df
-        
-    @staticmethod
-    def enforce_end_events_i_within_interval_of_outage_OLD(
-        end_events_df_i, 
-        outg_times_series, 
-        min_timedelta, 
-        max_timedelta, 
-        outg_rec_nb_col = 'outg_rec_nb', 
-        datetime_col='valuesinterval_local'
-    ):
-        r"""
-        This is really intended to be used in a lambda function of a groupby operation.
-
-        end_events_df_i should be an end events pd.DataFrame for a single outage
-
-        outg_times_series should be a series with indices equal to the outage number and values equal
-          to the time of the outage (typically 'DT_OFF_TS_FULL')
-
-        min_timedelta is the minimum time BEFORE the outage to allow end events
-        max_timedelta is the maximum time BEFORE the outage to allow end events
-          e.g., for beteween 1 and 30 days before the outage, set:
-                min_timedelta = datetime.timedelta(days=1)
-                max_timedelta = datetime.timedelta(days=30)
-          I suppose if you wanted to allow end events AFTER the outage you could set min_timedelta to a negative value?
-            (although I HAVE NOT TESTED THIS!)
-        min_ or max_timedelta can be set to None to have one end open
-        """
-        #-------------------------
-        if min_timedelta is None and max_timedelta is None:
-            return end_events_df_i
-        #-------------------------
-        assert(end_events_df_i[outg_rec_nb_col].nunique()==1)
-        outg_rec_nb = end_events_df_i[outg_rec_nb_col].unique().tolist()[0]
-        #-------------------------
-        if outg_rec_nb not in outg_times_series.index:
-            print(f'In enforce_end_events_i_within_interval_of_outage, '\
-                  f'outg_rec_nb={outg_rec_nb} not in outg_times_series!!!!!'\
-                  f'\nCRASH IMMINENT!')
-        outg_time = outg_times_series.loc[outg_rec_nb]
-        # Should only be a single, datetime, value (not, e.g. a series)
-        assert(isinstance(outg_time, datetime.datetime))
-        #-------------------------
-        assert(min_timedelta is not None or max_timedelta is not None)
-        #-------------------------
-        if min_timedelta is None:
-            assert(isinstance(max_timedelta, datetime.timedelta))
-            truth_series = outg_time-end_events_df_i[datetime_col]<max_timedelta
-        elif max_timedelta is None:
-            assert(isinstance(min_timedelta, datetime.timedelta))
-            truth_series = outg_time-end_events_df_i[datetime_col]>min_timedelta
-        else:
-            assert(isinstance(min_timedelta, datetime.timedelta))
-            assert(isinstance(max_timedelta, datetime.timedelta))
-            truth_series = ((outg_time-end_events_df_i[datetime_col]>min_timedelta) & 
-                            (outg_time-end_events_df_i[datetime_col]<max_timedelta))
-        return end_events_df_i[truth_series]
         
         
     @staticmethod
@@ -1677,58 +1471,6 @@ class AMIEndEvents(GenAn):
             #----------
             truth_series = truth_series|truth_series_i
         return end_events_df_i.loc[truth_series]
-
-    @staticmethod
-    def enforce_end_events_within_interval_of_outage_OLD(
-        end_events_df, 
-        outg_times_series, 
-        min_timedelta, 
-        max_timedelta, 
-        outg_rec_nb_col = 'outg_rec_nb', 
-        datetime_col='valuesinterval_local'
-    ):
-        r"""    
-        end_events_df should be an end events pd.DataFrame containing multiple outages (although, 
-          this will work also for a single outage)
-
-        outg_times_series should be a series with indices equal to the outage number and values equal
-          to the time of the outage (typically 'DT_OFF_TS_FULL')
-          outg_times_series needs to include all outages found in end_events_df, and the dtype should be the same
-            e.g., if outages are strings in end_events_df, the index of outg_times_series needs to be strings
-
-        min_timedelta is the minimum time BEFORE the outage to allow end events
-        max_timedelta is the maximum time BEFORE the outage to allow end events
-          e.g., for beteween 1 and 30 days before the outage, set:
-                min_timedelta = datetime.timedelta(days=1)
-                max_timedelta = datetime.timedelta(days=30)
-          I suppose if you wanted to allow end events AFTER the outage you could set min_timedelta to a negative value?
-            (although I HAVE NOT TESTED THIS!)
-        min_ or max_timedelta can be set to None to have one end open
-        """
-        #-------------------------
-        if min_timedelta is None and max_timedelta is None:
-            return end_events_df
-        #-------------------------
-        reduced_end_events_df = end_events_df.groupby(outg_rec_nb_col).apply(
-            lambda x: AMIEndEvents.enforce_end_events_i_within_interval_of_outage_OLD(
-                end_events_df_i=x, 
-                outg_times_series=outg_times_series, 
-                min_timedelta=min_timedelta, 
-                max_timedelta=max_timedelta, 
-                outg_rec_nb_col=outg_rec_nb_col, 
-                datetime_col=datetime_col
-            )
-        )
-        #-------------------------
-        # Reset the index, so reduced_end_events_df has the same form as end_events_df
-        #   Otherwise, outg_rec_nb_col would be the new index
-        if outg_rec_nb_col in reduced_end_events_df: #should always be true
-            drop_idx_in_reset=True
-        else:
-            drop_idx_in_reset=False
-        reduced_end_events_df = reduced_end_events_df.reset_index(drop=drop_idx_in_reset)
-        #-------------------------
-        return reduced_end_events_df
         
     @staticmethod
     def enforce_end_events_within_interval_of_outage(
@@ -1972,9 +1714,11 @@ class AMIEndEvents(GenAn):
         
     @staticmethod
     def convert_reason_counts_per_outage_df_long_to_wide(
-        rcpo_df_long , 
-        reason_col   = 'reason', 
-        fillna_w_0   = True
+        rcpo_df_long      , 
+        reason_col        = 'reason', 
+        higher_order_cols = None, 
+        fillna_w_0        = True, 
+        drop_lvl_0_col    = False
     ):
         r"""
         Convert a long format reason_counts_per_outage_df to a wide format.
@@ -1986,17 +1730,36 @@ class AMIEndEvents(GenAn):
               Missing reasons are filled with NaN.  Setting fillna_w_0=True replaces these with 0 (as these signify
               0 counts for that reason)
         """
+        #--------------------------------------------------
+        warnings.filterwarnings('ignore', '.*DataFrame is highly fragmented.*', )
+        #--------------------------------------------------
+        # Need reason_col (and any higher_order_cols) to be contained in columns
+        if higher_order_cols is not None:
+            assert(isinstance(higher_order_cols, list))
+            final_cols = higher_order_cols + [reason_col]
+        else:
+            final_cols = [reason_col]
         #-------------------------
-        # Need to find which index level contains reason_col and reset that index 
-        #  (effectively turning that index into a column)
-        assert(reason_col in rcpo_df_long.index.names)
-        reason_col_idx_level = rcpo_df_long.index.names.index(reason_col)
-        rcpo_df_long = rcpo_df_long.reset_index(level=reason_col_idx_level)
-        rcpo_df_wide = rcpo_df_long.pivot(columns=reason_col)
-        #-----
+        # If not in columns, need to find which index level contains final_cols and reset those indices 
+        #  (effectively turning those indices into columns)
+        for final_col_i in final_cols:
+            if final_col_i not in rcpo_df_long.columns:
+                assert(final_col_i in rcpo_df_long.index.names)
+                final_col_i_idx_level = rcpo_df_long.index.names.index(final_col_i)
+                rcpo_df_long          = rcpo_df_long.reset_index(level=final_col_i_idx_level)
+        #-------------------------
+        assert(len(set(rcpo_df_long.columns).difference(set(final_cols)))==1)
+        rcpo_df_wide = rcpo_df_long.pivot(columns=final_cols)
+        #-------------------------
         if fillna_w_0:
             rcpo_df_wide = rcpo_df_wide.fillna(0)
         #-------------------------
+        rcpo_df_wide = rcpo_df_wide[rcpo_df_wide.columns.sort_values()]
+        if drop_lvl_0_col and rcpo_df_wide.columns.get_level_values(0).nunique()==1:
+            rcpo_df_wide = rcpo_df_wide.droplevel(level=0, axis=1)
+        #--------------------------------------------------
+        warnings.filterwarnings('default', '.*DataFrame is highly fragmented.*', )
+        #--------------------------------------------------
         return rcpo_df_wide
 
     @staticmethod
@@ -2322,12 +2085,12 @@ class AMIEndEvents(GenAn):
                     
                     
     def get_reason_counts_per_group_QUICK(
-            end_events_df         , 
-            group_cols            = ['serialnumber', 'aep_premise_nb'], 
-            group_freq            = None, 
-            gpby_dropna           = True, 
-            reason_col            = 'reason', 
-            set_group_cols_as_idx = True
+        end_events_df         , 
+        group_cols            = ['serialnumber', 'aep_premise_nb'], 
+        group_freq            = None, 
+        gpby_dropna           = True, 
+        reason_col            = 'reason', 
+        set_group_cols_as_idx = True
     ):
         r"""
         """
@@ -2490,6 +2253,7 @@ class AMIEndEvents(GenAn):
         )
                     
     #****************************************************************************************************
+    # MOVED to CPXDfBuilder (make_reason_columns_equal)
     @staticmethod                
     def make_reason_counts_per_outg_columns_equal(
         rcpo_df_1                     , 
@@ -2520,6 +2284,8 @@ class AMIEndEvents(GenAn):
         if cols_to_init_with_empty_lists is None:
             cols_to_init_with_empty_lists=AMIEndEvents.std_SNs_cols()
         #-------------------------
+        warnings.filterwarnings('ignore', '.*DataFrame is highly fragmented.*', )
+        #-------------------------
         if not inplace:
             rcpo_df_1 = rcpo_df_1.copy()
             rcpo_df_2 = rcpo_df_2.copy()
@@ -2546,93 +2312,15 @@ class AMIEndEvents(GenAn):
             # Make sure operation worked as expected
             assert(rcpo_df_1.columns.tolist()==rcpo_df_2.columns.tolist())
         #-------------------------
+        warnings.filterwarnings('default', '.*DataFrame is highly fragmented.*', )
+        #-------------------------
         if not inplace:
             return (rcpo_df_1, rcpo_df_2)
         else:
             return
         
-    @staticmethod    
-    def make_reason_counts_per_outg_columns_equal_dfs_list_OLD(
-        rcpo_dfs, 
-        same_order=True, 
-        inplace=True, 
-        cols_to_init_with_empty_lists=None
-    ):
-        r"""
-        Just like make_reason_counts_per_outg_columns_equal, but for a list of pd.DataFrames, not just two.
-        Probably make_reason_counts_per_outg_columns_equal can be replaced in favor of this more general function.
-        
-        The missing columns in each are added as columns of zeros, which is appropriate as no instances of
-          the missing reason were found.
-          EXCEPT any missing column in cols_to_init_with_empty_lists is added as a column of empty lists!
 
-        This is important when joining two pd.DataFrames, or when plotting two together  
-        
-        If inplace is True, nothing is returned
-        If inplace is False, the updated input DFs are returned
-        
-        NOTE: Occasionally pandas will output a warning due to the code below stating, "PerformanceWarning: DataFrame is highly fragmented...."
-              I suggest you just ignore this.  There is no option for inplace with pd.concat, so when inplace=True the method suggested by Python
-              will not work.
-              
-        cols_to_init_with_empty_lists:
-          Defaults to AMIEndEvents.std_SNs_cols() when cols_to_init_with_empty_lists is None
-        """
-        #-------------------------
-        if cols_to_init_with_empty_lists is None:
-            cols_to_init_with_empty_lists=AMIEndEvents.std_SNs_cols()
-        #-------------------------
-        warnings.filterwarnings('ignore', '.*DataFrame is highly fragmented.*', )
-        #-------------------------
-        all_cols = []
-        for df in rcpo_dfs:
-            all_cols.extend(df.columns.tolist())
-        all_cols=list(set(all_cols))
-        #-------------------------
-        return_dfs = []
-        for i,df in enumerate(rcpo_dfs):
-            n_rows = df.shape[0]
-            new_cols_dict={}
-            for col in all_cols:
-                if col not in df.columns:
-                    if col in cols_to_init_with_empty_lists:
-                        new_col_vals = [[]]*n_rows
-                    else:
-                        new_col_vals = [0.0]*n_rows
-                    #---------------
-                    assert(col not in new_cols_dict)
-                    new_cols_dict[col] = new_col_vals
-                else:
-                    continue
-            # END for col in all_cols
-            if len(new_cols_dict)>0:
-                new_cols_df = pd.DataFrame(data=new_cols_dict, index=df.index)
-                if not inplace:
-                    df = pd.concat([df, new_cols_df], axis=1)
-                else:
-                    # See note above concerning warning
-                    df[new_cols_df.columns] = new_cols_df.values
-            if same_order:
-                df.sort_index(axis=1, inplace=True)
-            return_dfs.append(df)
-        # END for i,df in enumerate(rcpo_dfs)
-        #-------------------------
-        # Make sure operation worked as expected
-        for df in return_dfs:
-            assert(len(set(df.columns).symmetric_difference(set(all_cols)))==0)
-        #-------------------------
-        if same_order:
-            for df in return_dfs:
-                # Make sure operation worked as expected
-                assert(df.columns.tolist()==return_dfs[0].columns.tolist())
-        #-------------------------
-        warnings.filterwarnings('default', '.*DataFrame is highly fragmented.*', )
-        #-------------------------
-        if not inplace:
-            return return_dfs
-        else:
-            return
-        
+    # MOVED to CPXDfBuilder (make_reason_columns_equal_dfs_list)
     @staticmethod
     def make_reason_counts_per_outg_columns_equal_dfs_list(
         rcpo_dfs                      , 
@@ -2723,7 +2411,7 @@ class AMIEndEvents(GenAn):
         all_cols = []
         for df in rcpo_dfs:
             all_cols.extend(df.columns.get_level_values(col_level).tolist())
-        all_cols=list(set(all_cols))
+        all_cols = list(set(all_cols))
         #-------------------------
         return_dfs = []
         for i,df in enumerate(rcpo_dfs):
@@ -2804,10 +2492,10 @@ class AMIEndEvents(GenAn):
             
     @staticmethod
     def make_reason_counts_per_outg_columns_equal_list_of_dicts_of_dfs(
-        rcpo_dfs_dicts, 
-        df_key_tags_to_ignore = ['ede_typeid_to_reason', 'reason_to_ede_typeid'], 
-        same_order=True, 
-        cols_to_init_with_empty_lists=None
+        rcpo_dfs_dicts                , 
+        df_key_tags_to_ignore         = ['ede_typeid_to_reason', 'reason_to_ede_typeid'], 
+        same_order                    = True, 
+        cols_to_init_with_empty_lists = None
     ):
         r"""
         rcpo_dfs_dicts should be a list with elements equal to dicts with pd.DataFrame values.
@@ -2836,7 +2524,7 @@ class AMIEndEvents(GenAn):
         """
         #-------------------------
         if cols_to_init_with_empty_lists is None:
-            cols_to_init_with_empty_lists=AMIEndEvents.std_SNs_cols()
+            cols_to_init_with_empty_lists = AMIEndEvents.std_SNs_cols()
         #-------------------------
         # Make sure rcpo_dfs_dicts is a list of dicts
         assert(isinstance(rcpo_dfs_dicts, list))
@@ -2852,14 +2540,19 @@ class AMIEndEvents(GenAn):
         #-------------------------
         # Remove any df_key_tags_to_ignore from unique_df_keys
         if df_key_tags_to_ignore is not None:
-            unique_df_keys = Utilities.remove_tagged_from_list(lst=unique_df_keys, tags_to_ignore=df_key_tags_to_ignore)
+            unique_df_keys = Utilities.remove_tagged_from_list(
+                lst            = unique_df_keys, 
+                tags_to_ignore = df_key_tags_to_ignore
+            )
 
         #-------------------------
         # For each key, grab all entries from each dict having that key,
         #   and make the columns equal
         for df_key_i in unique_df_keys:
-            rcpo_dfs_i = [dfs_dict[df_key_i] for dfs_dict in rcpo_dfs_dicts 
-                          if df_key_i in dfs_dict]
+            rcpo_dfs_i = [
+                dfs_dict[df_key_i] for dfs_dict in rcpo_dfs_dicts 
+                if df_key_i in dfs_dict
+            ]
             assert(len(rcpo_dfs_i)>0)
             #-------------------------
             # If only one DF, no need to call make_reason_counts_per_outg_columns_equal_dfs_list
@@ -2867,20 +2560,19 @@ class AMIEndEvents(GenAn):
                 continue
             #-------------------------
             AMIEndEvents.make_reason_counts_per_outg_columns_equal_dfs_list(
-                rcpo_dfs = rcpo_dfs_i, 
-                same_order=same_order, 
-                inplace=True, 
-                cols_to_init_with_empty_lists=cols_to_init_with_empty_lists
+                rcpo_dfs                      = rcpo_dfs_i, 
+                same_order                    = same_order, 
+                inplace                       = True, 
+                cols_to_init_with_empty_lists = cols_to_init_with_empty_lists
             )
         #-------------------------
         return
         
     @staticmethod
     def make_multiindex_reason_counts_per_outg_reasons_uniform(
-        mi_rcpo_df, 
-        same_order=True, 
-        sort_index=True,
-        cols_to_init_with_empty_lists=None
+        mi_rcpo_df                    ,  
+        sort_index                    = True,
+        cols_to_init_with_empty_lists = None
     ):
         r"""
         This is similar in spirit to make_reason_counts_per_outg_columns_equal.
@@ -2894,16 +2586,16 @@ class AMIEndEvents(GenAn):
         """
         #-------------------------
         if cols_to_init_with_empty_lists is None:
-            cols_to_init_with_empty_lists=AMIEndEvents.std_SNs_cols()
+            cols_to_init_with_empty_lists = AMIEndEvents.std_SNs_cols()
         #-------------------------
         assert(mi_rcpo_df.index.nlevels==2)
         all_reasons = mi_rcpo_df.index.get_level_values(1).unique().tolist()
         return_df = pd.DataFrame()
         for idx, df_i in mi_rcpo_df.groupby(mi_rcpo_df.index.get_level_values(0)):
-            reasons_needed = set(all_reasons).difference(set(df_i.index.get_level_values(1)))
+            reasons_needed   = set(all_reasons).difference(set(df_i.index.get_level_values(1)))
             #-----
             multi_idx_tuples = [(idx, x) for x in reasons_needed]
-            multi_idx = pd.MultiIndex.from_tuples(multi_idx_tuples, names=df_i.index.names)
+            multi_idx        = pd.MultiIndex.from_tuples(multi_idx_tuples, names=df_i.index.names)
             #-----
             # If none of cols_to_init_with_empty_lists found in reasons_needed, can proceed with 
             # original, simple method.
@@ -2927,13 +2619,14 @@ class AMIEndEvents(GenAn):
         #-------------------------
         return return_df
 
+    # MOVED to CPXDfBuilder
     @staticmethod
     def sum_numeric_cols_and_join_list_cols(
-        df, 
-        list_cols=['_SNs'], 
-        list_counts_cols=['_nSNs'], 
-        numeric_cols=None,
-        update_list_counts_from_lists=True
+        df                            , 
+        list_cols                     = ['_SNs'], 
+        list_counts_cols              = ['_nSNs'], 
+        numeric_cols                  = None,
+        update_list_counts_from_lists = True
     ):
         r"""
         The numeric columns in df are summed, whereas the columns containing lists (e.g., lists of serial numbers)
@@ -2980,19 +2673,20 @@ class AMIEndEvents(GenAn):
                     return_series[list_counts_cols[i]] = len(joined_list_i)
 
         # Order return_series as df is ordered
-        order = [x for x in df.columns if x in return_series.index]
+        order         = [x for x in df.columns if x in return_series.index]
         return_series = return_series[order]
         #-------------------------
         return return_series
 
+    # MOVED to CPXDfBuilder
     @staticmethod
     def w_avg_df_numeric_cols_and_join_list_cols(
-        df, 
-        w_col, 
-        list_cols=['_SNs'], 
-        list_counts_cols=['_nSNs'], 
-        numeric_cols=None, 
-        update_list_counts_from_lists=True
+        df                            , 
+        w_col                         , 
+        list_cols                     = ['_SNs'], 
+        list_counts_cols              = ['_nSNs'], 
+        numeric_cols                  = None, 
+        update_list_counts_from_lists = True
     ):
         r"""
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -3056,10 +2750,12 @@ class AMIEndEvents(GenAn):
         # NOTE: Never want list_counts_cols to be weighted, hence the use of sum_and_weighted_sum_of_df_cols below instead
         #       of w_sum_df_cols
         return_series = Utilities_df.sum_and_weighted_sum_of_df_cols(
-            df=df, 
-            sum_x_cols=list_counts_cols, sum_w_col=None,
-            wght_x_cols=numeric_cols, wght_w_col=w_col, 
-            include_sum_of_weights=True
+            df                     = df, 
+            sum_x_cols             = list_counts_cols, 
+            sum_w_col              = None,
+            wght_x_cols            = numeric_cols, 
+            wght_w_col             = w_col, 
+            include_sum_of_weights = True
         )
         #-------------------------
         for i, list_col_i in enumerate(list_cols):
@@ -3079,10 +2775,19 @@ class AMIEndEvents(GenAn):
 
     @staticmethod
     def sum_and_weighted_average_of_df_numeric_cols_and_join_list_cols(
-        df, 
-        sum_numeric_cols,  sum_w_col,  sum_list_cols,  sum_list_counts_cols, 
-        wght_numeric_cols, wght_w_col, wght_list_cols, wght_list_counts_cols, 
-        update_list_counts_from_lists=True
+        df                            , 
+        #-----
+        sum_numeric_cols              ,  
+        sum_w_col                     ,  
+        sum_list_cols                 ,  
+        sum_list_counts_cols          , 
+        #-----
+        wght_numeric_cols             , 
+        wght_w_col                    , 
+        wght_list_cols                , 
+        wght_list_counts_cols         , 
+        #-----
+        update_list_counts_from_lists = True
     ): 
         r"""
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -3111,8 +2816,8 @@ class AMIEndEvents(GenAn):
             return df.squeeze()
         #-------------------------
         # There must be the same number of list_cols as list_counts_cols, and the ordering should be the same.
-        assert(len(sum_list_cols) ==len(sum_list_counts_cols))
-        assert(len(wght_list_cols)==len(wght_list_counts_cols))
+        assert(len(sum_list_cols)  == len(sum_list_counts_cols))
+        assert(len(wght_list_cols) == len(wght_list_counts_cols))
         #-------------------------
         # Allow myself to be a little lazy by permitting sum_list_cols to be in sum_numeric_cols
         # (and, similarly, wght_SNs_col in wght_x_cols)
@@ -3121,44 +2826,45 @@ class AMIEndEvents(GenAn):
         wght_numeric_cols = [x for x in wght_numeric_cols if x not in [wght_w_col]+wght_list_cols+wght_list_counts_cols]
         #-------------------------
         wght_series = AMIEndEvents.w_avg_df_numeric_cols_and_join_list_cols(
-            df=df, 
-            w_col=wght_w_col, 
-            list_cols=wght_list_cols, 
-            list_counts_cols=wght_list_counts_cols, 
-            numeric_cols=wght_numeric_cols, 
-            update_list_counts_from_lists=update_list_counts_from_lists
+            df                            = df, 
+            w_col                         = wght_w_col, 
+            list_cols                     = wght_list_cols, 
+            list_counts_cols              = wght_list_counts_cols, 
+            numeric_cols                  = wght_numeric_cols, 
+            update_list_counts_from_lists = update_list_counts_from_lists
         )    
         #-------------------------
         sum_series = AMIEndEvents.sum_numeric_cols_and_join_list_cols(
-            df=df, 
-            list_cols=sum_list_cols, 
-            list_counts_cols=sum_list_counts_cols, 
-            numeric_cols=sum_numeric_cols,
-            update_list_counts_from_lists=update_list_counts_from_lists
+            df                            = df, 
+            list_cols                     = sum_list_cols, 
+            list_counts_cols              = sum_list_counts_cols, 
+            numeric_cols                  = sum_numeric_cols,
+            update_list_counts_from_lists = update_list_counts_from_lists
         )
         sum_series[sum_w_col] = wght_series[wght_w_col]
         #-------------------------
         return_series = pd.concat([sum_series, wght_series])
         #-------------------------
         # Order return_series as df is ordered
-        order = [x for x in df.columns if x in return_series.index]
+        order         = [x for x in df.columns if x in return_series.index]
         return_series = return_series[order]
         #-------------------------
         return return_series
-                    
+
+    # MOVED TO CPXDfBuilder                
     @staticmethod                
     def combine_two_reason_counts_per_outage_dfs(
-        rcpo_df_1, 
-        rcpo_df_2, 
-        are_dfs_wide_form, 
-        normalize_by_nSNs_included, 
-        is_norm, 
-        list_cols=['_SNs'], 
-        list_counts_cols=['_nSNs'],
-        w_col = None, 
-        level_0_raw_col = 'counts', 
-        level_0_nrm_col = 'counts_norm', 
-        convert_rcpo_wide_to_long_col_args=None
+        rcpo_df_1                          , 
+        rcpo_df_2                          , 
+        are_dfs_wide_form                  , 
+        normalize_by_nSNs_included         , 
+        is_norm                            , 
+        list_cols                          = ['_SNs'], 
+        list_counts_cols                   = ['_nSNs'],
+        w_col                              = None, 
+        level_0_raw_col                    = 'counts', 
+        level_0_nrm_col                    = 'counts_norm', 
+        convert_rcpo_wide_to_long_col_args = None
     ):
         r"""
         Combine two reason_counts_per_outage_dfs.
@@ -3203,46 +2909,53 @@ class AMIEndEvents(GenAn):
             #-------------------------
             # (2) run wide form through this function
             rcpo_full_wide = AMIEndEvents.combine_two_reason_counts_per_outage_dfs(
-                rcpo_df_1=rcpo_df_1, 
-                rcpo_df_2=rcpo_df_2, 
-                are_dfs_wide_form=True, 
-                normalize_by_nSNs_included=normalize_by_nSNs_included, 
-                is_norm=is_norm, 
-                list_cols=list_cols, 
-                list_counts_cols=list_counts_cols,
-                w_col = w_col, 
-                level_0_raw_col=level_0_raw_col, 
-                level_0_nrm_col=level_0_nrm_col, 
-                convert_rcpo_wide_to_long_col_args=convert_rcpo_wide_to_long_col_args
+                rcpo_df_1                          = rcpo_df_1, 
+                rcpo_df_2                          = rcpo_df_2, 
+                are_dfs_wide_form                  = True, 
+                normalize_by_nSNs_included         = normalize_by_nSNs_included, 
+                is_norm                            = is_norm, 
+                list_cols                          = list_cols, 
+                list_counts_cols                   = list_counts_cols,
+                w_col                              = w_col, 
+                level_0_raw_col                    = level_0_raw_col, 
+                level_0_nrm_col                    = level_0_nrm_col, 
+                convert_rcpo_wide_to_long_col_args = convert_rcpo_wide_to_long_col_args
             )
             #-------------------------
             # (3) convert back to long form
             dflt_convert_rcpo_wide_to_long_col_args = dict(        
-                new_counts_col='counts', 
-                new_counts_norm_col='counts_norm', 
-                org_counts_col='counts', 
-                org_counts_norm_col='counts_norm', 
-                idx_0_name = 'outg_rec_nb'
+                new_counts_col      = 'counts', 
+                new_counts_norm_col = 'counts_norm', 
+                org_counts_col      = 'counts', 
+                org_counts_norm_col = 'counts_norm', 
+                idx_0_name          = 'outg_rec_nb'
             )
             if convert_rcpo_wide_to_long_col_args is None:
                 convert_rcpo_wide_to_long_col_args = {}
             convert_rcpo_wide_to_long_col_args = Utilities.supplement_dict_with_default_values(
-                to_supplmnt_dict=convert_rcpo_wide_to_long_col_args, 
-                default_values_dict=dflt_convert_rcpo_wide_to_long_col_args, 
-                extend_any_lists=False, inplace=True
+                to_supplmnt_dict    = convert_rcpo_wide_to_long_col_args, 
+                default_values_dict = dflt_convert_rcpo_wide_to_long_col_args, 
+                extend_any_lists    = False, 
+                inplace             = True
             )
             if not normalize_by_nSNs_included and is_norm:
                 convert_rcpo_wide_to_long_col_args['new_counts_col'] = convert_rcpo_wide_to_long_col_args['new_counts_norm_col']
                 convert_rcpo_wide_to_long_col_args['org_counts_col'] = convert_rcpo_wide_to_long_col_args['org_counts_norm_col']
             rcpo_full = AMIEndEvents.convert_reason_counts_per_outage_df_wide_to_long(
-                rcpo_df_wide=rcpo_full_wide, 
-                normalize_by_nSNs_included=normalize_by_nSNs_included, 
+                rcpo_df_wide               = rcpo_full_wide, 
+                normalize_by_nSNs_included = normalize_by_nSNs_included, 
                 **convert_rcpo_wide_to_long_col_args
             )
             return rcpo_full
         #----------------------------------------------------------------------------------------------------
         #--------------------------------------------------
-        AMIEndEvents.make_reason_counts_per_outg_columns_equal(rcpo_df_1, rcpo_df_2, same_order=True, inplace=True)
+        AMIEndEvents.make_reason_counts_per_outg_columns_equal(
+            rcpo_df_1                     = rcpo_df_1, 
+            rcpo_df_2                     = rcpo_df_2, 
+            same_order                    = True, 
+            inplace                       = True, 
+            cols_to_init_with_empty_lists = None
+        )
         #-------------------------
         rcpo_full = pd.concat([rcpo_df_1, rcpo_df_2])
         rcpo_full = rcpo_full[rcpo_full.columns.sort_values()]
@@ -3266,57 +2979,66 @@ class AMIEndEvents(GenAn):
             #                rcpo_full_nrm = rcpo_full_nrm.groupby(rcpo_full_nrm.index).apply(Utilities_df.w_avg_df_cols, w_col=nSNs_col)
             #       3. Recombining into rcpo_full
             assert(rcpo_full.columns.nlevels==2)
-            sum_numeric_cols = rcpo_full.columns[rcpo_full.columns.get_level_values(0)==level_0_raw_col]
-            sum_w_col = (level_0_raw_col, w_col)
+            sum_numeric_cols     = rcpo_full.columns[rcpo_full.columns.get_level_values(0)==level_0_raw_col]
+            sum_w_col            = (level_0_raw_col, w_col)
             sum_list_cols        = [(level_0_raw_col, x) for x in list_cols]
             sum_list_counts_cols = [(level_0_raw_col, x) for x in list_counts_cols]
 
-            wght_numeric_cols = rcpo_full.columns[rcpo_full.columns.get_level_values(0)==level_0_nrm_col]
-            wght_w_col = (level_0_nrm_col, w_col)
+            wght_numeric_cols     = rcpo_full.columns[rcpo_full.columns.get_level_values(0)==level_0_nrm_col]
+            wght_w_col            = (level_0_nrm_col, w_col)
             wght_list_cols        = [(level_0_nrm_col, x) for x in list_cols]
             wght_list_counts_cols = [(level_0_nrm_col, x) for x in list_counts_cols]
 
             rcpo_full = rcpo_full.groupby(rcpo_full.index).apply(
                 lambda x: AMIEndEvents.sum_and_weighted_average_of_df_numeric_cols_and_join_list_cols(
-                    df=x, 
-                    sum_numeric_cols=sum_numeric_cols,   sum_w_col=sum_w_col,   sum_list_cols=sum_list_cols,   sum_list_counts_cols=sum_list_counts_cols, 
-                    wght_numeric_cols=wght_numeric_cols, wght_w_col=wght_w_col, wght_list_cols=wght_list_cols, wght_list_counts_cols=wght_list_counts_cols, 
-                    update_list_counts_from_lists=True                    
+                    df                            = x, 
+                    #-----
+                    sum_numeric_cols              = sum_numeric_cols,   
+                    sum_w_col                     = sum_w_col,   
+                    sum_list_cols                 = sum_list_cols,   
+                    sum_list_counts_cols          = sum_list_counts_cols, 
+                    #-----
+                    wght_numeric_cols             = wght_numeric_cols, 
+                    wght_w_col                    = wght_w_col, 
+                    wght_list_cols                = wght_list_cols, 
+                    wght_list_counts_cols         = wght_list_counts_cols, 
+                    #-----
+                    update_list_counts_from_lists = True                    
                 )
             )
         else:
             if rcpo_full.columns.nlevels>1:
                 assert(rcpo_full.columns.nlevels==2)
                 assert(rcpo_full.columns.get_level_values(0).nunique()==1)
-                list_cols =        [(rcpo_full.columns.get_level_values(0).unique().tolist()[0], x) for x in list_cols]
+                list_cols        = [(rcpo_full.columns.get_level_values(0).unique().tolist()[0], x) for x in list_cols]
                 list_counts_cols = [(rcpo_full.columns.get_level_values(0).unique().tolist()[0], x) for x in list_counts_cols]
-                w_col =             (rcpo_full.columns.get_level_values(0).unique().tolist()[0], w_col)
-                
+                w_col            = (rcpo_full.columns.get_level_values(0).unique().tolist()[0], w_col)
+                #-----
                 nSNs_col = (rcpo_full.columns.get_level_values(0).unique().tolist()[0], nSNs_col)
-                SNs_col = (rcpo_full.columns.get_level_values(0).unique().tolist()[0], SNs_col)
+                SNs_col  = (rcpo_full.columns.get_level_values(0).unique().tolist()[0], SNs_col)
             #NOTE: No assert for list_cols (SNs_col) because this function is intended for use both with and without it
             assert(all([x in rcpo_full for x in list_counts_cols]))
             #-------------------------
             if not is_norm:
                 rcpo_full = rcpo_full.groupby(rcpo_full.index).apply(
                     lambda x: AMIEndEvents.sum_numeric_cols_and_join_list_cols(
-                        df=x, 
-                        list_cols=list_cols, 
-                        list_counts_cols=list_counts_cols, 
-                        numeric_cols=None,
-                        update_list_counts_from_lists=True
+                        df                            = x, 
+                        list_cols                     = list_cols, 
+                        list_counts_cols              = list_counts_cols, 
+                        numeric_cols                  = None,
+                        update_list_counts_from_lists = True
                     )
                 )
             #-------------------------
             else:
                 rcpo_full = rcpo_full.groupby(rcpo_full.index).apply(
                     lambda x: AMIEndEvents.w_avg_df_numeric_cols_and_join_list_cols(
-                        df=x, 
-                        w_col=w_col, 
-                        list_cols=list_cols, 
-                        list_counts_cols=list_counts_cols, 
-                        numeric_cols=None, 
-                        update_list_counts_from_lists=True
+                        df                            = x, 
+                        w_col                         = w_col, 
+                        list_cols                     = list_cols, 
+                        list_counts_cols              = list_counts_cols, 
+                        numeric_cols                  = None, 
+                        update_list_counts_from_lists = True
                     )
                 )
         #--------------------------------------------------
@@ -3332,48 +3054,52 @@ class AMIEndEvents(GenAn):
     #****************************************************************************************************
     @staticmethod
     def build_ede_typeid_to_reason_df(
-        end_events_df, 
-        reason_col='reason', 
-        ede_typeid_col='enddeviceeventtypeid'
+        end_events_df  , 
+        reason_col     = 'reason', 
+        ede_typeid_col = 'enddeviceeventtypeid'
     ):
         r"""
         Build a pd.DataFrame to allow the mapping of enddeviceeventtypeid to reason
         """
-        ede_typeid_to_reason_df = end_events_df.groupby(ede_typeid_col)[reason_col].unique().to_frame()
+        ede_typeid_to_reason_df             = end_events_df.groupby(ede_typeid_col)[reason_col].unique().to_frame()
         ede_typeid_to_reason_df[reason_col] = ede_typeid_to_reason_df[reason_col].apply(lambda x: list(x))
         return ede_typeid_to_reason_df
 
     @staticmethod
     def combine_two_ede_typeid_to_reason_dfs(
-        ede_typeid_to_reason_df1, 
-        ede_typeid_to_reason_df2,
-        sort=False
+        ede_typeid_to_reason_df1 , 
+        ede_typeid_to_reason_df2 ,
+        sort                     = False
     ):
         r"""
         """
         #-------------------------
-        assert(ede_typeid_to_reason_df1.shape[1]==ede_typeid_to_reason_df2.shape[1]==1)
-        assert(ede_typeid_to_reason_df1.columns[0]==ede_typeid_to_reason_df2.columns[0])
+        assert(ede_typeid_to_reason_df1.shape[1]   == ede_typeid_to_reason_df2.shape[1]==1)
+        assert(ede_typeid_to_reason_df1.columns[0] == ede_typeid_to_reason_df2.columns[0])
         # After calling Utilities_df.consolidate_column_of_lists, the column name is forgotten, so save here
         reason_col = ede_typeid_to_reason_df1.columns[0]
         #-------------------------
         ede_typeid_to_reason_df_full = pd.concat([ede_typeid_to_reason_df1, ede_typeid_to_reason_df2])
         ede_typeid_to_reason_df_full=ede_typeid_to_reason_df_full.groupby(ede_typeid_to_reason_df_full.index).apply(
             lambda x: Utilities_df.consolidate_column_of_lists(
-                df=x, 
-                col=reason_col, 
-                sort=sort
+                df   = x, 
+                col  = reason_col, 
+                sort = sort
             )
         )
         ede_typeid_to_reason_df_full=ede_typeid_to_reason_df_full.to_frame(name=reason_col)
         #-------------------------
-        assert(len(set(ede_typeid_to_reason_df1.index.tolist()+ede_typeid_to_reason_df2.index.tolist()))==
-               ede_typeid_to_reason_df_full.shape[0])
+        assert(
+            len(set(ede_typeid_to_reason_df1.index.tolist()+ede_typeid_to_reason_df2.index.tolist()))==
+            ede_typeid_to_reason_df_full.shape[0]
+        )
         #-------------------------
         return ede_typeid_to_reason_df_full 
 
     @staticmethod
-    def invert_ede_typeid_to_reason_df(ede_typeid_to_reason_df):
+    def invert_ede_typeid_to_reason_df(
+        ede_typeid_to_reason_df
+    ):
         r"""
         Invert ede_typeid_to_reason_df to create a pd.DataFrame to allow the mapping of reason to enddeviceeventtypeid
         """
@@ -3381,22 +3107,22 @@ class AMIEndEvents(GenAn):
         assert(ede_typeid_to_reason_df.shape[1]==1)
         reason_col = ede_typeid_to_reason_df.columns[0]
         #-------------------------
-        reason_to_ede_typeid_df = ede_typeid_to_reason_df.explode(column=reason_col)
+        reason_to_ede_typeid_df                                     = ede_typeid_to_reason_df.explode(column=reason_col)
         # Make a new column to house the ede_typeid (previously the index)
-        reason_to_ede_typeid_df[reason_to_ede_typeid_df.index.name]=reason_to_ede_typeid_df.index
-        reason_to_ede_typeid_df=reason_to_ede_typeid_df.set_index(reason_col)
+        reason_to_ede_typeid_df[reason_to_ede_typeid_df.index.name] = reason_to_ede_typeid_df.index
+        reason_to_ede_typeid_df                                     = reason_to_ede_typeid_df.set_index(reason_col)
         #-------------------------
         return reason_to_ede_typeid_df    
     
     #****************************************************************************************************
     @staticmethod
     def get_net_reason_counts_for_outages_from_rcpo_df(
-        rcpo_df, 
-        reason_col='reason', 
-        normalize_by_nSNs_included=False,
-        agg_types = [np.sum, np.mean], 
-        SNs_reasons_contain='_SNs', 
-        convert_rcpo_wide_to_long_col_args=None
+        rcpo_df                            , 
+        reason_col                         = 'reason', 
+        normalize_by_nSNs_included         = False,
+        agg_types                          = [np.sum, np.mean], 
+        SNs_reasons_contain                = '_SNs', 
+        convert_rcpo_wide_to_long_col_args = None
     ):
         r"""
         This function is designed to work with long-format rcpo df WITHOUT list of SNs.
@@ -3408,27 +3134,23 @@ class AMIEndEvents(GenAn):
         assert(Utilities.is_object_one_of_types(rcpo_df, [pd.DataFrame, dict]))
         if isinstance(rcpo_df, dict):
             return_dict = {}
-            if convert_rcpo_wide_to_long_col_args is None:
-                counts_col = 'counts'
-            else:
-                counts_col = convert_rcpo_wide_to_long_col_args.get(new_counts_col, 'counts')
             for key,df in rcpo_df.items():
                 assert(key not in return_dict)
                 net_reason_counts_df_i = AMIEndEvents.get_net_reason_counts_for_outages_from_rcpo_df(
-                    rcpo_df=df, 
-                    reason_col=reason_col, 
-                    normalize_by_nSNs_included=False,
-                    agg_types=agg_types, 
-                    SNs_reasons_contain=SNs_reasons_contain, 
-                    convert_rcpo_wide_to_long_col_args=convert_rcpo_wide_to_long_col_args
+                    rcpo_df                            = df, 
+                    reason_col                         = reason_col, 
+                    normalize_by_nSNs_included         = False,
+                    agg_types                          = agg_types, 
+                    SNs_reasons_contain                = SNs_reasons_contain, 
+                    convert_rcpo_wide_to_long_col_args = convert_rcpo_wide_to_long_col_args
                 )
                 # Below sets column equal to key (this is needed so counts_norm does not come back simply as counts)
-                assert(net_reason_counts_df_i.columns.nlevels<=2)
-                if net_reason_counts_df_i.columns.nlevels==1:
-                    assert(len(net_reason_counts_df_i.columns)==1)
-                    net_reason_counts_df_i.columns=key
+                assert(net_reason_counts_df_i.columns.nlevels <= 2)
+                if net_reason_counts_df_i.columns.nlevels == 1:
+                    assert(len(net_reason_counts_df_i.columns) == 1)
+                    net_reason_counts_df_i.columns = key
                 else:
-                    assert(net_reason_counts_df_i.columns.get_level_values(0).nunique()==1)
+                    assert(net_reason_counts_df_i.columns.get_level_values(0).nunique() == 1)
                     net_reason_counts_df_i.columns = net_reason_counts_df_i.columns.set_levels([key], level=0)
                 return_dict[key] = net_reason_counts_df_i
             return return_dict
@@ -3440,23 +3162,24 @@ class AMIEndEvents(GenAn):
         if rcpo_df.index.nlevels==1:
             #----------
             dflt_convert_rcpo_wide_to_long_col_args = dict(        
-                new_counts_col='counts', 
-                new_counts_norm_col='counts_norm', 
-                org_counts_col='counts', 
-                org_counts_norm_col='counts_norm', 
-                idx_0_name = 'outg_rec_nb'
+                new_counts_col      = 'counts', 
+                new_counts_norm_col = 'counts_norm', 
+                org_counts_col      = 'counts', 
+                org_counts_norm_col = 'counts_norm', 
+                idx_0_name          = 'outg_rec_nb'
             )
             if convert_rcpo_wide_to_long_col_args is None:
                 convert_rcpo_wide_to_long_col_args = {}
             convert_rcpo_wide_to_long_col_args = Utilities.supplement_dict_with_default_values(
-                to_supplmnt_dict=convert_rcpo_wide_to_long_col_args, 
-                default_values_dict=dflt_convert_rcpo_wide_to_long_col_args, 
-                extend_any_lists=False, inplace=True
+                to_supplmnt_dict    = convert_rcpo_wide_to_long_col_args, 
+                default_values_dict = dflt_convert_rcpo_wide_to_long_col_args, 
+                extend_any_lists    = False, 
+                inplace             = True
             )
             #----------
             rcpo_df = AMIEndEvents.convert_reason_counts_per_outage_df_wide_to_long(
-                rcpo_df_wide=rcpo_df, 
-                normalize_by_nSNs_included=normalize_by_nSNs_included, 
+                rcpo_df_wide               = rcpo_df, 
+                normalize_by_nSNs_included = normalize_by_nSNs_included, 
                 **convert_rcpo_wide_to_long_col_args
             )
         #-------------------------
@@ -3473,48 +3196,52 @@ class AMIEndEvents(GenAn):
     
     @staticmethod                
     def get_net_reason_counts_for_outages_from_end_events_df(
-        end_events_df, 
-        outg_rec_nb_col='outg_rec_nb', 
-        serial_number_col='serialnumber', 
-        reason_col='reason', 
-        include_normalize_by_nSNs=False,
-        include_nSNs=True,
-        agg_types = [np.sum, np.mean]
+        end_events_df             , 
+        outg_rec_nb_col           = 'outg_rec_nb', 
+        serial_number_col         = 'serialnumber', 
+        reason_col                = 'reason', 
+        include_normalize_by_nSNs = False,
+        include_nSNs              = True,
+        agg_types                 = [np.sum, np.mean]
     ):
         # inclue_zero_counts must be True to get correct values for mean etc
         #   - sum values would be same either way
-        return_form = dict(return_multiindex_outg_reason = True, 
-                           return_normalized_separately  = False)
+        return_form = dict(
+            return_multiindex_outg_reason = True, 
+            return_normalized_separately  = False
+        )
         reason_counts_per_outg_df = AMIEndEvents.get_reason_counts_per_outage(
-            end_events_df = end_events_df, 
-            outg_rec_nb_col=outg_rec_nb_col, 
-            serial_number_col=serial_number_col, 
-            reason_col=reason_col, 
-            include_normalize_by_nSNs=include_normalize_by_nSNs, 
-            inclue_zero_counts=True,
-            possible_reasons=None, 
-            include_nSNs=include_nSNs, 
-            include_SNs=False, 
-            prem_nb_col='aep_premise_nb', 
-            include_nprem_nbs=False,
-            include_prem_nbs=False, 
-            return_form = return_form
+            end_events_df             = end_events_df, 
+            outg_rec_nb_col           = outg_rec_nb_col, 
+            serial_number_col         = serial_number_col, 
+            reason_col                = reason_col, 
+            include_normalize_by_nSNs = include_normalize_by_nSNs, 
+            inclue_zero_counts        = True,
+            possible_reasons          = None, 
+            include_nSNs              = include_nSNs, 
+            include_SNs               = False, 
+            prem_nb_col               = 'aep_premise_nb', 
+            include_nprem_nbs         = False,
+            include_prem_nbs          = False, 
+            return_form               = return_form
         )
         #-------------------------
         if include_normalize_by_nSNs and not return_form['return_normalized_separately']:
-            normalize_by_nSNs_included=True
+            normalize_by_nSNs_included = True
         else:
-            normalize_by_nSNs_included=False
+            normalize_by_nSNs_included = False
         return AMIEndEvents.get_net_reason_counts_for_outages_from_rcpo_df(
-            rcpo_df=reason_counts_per_outg_df, 
-            reason_col=reason_col, 
-            normalize_by_nSNs_included=normalize_by_nSNs_included,
-            agg_types = agg_types            
+            rcpo_df                    = reason_counts_per_outg_df, 
+            reason_col                 = reason_col, 
+            normalize_by_nSNs_included = normalize_by_nSNs_included,
+            agg_types                  = agg_types            
         )
     
 
     @staticmethod
-    def find_summary_file_from_csv(csv_path):
+    def find_summary_file_from_csv(
+        csv_path
+    ):
         r"""
         Simple function to find summary file from csv file.
         e.g., from 'C:\Users\s346557\Documents\LocalData\dovs_and_end_events_data\EndEvents_NoOutg\end_events_0.csv'
@@ -3524,11 +3251,15 @@ class AMIEndEvents(GenAn):
         """
         #-------------------------
         parent_dir = Path(csv_path).parent
-        file_name = os.path.basename(csv_path)
+        file_name  = os.path.basename(csv_path)
         assert(os.path.join(parent_dir, file_name)==csv_path)
         #-------------------------
-        summary_file_name = Utilities.append_to_path(save_path=file_name, appendix='_summary', ext_to_find='.csv')
-        summary_file_name =  summary_file_name.replace('.csv', '.json')
+        summary_file_name = Utilities.append_to_path(
+            save_path   = file_name, 
+            appendix    = '_summary', 
+            ext_to_find = '.csv'
+        )
+        summary_file_name = summary_file_name.replace('.csv', '.json')
         #-----
         summary_path = os.path.join(parent_dir, 'summary_files', summary_file_name)
         assert(os.path.exists(summary_path))
@@ -3536,9 +3267,9 @@ class AMIEndEvents(GenAn):
 
     @staticmethod
     def get_summary_paths_for_data_in_dir(
-        data_dir, 
-        file_path_glob=r'end_events_[0-9]*.csv', 
-        return_dict=False
+        data_dir       , 
+        file_path_glob = r'end_events_[0-9]*.csv', 
+        return_dict    = False
     ):
         r"""
         data_dir should point to the directory containing the actual data CSV files.

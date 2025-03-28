@@ -10,26 +10,15 @@ __status__ = "Personal"
 #--------------------------------------------------
 import Utilities_config
 import sys, os
-import re
-from string import punctuation
 from pathlib import Path
 
 import pandas as pd
 import numpy as np
-from pandas.api.types import is_numeric_dtype, is_datetime64_dtype, is_timedelta64_dtype
-from scipy import stats
-import datetime
-import time
-from natsort import natsorted, ns
-import warnings
 import copy
 
 from functools import reduce
 #--------------------------------------------------
-import CommonLearningMethods as clm
-from AMIEndEvents_SQL import AMIEndEvents_SQL
 from AMIEndEvents import AMIEndEvents
-from DOVSOutages import DOVSOutages
 from MECPODf import MECPODf, OutageDType
 from MECPOAn import MECPOAn
 #--------------------------------------------------
@@ -46,18 +35,18 @@ class MECPOCollection:
     """
     
     def __init__(
-        self, 
-        data_type, 
-        mecpo_coll, 
-        coll_label, 
-        barplot_kwargs_shared=None, 
-        read_and_load_all_pickles=False, 
-        pkls_base_dir=None,
-        days_min_max_outg_td_windows=None, 
-        pkls_sub_dirs=None,
-        naming_tag=None,
-        normalize_by_time_interval=False, 
-        are_no_outg=False
+        self                         , 
+        data_type                    , 
+        mecpo_coll                   , 
+        coll_label                   , 
+        barplot_kwargs_shared        = None, 
+        read_and_load_all_pickles    = False, 
+        pkls_base_dir                = None,
+        days_min_max_outg_td_windows = None, 
+        pkls_sub_dirs                = None,
+        naming_tag                   = None,
+        normalize_by_time_interval   = False, 
+        are_no_outg                  = False
     ):
         r"""
         data_type:
@@ -150,11 +139,11 @@ class MECPOCollection:
         #-----
         self.grp_by = self.get_grp_by()
         #-------------------------
-        self.coll_label=coll_label
+        self.coll_label = coll_label
         if barplot_kwargs_shared is None:
             self.barplot_kwargs_shared = {}
         else:
-            self.barplot_kwargs_shared=barplot_kwargs_shared
+            self.barplot_kwargs_shared = barplot_kwargs_shared
         self.barplot_kwargs_shared['label'] = self.coll_label
         #-------------------------
 
@@ -206,7 +195,7 @@ class MECPOCollection:
         """
         #-------------------------
         pkls_base_dir = self.get_cpx_pkls_base_dir()
-        base_dir = Path(pkls_base_dir).parent
+        base_dir      = Path(pkls_base_dir).parent
         assert(os.path.isdir(base_dir))
         return str(base_dir)
         
@@ -214,21 +203,21 @@ class MECPOCollection:
         r"""
         """
         #-------------------------
-        base_dir = self.get_base_dir()
+        base_dir       = self.get_base_dir()
         end_events_dir = os.path.join(base_dir, 'EndEvents')
         assert(os.path.isdir(end_events_dir))
         return end_events_dir
         
     @staticmethod
     def build_mecpo_coll_dict_from_pkls(
-        data_type, 
-        pkls_base_dir, 
-        days_min_max_outg_td_windows=None, 
-        pkls_sub_dirs=None,
-        naming_tag=None,
-        normalize_by_time_interval=False, 
-        are_no_outg=False, 
-        use_subdirs_as_mecpo_an_keys=True
+        data_type                    , 
+        pkls_base_dir                , 
+        days_min_max_outg_td_windows = None, 
+        pkls_sub_dirs                = None,
+        naming_tag                   = None,
+        normalize_by_time_interval   = False, 
+        are_no_outg                  = False, 
+        use_subdirs_as_mecpo_an_keys = True
     ):
         r"""
         data_type:
@@ -276,7 +265,7 @@ class MECPOCollection:
         assert(days_min_max_outg_td_windows is not None or pkls_sub_dirs is not None)
         #-----
         if naming_tag is None:
-            naming_tag=''
+            naming_tag = ''
         #-----    
         if normalize_by_time_interval:
             assert(days_min_max_outg_td_windows is not None)
@@ -407,12 +396,12 @@ class MECPOCollection:
         return all_cpo_df_names
     
     def get_cpo_df(
-        self,
-        mecpo_an_key,
-        cpo_df_name, 
-        cpo_df_subset_by_mjr_mnr_cause_args=None, 
-        max_total_counts_args=None, 
-        add_an_key_as_level_0_col=False
+        self                                ,
+        mecpo_an_key                        ,
+        cpo_df_name                         , 
+        cpo_df_subset_by_mjr_mnr_cause_args = None, 
+        max_total_counts_args               = None, 
+        add_an_key_as_level_0_col           = False
     ):
         r"""
         mecpo_an_key:
@@ -444,27 +433,27 @@ class MECPOCollection:
         assert(cpo_df_name in self.mecpo_coll_dict[mecpo_an_key].cpo_dfs)
         #-------------------------
         cpo_df = self.mecpo_coll_dict[mecpo_an_key].get_cpo_df(
-            cpo_df_name=cpo_df_name, 
-            cpo_df_subset_by_mjr_mnr_cause_args=cpo_df_subset_by_mjr_mnr_cause_args, 
-            max_total_counts_args=max_total_counts_args
+            cpo_df_name                         = cpo_df_name, 
+            cpo_df_subset_by_mjr_mnr_cause_args = cpo_df_subset_by_mjr_mnr_cause_args, 
+            max_total_counts_args               = max_total_counts_args
         )
         #-------------------------
         if add_an_key_as_level_0_col:
             cpo_df = Utilities_df.prepend_level_to_MultiIndex(
-                df=cpo_df, 
-                level_val=mecpo_an_key, 
-                level_name='mecpo_an_key', 
-                axis=1
+                df         = cpo_df, 
+                level_val  = mecpo_an_key, 
+                level_name = 'mecpo_an_key', 
+                axis       = 1
             )
         #-------------------------
         return cpo_df
     
     def get_cpo_dfs_dict(
-        self, 
-        cpo_df_name, 
-        cpo_df_subset_by_mjr_mnr_cause_args=None, 
-        max_total_counts_args=None, 
-        add_an_key_as_level_0_col=False
+        self                                , 
+        cpo_df_name                         , 
+        cpo_df_subset_by_mjr_mnr_cause_args = None, 
+        max_total_counts_args               = None, 
+        add_an_key_as_level_0_col           = False
     ):
         r"""
         Returns a dict object where the keys are the mecpo_an_key and the values are the 
@@ -490,22 +479,22 @@ class MECPOCollection:
         for an_key in list(self.mecpo_coll_dict.keys()):
             assert(an_key not in cpo_dfs_dict)
             cpo_dfs_dict[an_key] = self.get_cpo_df(
-                mecpo_an_key=an_key,
-                cpo_df_name=cpo_df_name, 
-                cpo_df_subset_by_mjr_mnr_cause_args=cpo_df_subset_by_mjr_mnr_cause_args, 
-                max_total_counts_args=max_total_counts_args, 
-                add_an_key_as_level_0_col=add_an_key_as_level_0_col
+                mecpo_an_key                        = an_key,
+                cpo_df_name                         = cpo_df_name, 
+                cpo_df_subset_by_mjr_mnr_cause_args = cpo_df_subset_by_mjr_mnr_cause_args, 
+                max_total_counts_args               = max_total_counts_args, 
+                add_an_key_as_level_0_col           = add_an_key_as_level_0_col
             )
         #-------------------------
         return cpo_dfs_dict
     
     def get_cpo_dfs(
-        self, 
-        cpo_df_name, 
-        cpo_df_subset_by_mjr_mnr_cause_args=None, 
-        max_total_counts_args=None, 
-        mecpo_an_order=None, 
-        add_an_key_as_level_0_col=False
+        self                                , 
+        cpo_df_name                         , 
+        cpo_df_subset_by_mjr_mnr_cause_args = None, 
+        max_total_counts_args               = None, 
+        mecpo_an_order                      = None, 
+        add_an_key_as_level_0_col           = False
     ):
         r"""
         cpo_df_name:
@@ -530,10 +519,10 @@ class MECPOCollection:
         """
         #-------------------------
         cpo_dfs_dict = self.get_cpo_dfs_dict(
-            cpo_df_name=cpo_df_name, 
-            cpo_df_subset_by_mjr_mnr_cause_args=cpo_df_subset_by_mjr_mnr_cause_args, 
-            max_total_counts_args=max_total_counts_args, 
-            add_an_key_as_level_0_col=add_an_key_as_level_0_col
+            cpo_df_name                         = cpo_df_name, 
+            cpo_df_subset_by_mjr_mnr_cause_args = cpo_df_subset_by_mjr_mnr_cause_args, 
+            max_total_counts_args               = max_total_counts_args, 
+            add_an_key_as_level_0_col           = add_an_key_as_level_0_col
         )
         #-------------------------
         if mecpo_an_order is None:
@@ -549,8 +538,8 @@ class MECPOCollection:
     #-----------------------------------------------------------------------------------------------------------------------------
     def build_time_infos_df(
         self, 
-        save_to_pkl=False, 
-        build_all=False
+        save_to_pkl = False, 
+        build_all   = False
     ):
         r"""
         In most cases, one should use MECPOCollection.build_or_load_time_infos_df
@@ -614,9 +603,9 @@ class MECPOCollection:
 
 
     def build_or_load_time_infos_df(
-        self, 
-        save_to_pkl=False, 
-        verbose=True
+        self        , 
+        save_to_pkl = False, 
+        verbose     = True
     ):
         r"""
         """
@@ -674,19 +663,19 @@ class MECPOCollection:
         # Therefore, if OutageDType.outg, we must save here
         if self.data_type==OutageDType.outg and save_to_pkl:
             save_base = self.get_base_dir()
-            pkl_path = os.path.join(save_base, 'time_infos_df.pkl')
+            pkl_path  = os.path.join(save_base, 'time_infos_df.pkl')
             self.time_infos_df.to_pickle(pkl_path)
     
     
         
     #-----------------------------------------------------------------------------------------------------------------------------    
     def build_and_set_norm_counts_df_for_all(
-        self, 
-        remove_cols_from_dfs=True, 
-        cpo_df_name_w_counts='rcpo_df_raw', 
-        include_norm_lists=True, 
-        include_all_available=True, 
-        look_in_all_dfs_for_missing=True
+        self                        ,  
+        remove_cols_from_dfs        = True, 
+        cpo_df_name_w_counts        = 'rcpo_df_raw', 
+        include_norm_lists          = True, 
+        include_all_available       = True, 
+        look_in_all_dfs_for_missing = True
     ):
         r"""
         For all analyses, call build_and_set_norm_counts_df.
@@ -699,24 +688,24 @@ class MECPOCollection:
         #-------------------------
         for mecpo_an in self.mecpo_coll_dict.values():
             mecpo_an.build_and_set_norm_counts_df(
-                remove_cols_from_dfs=remove_cols_from_dfs, 
-                cpo_df_name_w_counts=cpo_df_name_w_counts, 
-                include_norm_lists=include_norm_lists, 
-                include_all_available=include_all_available, 
-                look_in_all_dfs_for_missing=look_in_all_dfs_for_missing, 
-                replace_if_present=False
+                remove_cols_from_dfs        = remove_cols_from_dfs, 
+                cpo_df_name_w_counts        = cpo_df_name_w_counts, 
+                include_norm_lists          = include_norm_lists, 
+                include_all_available       = include_all_available, 
+                look_in_all_dfs_for_missing = look_in_all_dfs_for_missing, 
+                replace_if_present          = False
             )        
         
         
         
     def remove_SNs_cols_from_all_cpo_dfs(
-        self, 
-        SNs_tags=None, 
-        include_cpo_df_OG=False,
-        include_cpo_df_raw=False,
-        cpo_dfs_to_ignore=None, 
-        mecpo_an_keys_to_ignore=None, 
-        is_long=False
+        self                    , 
+        SNs_tags                = None, 
+        include_cpo_df_OG       = False,
+        include_cpo_df_raw      = False,
+        cpo_dfs_to_ignore       = None, 
+        mecpo_an_keys_to_ignore = None, 
+        is_long                 = False
     ):
         r"""
         Remove the SNs cols from all cpo_dfs in each MECPOAn in self.mecpo_coll_dict.
@@ -749,36 +738,36 @@ class MECPOCollection:
             if mecpo_an_key in mecpo_an_keys_to_ignore:
                 continue
             self.mecpo_coll_dict[mecpo_an_key].remove_SNs_cols_from_all_cpo_dfs(
-                SNs_tags=SNs_tags, 
-                include_cpo_df_OG=include_cpo_df_OG,
-                include_cpo_df_raw=include_cpo_df_raw,
-                cpo_dfs_to_ignore=cpo_dfs_to_ignore, 
-                is_long=is_long
+                SNs_tags           = SNs_tags, 
+                include_cpo_df_OG  = include_cpo_df_OG,
+                include_cpo_df_raw = include_cpo_df_raw,
+                cpo_dfs_to_ignore  = cpo_dfs_to_ignore, 
+                is_long            = is_long
             )
     
     def make_cpo_columns_equal(
-        self,
-        same_order=True, 
-        cols_to_init_with_empty_lists=MECPODf.std_SNs_cols(), 
-        drop_empty_cpo_dfs=False
+        self                          ,
+        same_order                    = True, 
+        cols_to_init_with_empty_lists = MECPODf.std_SNs_cols(), 
+        drop_empty_cpo_dfs            = False
     ):
         r"""
         This makes the cpo columns equal between MECPOAn objects within self.mecpo_coll_dict
         """
         #-------------------------
         MECPOAn.make_cpo_columns_equal(
-            mecpo_coll = list(self.mecpo_coll_dict.values()), 
-            same_order=same_order, 
-            cols_to_init_with_empty_lists=cols_to_init_with_empty_lists, 
-            drop_empty_cpo_dfs=drop_empty_cpo_dfs
+            mecpo_coll                    = list(self.mecpo_coll_dict.values()), 
+            same_order                    = same_order, 
+            cols_to_init_with_empty_lists = cols_to_init_with_empty_lists, 
+            drop_empty_cpo_dfs            = drop_empty_cpo_dfs
         )
         
     @staticmethod
     def make_cpo_columns_equal_between_mecpo_colls(
-        mecpo_colls, 
-        same_order=True, 
-        cols_to_init_with_empty_lists=MECPODf.std_SNs_cols(), 
-        drop_empty_cpo_dfs=False
+        mecpo_colls                   , 
+        same_order                    = True, 
+        cols_to_init_with_empty_lists = MECPODf.std_SNs_cols(), 
+        drop_empty_cpo_dfs            = False
     ):
         r"""
         This makes cpo columns equal between the MECPOCollection objects within mecpo_colls.
@@ -804,21 +793,20 @@ class MECPOCollection:
                     mecpo_an_list_i.append(mecpo_coll_i.mecpo_coll_dict[mecpo_an_key_i])
             if len(mecpo_an_list_i)>1:
                 MECPOAn.make_cpo_columns_equal(
-                    mecpo_coll=mecpo_an_list_i, 
-                    same_order=same_order, 
-                    cols_to_init_with_empty_lists=cols_to_init_with_empty_lists, 
-                    drop_empty_cpo_dfs=drop_empty_cpo_dfs
+                    mecpo_coll                    = mecpo_an_list_i, 
+                    same_order                    = same_order, 
+                    cols_to_init_with_empty_lists = cols_to_init_with_empty_lists, 
+                    drop_empty_cpo_dfs            = drop_empty_cpo_dfs
                 )
         #-------------------------
         return
         
     @staticmethod
     def make_mixed_cpo_columns_equal_between_mecpo_colls(
-        mecpo_colls_with_cpo_df_names, 
-        segregate_by_mecpo_an_keys=False, 
-        same_order=True, 
-        cols_to_init_with_empty_lists=MECPODf.std_SNs_cols(), 
-        drop_empty_cpo_dfs=False
+        mecpo_colls_with_cpo_df_names , 
+        segregate_by_mecpo_an_keys    = False, 
+        same_order                    = True, 
+        cols_to_init_with_empty_lists = MECPODf.std_SNs_cols()
     ):
         r"""
         This allows the columns of DFs with different names to be made equal.
@@ -861,10 +849,10 @@ class MECPOCollection:
                                 dfs_list.append(coll.mecpo_coll_dict[mecpo_an_key_i].cpo_dfs[cpo_df_name])
                 if len(dfs_list)>1:
                     AMIEndEvents.make_reason_counts_per_outg_columns_equal_dfs_list(
-                        rcpo_dfs=dfs_list, 
-                        same_order=same_order, 
-                        inplace=True, 
-                        cols_to_init_with_empty_lists=cols_to_init_with_empty_lists 
+                        rcpo_dfs                      = dfs_list, 
+                        same_order                    = same_order, 
+                        inplace                       = True, 
+                        cols_to_init_with_empty_lists = cols_to_init_with_empty_lists 
                     )
         else:
             dfs_list = []
@@ -874,17 +862,17 @@ class MECPOCollection:
                 for cpo_df_name in cpo_df_names:
                     dfs_list.extend(coll.get_cpo_dfs(cpo_df_name))
             AMIEndEvents.make_reason_counts_per_outg_columns_equal_dfs_list(
-                rcpo_dfs=dfs_list, 
-                same_order=same_order, 
-                inplace=True, 
-                cols_to_init_with_empty_lists=cols_to_init_with_empty_lists            
+                rcpo_dfs                      = dfs_list, 
+                same_order                    = same_order, 
+                inplace                       = True, 
+                cols_to_init_with_empty_lists = cols_to_init_with_empty_lists            
             )
         
     def get_rough_reason_ordering(
-        self,
-        cpo_df_name, 
-        cpo_df_subset_by_mjr_mnr_cause_args=None, 
-        max_total_counts_args=None
+        self                                ,
+        cpo_df_name                         , 
+        cpo_df_subset_by_mjr_mnr_cause_args = None, 
+        max_total_counts_args               = None
     ):
         r"""
         Basically, find the ordering for each member of the collection, and take the overall ordering to be the
@@ -902,23 +890,23 @@ class MECPOCollection:
         """
         #-------------------------
         cpo_dfs = self.get_cpo_dfs(
-            cpo_df_name=cpo_df_name, 
-            cpo_df_subset_by_mjr_mnr_cause_args=cpo_df_subset_by_mjr_mnr_cause_args, 
-            max_total_counts_args=max_total_counts_args, 
-            mecpo_an_order=None
+            cpo_df_name                         = cpo_df_name, 
+            cpo_df_subset_by_mjr_mnr_cause_args = cpo_df_subset_by_mjr_mnr_cause_args, 
+            max_total_counts_args               = max_total_counts_args, 
+            mecpo_an_order                      = None
         )
         cpo_dfs = AMIEndEvents.make_reason_counts_per_outg_columns_equal_dfs_list(rcpo_dfs=cpo_dfs, inplace=False)
         #-------------------------
-        orders = [x.mean().sort_values(ascending=False) for x in cpo_dfs]
-        orders_df = pd.concat(orders, axis=1)
+        orders       = [x.mean().sort_values(ascending=False) for x in cpo_dfs]
+        orders_df    = pd.concat(orders, axis=1)
         return_order = orders_df.mean(axis=1).sort_values(ascending=False).index.tolist()
         #-------------------------
         return return_order
         
     def add_counts_col_to_all_cpo_dfs_of_name(
-        self, 
-        cpo_df_name, 
-        include_list_col=False
+        self             , 
+        cpo_df_name      , 
+        include_list_col = False
     ):
         r"""
         For each df of name cpo_df_name in each MECPOAn, add counts col (and possibly list col), as determined by 
@@ -927,13 +915,13 @@ class MECPOCollection:
         #-------------------------
         for mecpo_an in self.mecpo_coll_dict.values():
             mecpo_an.add_counts_col_to_df(
-                cpo_df_name=cpo_df_name, 
-                include_list_col=include_list_col
+                cpo_df_name      = cpo_df_name, 
+                include_list_col = include_list_col
             )
         
     def add_counts_col_to_all_rcpo_dfs(
         self, 
-        include_list_col=False
+        include_list_col = False
     ):
         r"""
         For each rcpo_df in each MECPOAn, add counts col (and possibly list col), as determined by 
@@ -942,13 +930,13 @@ class MECPOCollection:
         #-------------------------
         for mecpo_an in self.mecpo_coll_dict.values():
             mecpo_an.add_counts_col_to_all_rcpo_dfs(
-                include_list_col=include_list_col
+                include_list_col = include_list_col
             )
             
     def get_counts_series(
-        self, 
-        cpo_df_name, 
-        include_list_col=False
+        self             , 
+        cpo_df_name      , 
+        include_list_col = False
     ):
         r"""
         Grab counts series for DF from name cpo_df_name from each MECPOAn in collection.
@@ -961,8 +949,8 @@ class MECPOCollection:
         all_count_series_list = []
         for mecpo_an in self.mecpo_coll_dict.values():
             count_series_i = mecpo_an.get_counts_series(
-                cpo_df_name=cpo_df_name, 
-                include_list_col=include_list_col           
+                cpo_df_name      = cpo_df_name, 
+                include_list_col = include_list_col           
             )
             all_count_series_list.append(count_series_i)
         all_count_series = pd.concat(all_count_series_list)
@@ -972,7 +960,7 @@ class MECPOCollection:
         #   Therefore, convert to DF, drop duplicates, and convert back
         assert(Utilities.is_object_one_of_types(all_count_series, [pd.Series, pd.DataFrame]))
         if isinstance(all_count_series, pd.Series):
-            all_count_series=all_count_series.to_frame()
+            all_count_series = all_count_series.to_frame()
         tmp_cols = [Utilities.generate_random_string() for _ in range(all_count_series.index.nlevels)]
         for i,tmp_col in enumerate(tmp_cols):
             all_count_series[tmp_col] = all_count_series.index.get_level_values(i)
@@ -980,13 +968,13 @@ class MECPOCollection:
         #   drop_duplicates, as it throws an error (TypeError: unhashable type: 'list')
         if include_list_col:
             drop_subset = MECPODf.get_non_SNs_cols_from_cpo_df(
-                cpo_df=all_count_series, 
-                SNs_tags=MECPODf.std_SNs_cols()
+                cpo_df   = all_count_series, 
+                SNs_tags = MECPODf.std_SNs_cols()
             )
         else:
             drop_subset=None
-        all_count_series=all_count_series.drop_duplicates(subset=drop_subset)
-        all_count_series=all_count_series.drop(columns=tmp_cols)
+        all_count_series = all_count_series.drop_duplicates(subset=drop_subset)
+        all_count_series = all_count_series.drop(columns=tmp_cols)
 
         # If all_count_series has only 1 column at this point (i.e., was originally a Series)
         # squeeze down to a pd.Series
@@ -997,8 +985,8 @@ class MECPOCollection:
         #assert(all_count_series.index.nunique()==all_count_series.shape[0])
         if all_count_series.index.nunique()!=all_count_series.shape[0]:
             print('In MECPOCollection.get_counts_series, found indices with multiple values')
-            n_unq_idx      = all_count_series.index.nunique()
-            idx_val_counts = all_count_series.index.value_counts()
+            n_unq_idx                = all_count_series.index.nunique()
+            idx_val_counts           = all_count_series.index.value_counts()
             all_count_series_w_dups  = all_count_series.loc[idx_val_counts[idx_val_counts>1].index]
             all_count_series_wo_dups = all_count_series.loc[idx_val_counts[idx_val_counts==1].index]
             assert(all_count_series_w_dups.shape[0]+all_count_series_wo_dups.shape[0]==all_count_series.shape[0])
@@ -1011,13 +999,13 @@ class MECPOCollection:
         #-------------------------
         return all_count_series            
 
-            
+    # MOVED TO CPXDf        
     @staticmethod
     def get_merged_cpo_df_subset_below_max_total_counts(
-        merged_cpo_df, 
-        max_total_counts,
-        how='any', 
-        SNs_tags=MECPODf.std_SNs_cols() + MECPODf.std_nSNs_cols()
+        merged_cpo_df    , 
+        max_total_counts ,
+        how              = 'any', 
+        SNs_tags         = MECPODf.std_SNs_cols() + MECPODf.std_nSNs_cols()
     ):
         r"""
         Similar to MECPODf.get_cpo_df_subset_below_max_total_counts, but for merged cpo DFs.
@@ -1080,10 +1068,10 @@ class MECPOCollection:
             if max_total_counts_dict[mecpo_an_key] is None:
                 continue
             total_event_counts_i = MECPODf.get_total_event_counts(
-                merged_cpo_df[mecpo_an_key], 
-                output_col='total_counts', 
-                sort_output=False, 
-                SNs_tags=SNs_tags
+                cpo_df      = merged_cpo_df[mecpo_an_key], 
+                output_col  = 'total_counts', 
+                sort_output = False, 
+                SNs_tags    = SNs_tags
             )
             assert(total_event_counts_i.shape[1]==1)
             truth_series_i = total_event_counts_i.squeeze()<max_total_counts_dict[mecpo_an_key]
@@ -1116,7 +1104,7 @@ class MECPOCollection:
         #-------------------------
         return merged_cpo_df
     
-
+    # MOVED TO CPXDf
     @staticmethod
     def merge_cpo_dfs(
         dfs_coll                      , 
@@ -1173,7 +1161,7 @@ class MECPOCollection:
         assert(Utilities.is_object_one_of_types(dfs_coll, [dict, list]))
         if isinstance(dfs_coll, dict):
             prepend_keys = True
-            dfs_dict    = dfs_coll
+            dfs_dict     = dfs_coll
         else:
             prepend_keys = False
             dfs_dict     = {}
@@ -1195,7 +1183,7 @@ class MECPOCollection:
         # assert(np.all([x.columns.nlevels==1 for x in dfs_dict.values()]))
         # #-------------------------
         # # Make sure all have same columns and order
-        # AMIEndEvents.make_reason_counts_per_outg_columns_equal_dfs_list_OLD(
+        # AMIEndEvents.make_reason_counts_per_outg_columns_equal_dfs_list(
         #     rcpo_dfs                      = list(dfs_dict.values()), 
         #     same_order                    = True,
         #     inplace                       = True, 
@@ -1259,7 +1247,8 @@ class MECPOCollection:
         merged_df = merged_df.sort_index(axis=1)
         #-------------------------
         return merged_df
-        
+
+    # MOVED TO CPXDf    
     def get_merged_cpo_dfs(
         self, 
         cpo_df_name                         , 
@@ -1323,17 +1312,18 @@ class MECPOCollection:
         )
         #-------------------------
         return merged_df
-        
+
+    # MOVED TO CPXDf        
     @staticmethod
     def get_top_reasons_subset_from_merged_cpo_df(
-        merged_cpo_df,
-        how='per_mecpo_an', 
-        n_reasons_to_include=10,
-        combine_others=True,
-        output_combine_others_col='Other Reasons',
-        SNs_tags=None, 
-        is_norm=False, 
-        counts_series=None
+        merged_cpo_df             ,
+        how                       = 'per_mecpo_an', 
+        n_reasons_to_include      = 10,
+        combine_others            = True,
+        output_combine_others_col = 'Other Reasons',
+        SNs_tags                  = None, 
+        is_norm                   = False, 
+        counts_series             = None
     ):
         r"""
         Similar to MECPODf.get_top_reasons_subset_from_cpo_df, but for merged cpo DFs.
@@ -1363,13 +1353,13 @@ class MECPOCollection:
         assert(how=='per_mecpo_an' or how=='overall')
         mecpo_an_keys = merged_cpo_df.columns.get_level_values(0).unique().tolist()
         #-------------------------
-        need_counts_col=False
+        need_counts_col = False
         if combine_others and is_norm:
-            need_counts_col=True
+            need_counts_col = True
             assert(counts_series is not None and isinstance(counts_series, pd.Series))
             # Make sure all needed values are found in counter_series
             assert(len(set(merged_cpo_df.index).difference(counts_series.index))==0)
-            tmp_col = (Utilities.generate_random_string(), Utilities.generate_random_string())
+            tmp_col       = (Utilities.generate_random_string(), Utilities.generate_random_string())
             counts_series = counts_series.to_frame(name=tmp_col)
             merged_cpo_df = pd.merge(merged_cpo_df, counts_series, left_index=True, right_index=True, how='inner')
         #-------------------------
@@ -1407,14 +1397,14 @@ class MECPOCollection:
                 counts_col = None
             #-----
             merged_cpo_df_i = MECPODf.get_top_reasons_subset_from_cpo_df(
-                cpo_df=merged_cpo_df_i, 
-                n_reasons_to_include=n_reasons_to_include,
-                combine_others=combine_others, 
-                output_combine_others_col=output_combine_others_col, 
-                SNs_tags=SNs_tags, 
-                is_norm=is_norm, 
-                counts_col=counts_col, 
-                normalize_by_nSNs_included=False
+                cpo_df                     = merged_cpo_df_i, 
+                n_reasons_to_include       = n_reasons_to_include,
+                combine_others             = combine_others, 
+                output_combine_others_col  = output_combine_others_col, 
+                SNs_tags                   = SNs_tags, 
+                is_norm                    = is_norm, 
+                counts_col                 = counts_col, 
+                normalize_by_nSNs_included = False
             )
             #-----
             # Unflatten the columns
@@ -1443,13 +1433,13 @@ class MECPOCollection:
         
     @staticmethod
     def get_reasons_subset_from_merged_cpo_df(
-        merged_cpo_df,
-        reasons_to_include,
-        combine_others=True,
-        output_combine_others_col='Other Reasons',
-        SNs_tags=None, 
-        is_norm=False, 
-        counts_series=None
+        merged_cpo_df             ,
+        reasons_to_include        ,
+        combine_others            = True,
+        output_combine_others_col = 'Other Reasons',
+        SNs_tags                  = None, 
+        is_norm                   = False, 
+        counts_series             = None
     ):
         r"""
         Similar to MECPODf.get_reasons_subset_from_cpo_df, but for merged cpo DFs.
@@ -1480,7 +1470,7 @@ class MECPOCollection:
             assert(counts_series is not None and isinstance(counts_series, pd.Series))
             # Make sure all needed values are found in counter_series
             assert(len(set(merged_cpo_df.index).difference(counts_series.index))==0)
-            tmp_col = (Utilities.generate_random_string(), Utilities.generate_random_string())
+            tmp_col       = (Utilities.generate_random_string(), Utilities.generate_random_string())
             counts_series = counts_series.to_frame(name=tmp_col)
             merged_cpo_df = pd.merge(merged_cpo_df, counts_series, left_index=True, right_index=True, how='inner')
         #-------------------------
@@ -1529,14 +1519,14 @@ class MECPOCollection:
             reasons_to_include_i = [join_str.join([mecpo_an_key, x]) for x in reasons_to_include_i]
             #-----
             merged_cpo_df_i = MECPODf.get_reasons_subset_from_cpo_df(
-                cpo_df=merged_cpo_df_i, 
-                reasons_to_include=reasons_to_include_i, 
-                combine_others=combine_others, 
-                output_combine_others_col=output_combine_others_col, 
-                SNs_tags=SNs_tags, 
-                is_norm=is_norm, 
-                counts_col=counts_col, 
-                normalize_by_nSNs_included=False
+                cpo_df                     = merged_cpo_df_i, 
+                reasons_to_include         = reasons_to_include_i, 
+                combine_others             = combine_others, 
+                output_combine_others_col  = output_combine_others_col, 
+                SNs_tags                   = SNs_tags, 
+                is_norm                    = is_norm, 
+                counts_col                 = counts_col, 
+                normalize_by_nSNs_included = False
             )
             #-----
             # Unflatten the columns
@@ -1570,15 +1560,15 @@ class MECPOCollection:
         
     @staticmethod
     def get_top_reasons_subset_from_merged_cpo_df_and_project_from_others(
-        merged_cpo_df,
-        other_dfs_w_counts_series, 
-        how='per_mecpo_an', 
-        n_reasons_to_include=10,
-        combine_others=True,
-        output_combine_others_col='Other Reasons',
-        SNs_tags=None, 
-        is_norm=False, 
-        counts_series=None
+        merged_cpo_df             ,
+        other_dfs_w_counts_series , 
+        how                       = 'per_mecpo_an', 
+        n_reasons_to_include      = 10,
+        combine_others            = True,
+        output_combine_others_col = 'Other Reasons',
+        SNs_tags                  = None, 
+        is_norm                   = False, 
+        counts_series             = None
     ):
         r"""
         Get the top reasons subset from merged_cpo_df and project out those reasons from merged_cpo_df and the DFs found
@@ -1592,14 +1582,14 @@ class MECPOCollection:
         assert(Utilities.are_list_elements_lengths_homogeneous(other_dfs_w_counts_series, 2))
         #-------------------------
         merged_cpo_df = MECPOCollection.get_top_reasons_subset_from_merged_cpo_df(
-            merged_cpo_df=merged_cpo_df,
-            how=how, 
-            n_reasons_to_include=n_reasons_to_include,
-            combine_others=combine_others,
-            output_combine_others_col=output_combine_others_col,
-            SNs_tags=SNs_tags, 
-            is_norm=is_norm, 
-            counts_series=counts_series
+            merged_cpo_df             = merged_cpo_df,
+            how                       = how, 
+            n_reasons_to_include      = n_reasons_to_include,
+            combine_others            = combine_others,
+            output_combine_others_col = output_combine_others_col,
+            SNs_tags                  = SNs_tags, 
+            is_norm                   = is_norm, 
+            counts_series             = counts_series
         )
         #-------------------------
         reasons_to_include = {}
@@ -1620,13 +1610,13 @@ class MECPOCollection:
                 continue
             #-----
             df_i = MECPOCollection.get_reasons_subset_from_merged_cpo_df(
-                merged_cpo_df = df_i,
-                reasons_to_include=reasons_to_include,
-                combine_others=combine_others,
-                output_combine_others_col=output_combine_others_col,
-                SNs_tags=SNs_tags, 
-                is_norm=is_norm, 
-                counts_series=counts_series_i
+                merged_cpo_df             = df_i,
+                reasons_to_include        = reasons_to_include,
+                combine_others            = combine_others,
+                output_combine_others_col = output_combine_others_col,
+                SNs_tags                  = SNs_tags, 
+                is_norm                   = is_norm, 
+                counts_series             = counts_series_i
             )
             return_dfs.append(df_i)
         #-------------------------
@@ -1634,9 +1624,9 @@ class MECPOCollection:
         
         
     def remove_reasons_from_all_rcpo_dfs(
-        self, 
-        regex_patterns_to_remove, 
-        ignore_case=True    
+        self                     , 
+        regex_patterns_to_remove , 
+        ignore_case              = True    
     ):
         r"""
         For each rcpo_df in each MECPOAn, remove any columns from rcpo_df where any of the patterns in 
@@ -1645,19 +1635,19 @@ class MECPOCollection:
         #-------------------------
         for mecpo_an in self.mecpo_coll_dict.values():
             mecpo_an.remove_reasons_from_all_rcpo_dfs(
-                regex_patterns_to_remove=regex_patterns_to_remove, 
-                ignore_case=ignore_case
+                regex_patterns_to_remove = regex_patterns_to_remove, 
+                ignore_case              = ignore_case
             )
             
     def combine_reasons_in_all_rcpo_dfs(
-        self, 
-        patterns_and_replace=None, 
-        addtnl_patterns_and_replace=None, 
-        initial_strip=True,
-        initial_punctuation_removal=True, 
-        level_0_raw_col='counts', 
-        level_0_nrm_col='counts_norm', 
-        return_red_to_org_cols_dict=False
+        self                        , 
+        patterns_and_replace        = None, 
+        addtnl_patterns_and_replace = None, 
+        initial_strip               = True,
+        initial_punctuation_removal = True, 
+        level_0_raw_col             = 'counts', 
+        level_0_nrm_col             = 'counts_norm', 
+        return_red_to_org_cols_dict = False
     ):
         r"""
         For each rcpo_df in each MECPOAn, combine groups of reasons in according to patterns_and_replace.
@@ -1701,12 +1691,12 @@ class MECPOCollection:
             return red_to_org_cols_dicts
             
     def delta_cpo_df_reasons_in_all_rcpo_dfs(
-        self,  
-        reasons_1,
-        reasons_2,
-        delta_reason_name, 
-        level_0_raw_col='counts', 
-        level_0_nrm_col='counts_norm'
+        self              ,  
+        reasons_1         ,
+        reasons_2         ,
+        delta_reason_name , 
+        level_0_raw_col   = 'counts', 
+        level_0_nrm_col   = 'counts_norm'
     ):
         r"""
         For each rcpo_df in each MECPOAn, combine groups of reasons according to patterns_and_replace.
@@ -1714,25 +1704,25 @@ class MECPOCollection:
         #-------------------------
         for mecpo_an in self.mecpo_coll_dict.values():
             mecpo_an.delta_cpo_df_reasons_in_all_rcpo_dfs(
-                reasons_1=reasons_1,
-                reasons_2=reasons_2,
-                delta_reason_name=delta_reason_name, 
-                level_0_raw_col=level_0_raw_col, 
-                level_0_nrm_col=level_0_nrm_col
+                reasons_1         = reasons_1,
+                reasons_2         = reasons_2,
+                delta_reason_name = delta_reason_name, 
+                level_0_raw_col   = level_0_raw_col, 
+                level_0_nrm_col   = level_0_nrm_col
             )
             
             
     def get_total_event_counts(
-        self, 
-        mecpo_an_key,
-        cpo_df_name, 
-        cpo_df_subset_by_mjr_mnr_cause_args=None, 
-        output_col='total_counts', 
-        SNs_tags=MECPODf.std_SNs_cols() + MECPODf.std_nSNs_cols(), 
-        normalize_by_nSNs_included=False, 
-        level_0_raw_col = 'counts', 
-        level_0_nrm_col = 'counts_norm', 
-        add_an_key_as_level_0_col=False
+        self                                , 
+        mecpo_an_key                        ,
+        cpo_df_name                         , 
+        cpo_df_subset_by_mjr_mnr_cause_args = None, 
+        output_col                          = 'total_counts', 
+        SNs_tags                            = MECPODf.std_SNs_cols() + MECPODf.std_nSNs_cols(), 
+        normalize_by_nSNs_included          = False, 
+        level_0_raw_col                     = 'counts', 
+        level_0_nrm_col                     = 'counts_norm', 
+        add_an_key_as_level_0_col           = False
     ):
         r"""
         mecpo_an_key:
@@ -1761,21 +1751,21 @@ class MECPOCollection:
         assert(cpo_df_name in self.mecpo_coll_dict[mecpo_an_key].cpo_dfs.keys())
         #-------------------------
         total_df = self.mecpo_coll_dict[mecpo_an_key].get_total_event_counts(
-            cpo_df_name=cpo_df_name, 
-            cpo_df_subset_by_mjr_mnr_cause_args=cpo_df_subset_by_mjr_mnr_cause_args, 
-            output_col=output_col, 
-            SNs_tags=SNs_tags, 
-            normalize_by_nSNs_included=normalize_by_nSNs_included, 
-            level_0_raw_col = level_0_raw_col, 
-            level_0_nrm_col = level_0_nrm_col
+            cpo_df_name                         = cpo_df_name, 
+            cpo_df_subset_by_mjr_mnr_cause_args = cpo_df_subset_by_mjr_mnr_cause_args, 
+            output_col                          = output_col, 
+            SNs_tags                            = SNs_tags, 
+            normalize_by_nSNs_included          = normalize_by_nSNs_included, 
+            level_0_raw_col                     = level_0_raw_col, 
+            level_0_nrm_col                     = level_0_nrm_col
         )
         #-------------------------
         if add_an_key_as_level_0_col:
             total_df = Utilities_df.prepend_level_to_MultiIndex(
-                df=total_df, 
-                level_val=mecpo_an_key, 
-                level_name='mecpo_an_key', 
-                axis=1
+                df         = total_df, 
+                level_val  = mecpo_an_key, 
+                level_name = 'mecpo_an_key', 
+                axis       = 1
             )
         #-------------------------
         return total_df
@@ -1783,9 +1773,9 @@ class MECPOCollection:
         
     @staticmethod
     def get_total_event_counts_for_merged_cpo_df(
-        merged_df, 
-        output_col='total_counts', 
-        SNs_tags=None
+        merged_df  , 
+        output_col = 'total_counts', 
+        SNs_tags   = None
     ):
         r"""
         Get total event counts for a merged cpo df
@@ -1799,11 +1789,11 @@ class MECPOCollection:
         for mecpo_an_key in mecpo_an_keys:
             cpo_df_i = merged_df[[mecpo_an_key]]
             total_counts_i = MECPODf.get_total_event_counts(
-                cpo_df=cpo_df_i, 
-                output_col = (mecpo_an_key, output_col), 
-                sort_output=False, 
-                SNs_tags=SNs_tags, 
-                normalize_by_nSNs_included=False
+                cpo_df                     = cpo_df_i, 
+                output_col                 = (mecpo_an_key, output_col), 
+                sort_output                = False, 
+                SNs_tags                   = SNs_tags, 
+                normalize_by_nSNs_included = False
             )
             total_counts_dfs.append(total_counts_i)
             #-----
@@ -1855,11 +1845,11 @@ class MECPOCollection:
             
             
     def remove_all_cpo_dfs_except(
-        self, 
-        to_keep, 
-        first_build_and_set_norm_counts_df_for_all=True, 
-        build_and_set_norm_counts_df_for_all_kwargs=None, 
-        keep_rcpo_df_OG=True
+        self                                        , 
+        to_keep                                     , 
+        first_build_and_set_norm_counts_df_for_all  = True, 
+        build_and_set_norm_counts_df_for_all_kwargs = None, 
+        keep_rcpo_df_OG                             = True
     ):
         r"""
         By remove, I mean set to self.init_cpo_dfs_to (which is typically an empty DF)
@@ -1887,16 +1877,16 @@ class MECPOCollection:
         #-------------------------
         for mecpo_an in self.mecpo_coll_dict.values():
             mecpo_an.remove_all_cpo_dfs_except(
-                to_keep=to_keep, 
-                keep_rcpo_df_OG=keep_rcpo_df_OG
+                to_keep         = to_keep, 
+                keep_rcpo_df_OG = keep_rcpo_df_OG
             )
             
             
     @staticmethod
     def combine_two_mecpo_colls(
-        mecpo_coll_1, 
-        mecpo_coll_2, 
-        append_only=True
+        mecpo_coll_1 , 
+        mecpo_coll_2 , 
+        append_only  = True
     ):
         r"""
         NOTE: Case where append_only==False should work, but has not been super scrutinized and is somewhat hacky
@@ -1949,16 +1939,16 @@ class MECPOCollection:
         #-------------------------
         # Use mecpo_coll_12_dict and coll_label_12 to build mecpo_coll_12
         mecpo_coll_12 = MECPOCollection(
-            mecpo_coll=mecpo_coll_12_dict, 
-            coll_label=coll_label_12
+            mecpo_coll = mecpo_coll_12_dict, 
+            coll_label = coll_label_12
         )
         #-------------------------
         return mecpo_coll_12
 
     @staticmethod
     def combine_mecpo_colls(
-        mecpo_colls_list, 
-        append_only=True
+        mecpo_colls_list , 
+        append_only      = True
     ):
         r"""
         NOTE: Case where append_only==False should work, but has not been super scrutinized and is somewhat hacky
@@ -1973,9 +1963,9 @@ class MECPOCollection:
         mecpo_coll_comb = copy.deepcopy(mecpo_colls_list[0])
         for i_coll in range(1, len(mecpo_colls_list)):
             mecpo_coll_comb = MECPOCollection.combine_two_mecpo_colls(
-                mecpo_coll_1=mecpo_coll_comb, 
-                mecpo_coll_2=mecpo_colls_list[i_coll], 
-                append_only=append_only
+                mecpo_coll_1 = mecpo_coll_comb, 
+                mecpo_coll_2 = mecpo_colls_list[i_coll], 
+                append_only  = append_only
             )    
         #-------------------------
         return mecpo_coll_comb

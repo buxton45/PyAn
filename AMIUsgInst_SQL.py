@@ -92,6 +92,8 @@ class AMIUsgInst_SQL(AMI_SQL):
         sql_alias_base             = 'USG_', 
         max_n_prem_per_outg        = None, 
         join_mp_args               = False, 
+        date_only                  = False, 
+        output_t_minmax            = False, 
         df_args                    = {}
     ):
         r"""
@@ -128,6 +130,8 @@ class AMIUsgInst_SQL(AMI_SQL):
             sql_alias_base             = sql_alias_base, 
             max_n_prem_per_outg        = max_n_prem_per_outg, 
             join_mp_args               = join_mp_args, 
+            date_only                  = date_only, 
+            output_t_minmax            = output_t_minmax, 
             df_args                    = df_args
         )
     
@@ -142,6 +146,8 @@ class AMIUsgInst_SQL(AMI_SQL):
         sql_alias_base            = 'USG_', 
         max_n_prem_per_outg       = None, 
         join_mp_args              = False, 
+        date_only                 = False, 
+        output_t_minmax           = False, 
         df_args                   = {}
     ):
         return AMIUsgInst_SQL.build_sql_usg_inst_for_df_with_search_time_window(
@@ -152,6 +158,8 @@ class AMIUsgInst_SQL(AMI_SQL):
             sql_alias_base             = sql_alias_base, 
             max_n_prem_per_outg        = max_n_prem_per_outg, 
             join_mp_args               = join_mp_args, 
+            date_only                  = date_only, 
+            output_t_minmax            = output_t_minmax, 
             df_args                    = df_args
         )
         
@@ -167,6 +175,7 @@ class AMIUsgInst_SQL(AMI_SQL):
         max_n_prem_per_outg       = None, 
         join_mp_args              = False, 
         date_only                 = False, 
+        output_t_minmax           = False, 
         df_args                   = {}
     ):
         r"""
@@ -190,5 +199,6 @@ class AMIUsgInst_SQL(AMI_SQL):
             max_n_prem_per_outg        = max_n_prem_per_outg, 
             join_mp_args               = join_mp_args, 
             date_only                  = date_only, 
+            output_t_minmax            = output_t_minmax, 
             df_args                    = df_args
         )

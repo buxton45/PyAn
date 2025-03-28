@@ -49,33 +49,33 @@ match_events_in_df_to_outages(df_events, df_outages,
 set_all_outages_info_in_events_df_original(df_events, df_outage, 
                                                outg_rec_nb_col_in_df_events='OUTG_REC_NB', 
                                                outg_rec_nb_col_in_df_outage='OUTG_REC_NB', 
-                                               cols_to_return_from_df_outage = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_half_window'], 
-                                               placement_cols = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_half_window']
+                                               cols_to_return_from_df_outage = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_window'], 
+                                               placement_cols = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_window']
                                               )
 
 get_outage_info(outg_rec_nb, df_outage, 
                     outg_rec_nb_col_in_df_outage='OUTG_REC_NB', 
-                    cols_to_return_from_df_outage = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_half_window']
+                    cols_to_return_from_df_outage = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_window']
                    )
                    
 get_outage_info_for_events_df_w_single_outage(df_events, df_outage, 
                                                   outg_rec_nb_col_in_df_events='OUTG_REC_NB', 
                                                   outg_rec_nb_col_in_df_outage='OUTG_REC_NB', 
-                                                  cols_to_return_from_df_outage = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_half_window']
+                                                  cols_to_return_from_df_outage = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_window']
                                                  )
                                                  
 set_outage_info_in_events_df_w_single_outage(df_events, df_outage, 
                                                  outg_rec_nb_col_in_df_events='OUTG_REC_NB', 
                                                  outg_rec_nb_col_in_df_outage='OUTG_REC_NB', 
-                                                 cols_to_return_from_df_outage = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_half_window'], 
-                                                 placement_cols = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_half_window']
+                                                 cols_to_return_from_df_outage = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_window'], 
+                                                 placement_cols = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_window']
                                                 )
                                                 
 set_all_outages_info_in_events_df(df_events, df_outage, 
                                       outg_rec_nb_col_in_df_events='OUTG_REC_NB', 
                                       outg_rec_nb_col_in_df_outage='OUTG_REC_NB', 
-                                      cols_to_return_from_df_outage = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_half_window'], 
-                                      placement_cols =                ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_half_window'],
+                                      cols_to_return_from_df_outage = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_window'], 
+                                      placement_cols =                ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_window'],
                                       dropna=False, 
                                       lowercase_cols_default=False
                                      )
@@ -577,34 +577,6 @@ def remove_longest_substring_shared_by_all_columns_in_df(df, inplace=True):
         df = df.rename(columns=cols_rename_dict, inplace=False)
     return df
 
-#**********************************************************************************************************************************************    
-def remove_prepend_from_columns_in_df(df, end_of_prepend_indicator='.', inplace=True):
-    # Intended to change e.g. a column named inst_msr_consume.read_type to read_type
-    # Somewhat similar to remove_longest_substring_shared_by_all_columns_in_df, but more simple minded.
-    # However, this works better for case where e.g. joins have occurred and therefore not all columns share
-    # the same prepdended value
-    # This simply finds the first occurrence of end_of_prepend_indicator and chops off
-    # end_of_prepend_indicator and preceding it.
-    columns_org = df.columns.tolist()
-    columns_new = []
-    for col in columns_org:
-        found_idx = col.find(end_of_prepend_indicator)
-        if found_idx > -1:
-            columns_new.append(col[found_idx+len(end_of_prepend_indicator):])
-        else:
-            columns_new.append(col)
-    cols_rename_dict = dict(zip(columns_org, columns_new))
-    if inplace:
-        df.rename(columns=cols_rename_dict, inplace=True)
-    else:
-        df = df.rename(columns=cols_rename_dict, inplace=False)
-    return df
-    
-def remove_table_aliases(df, end_of_prepend_indicator='.', inplace=True):
-    #I kept forgetting the name of remove_table_aliases
-    # So, this is simply an easier name to remember
-    return remove_prepend_from_columns_in_df(df=df, end_of_prepend_indicator=end_of_prepend_indicator, inplace=inplace)
-
 
 
 #**********************************************************************************************************************************************
@@ -704,8 +676,8 @@ def match_events_in_df_to_outages(df_events, df_outages,
 def set_all_outages_info_in_events_df_original(df_events, df_outage, 
                                                outg_rec_nb_col_in_df_events='OUTG_REC_NB', 
                                                outg_rec_nb_col_in_df_outage='OUTG_REC_NB', 
-                                               cols_to_return_from_df_outage = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_half_window'], 
-                                               placement_cols = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_half_window']
+                                               cols_to_return_from_df_outage = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_window'], 
+                                               placement_cols = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_window']
                                               ):
     assert(len(cols_to_return_from_df_outage)==len(placement_cols))
     for col in placement_cols:
@@ -726,7 +698,7 @@ def set_all_outages_info_in_events_df_original(df_events, df_outage,
 #**********************************************************************************************************************************************
 def get_outage_info(outg_rec_nb, df_outage, 
                     outg_rec_nb_col_in_df_outage='OUTG_REC_NB', 
-                    cols_to_return_from_df_outage = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_half_window']
+                    cols_to_return_from_df_outage = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_window']
                    ):
     if pd.isnull(outg_rec_nb) or outg_rec_nb not in df_outage[outg_rec_nb_col_in_df_outage].unique():
         return [np.nan for _ in range(len(cols_to_return_from_df_outage))]
@@ -739,7 +711,7 @@ def get_outage_info(outg_rec_nb, df_outage,
 def get_outage_info_for_events_df_w_single_outage(df_events, df_outage, 
                                                   outg_rec_nb_col_in_df_events='OUTG_REC_NB', 
                                                   outg_rec_nb_col_in_df_outage='OUTG_REC_NB', 
-                                                  cols_to_return_from_df_outage = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_half_window']
+                                                  cols_to_return_from_df_outage = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_window']
                                                  ):
     # Not intended to be called by user, but rather is for set_all_outages_info_in_events_df.
     # This can only be used when df_events contains only a single outage.
@@ -751,8 +723,8 @@ def get_outage_info_for_events_df_w_single_outage(df_events, df_outage,
 def set_outage_info_in_events_df_w_single_outage(df_events, df_outage, 
                                                  outg_rec_nb_col_in_df_events='OUTG_REC_NB', 
                                                  outg_rec_nb_col_in_df_outage='OUTG_REC_NB', 
-                                                 cols_to_return_from_df_outage = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_half_window'], 
-                                                 placement_cols = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_half_window']
+                                                 cols_to_return_from_df_outage = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_window'], 
+                                                 placement_cols = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_window']
                                                 ):
     # Not intended to be called by user, but rather is for set_all_outages_info_in_events_df.
     # This can only be used when df_events contains only a single outage.
@@ -772,8 +744,8 @@ def set_outage_info_in_events_df_w_single_outage(df_events, df_outage,
 def set_all_outages_info_in_events_df(df_events, df_outage, 
                                       outg_rec_nb_col_in_df_events='OUTG_REC_NB', 
                                       outg_rec_nb_col_in_df_outage='OUTG_REC_NB', 
-                                      cols_to_return_from_df_outage = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_half_window'], 
-                                      placement_cols =                ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_half_window'],
+                                      cols_to_return_from_df_outage = ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_window'], 
+                                      placement_cols =                ['DT_OFF_TS_FULL', 'DT_ON_TS', 'STEP_DRTN_NB', 'search_time_window'],
                                       dropna=False, 
                                       lowercase_cols_default=False
                                      ):

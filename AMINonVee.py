@@ -9,28 +9,14 @@ __status__ = "Personal"
 
 #--------------------------------------------------
 import Utilities_config
-import sys, os
-import re
-import copy
+import sys
 
 import pandas as pd
 import numpy as np
-from pandas.api.types import is_numeric_dtype, is_datetime64_dtype, is_timedelta64_dtype
-from scipy import stats
-import datetime
-import time
-from natsort import natsorted, ns
+from pandas.api.types import is_datetime64_dtype
 #---------------------------------------------------------------------
-import matplotlib as mpl
-import matplotlib.pyplot as plt
 import seaborn as sns
-from matplotlib.backends.backend_pdf import PdfPages
-import matplotlib.patches as mpatches
-from matplotlib.lines import Line2D
-import matplotlib.ticker as ticker
-from matplotlib import dates
 #--------------------------------------------------
-import CommonLearningMethods as clm
 from AMINonVee_SQL import AMINonVee_SQL
 from GenAn import GenAn
 #--------------------------------------------------
@@ -209,7 +195,7 @@ class AMINonVee(GenAn):
         set_index_col      = kwargs.get('set_index_col', utc_from_timestamp_col)
         index_name         = kwargs.get('index_name', 'time_idx')
         #**************************************************
-        df = clm.remove_table_aliases(df)
+        df = Utilities_df.remove_table_aliases(df)
         #-------------------------
         # Make sure all value_cols are floats
         if value_cols is not None:
@@ -258,6 +244,13 @@ class AMINonVee(GenAn):
         if set_index_col is not None:
             df = df.set_index(set_index_col, drop=False).sort_index()
             df.index.name=index_name
+        # #----------------------------
+        df = Utilities_df.drop_unnamed_columns(
+            df            = df, 
+            regex_pattern = r'Unnamed.*', 
+            ignore_case   = True, 
+            inplace       = True, 
+        )
         # #----------------------------
         return df    
     
@@ -459,7 +452,7 @@ class AMINonVee(GenAn):
             if verbose:
                 print('Reading file: ', csv)
             df = pd.read_csv(csv)
-            df = clm.remove_prepend_from_columns_in_df(df)
+            df = Utilities_df.remove_prepend_from_columns_in_df(df)
             df = df[cols_of_interest]
             if df.shape[0]==0:
                 continue

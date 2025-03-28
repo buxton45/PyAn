@@ -15,6 +15,7 @@ import pandas as pd
 import datetime
 import copy
 import textwrap
+import re
 #--------------------------------------------------
 from MeterPremise import MeterPremise
 #--------------------------------------------------
@@ -1226,6 +1227,80 @@ class AMI_SQL:
     
     
     #****************************************************************************************************
+    #----------------------------------------------------------------------------------------------------
+    @staticmethod
+    def get_rename_dict_for_gpd_for_sql_cols(df, col_level=-1):
+        r"""
+        The _gpd_for_sql appendix is added in the end events data acquisition stage, but is typically no longer needed after.
+        NOTE: Method is case insensitive!! (i.e., col_gpd_for_sql --> col, col_GPD_FOR_SQL --> col, etc.)
+        Returns a dict with key values equal to the found columns containing _gpd_for_sql and values w/o the _gpd_for_sql appendix.
+        The dict can be used, e.g., for a rename call.
+
+        Mainly for use in OutageDAQ and CPXDfBuilder, but makes sense for
+          this portion of the function to live here close to the methods used to create mapping table
+        """
+        #-------------------------
+        found_cols_dict = {}
+        for col in df.columns.get_level_values(col_level).tolist():
+            if col.lower().endswith('_gpd_for_sql'):
+                assert(col not in found_cols_dict.keys())
+                found_cols_dict[col] = col[:-12]
+        return found_cols_dict
+    
+    #---------------------------------------------------------------------------
+    @staticmethod
+    def find_gpd_for_sql_cols(df, col_level=-1):
+        r"""
+        The _gpd_for_sql appendix is added in the end events data acquisition stage, but is typically no longer needed after.
+        NOTE: Method is case insensitive!! (i.e., col_gpd_for_sql --> col, col_GPD_FOR_SQL --> col, etc.)
+        Returns a list of the columns containing _gpd_for_sql
+
+        Mainly for use in OutageDAQ and CPXDfBuilder, but makes sense for
+          this portion of the function to live here close to the methods used to create mapping table
+        """
+        #-------------------------
+        found_cols_dict = AMI_SQL.get_rename_dict_for_gpd_for_sql_cols(df=df, col_level=col_level)
+        found_cols      = list(found_cols_dict.keys())
+        return found_cols
+    
+    #---------------------------------------------------------------------------
+    @staticmethod
+    def rename_all_cols_with_gpd_for_sql_appendix(df):
+        r"""
+        Mainly for use in OutageDAQ and CPXDfBuilder, but makes sense for
+          this portion of the function to live here close to the methods used to create mapping table
+        """
+        #-------------------------
+        found_cols_dict = AMI_SQL.get_rename_dict_for_gpd_for_sql_cols(df=df)
+        if len(found_cols_dict)>0:
+            df = df.rename(columns=found_cols_dict)
+        return df
+    
+    #---------------------------------------------------------------------------
+    @staticmethod
+    def rename_all_index_names_with_gpd_for_sql_appendix(df):
+        r"""
+        The _gpd_for_sql appendix is added in the end events data acquisition stage, but is typically no longer needed after.
+        This function removes the appendix.
+        
+        NOTE: Method is case insensitive!! (i.e., col_gpd_for_sql --> col, col_GPD_FOR_SQL --> col, etc.)
+
+        Mainly for use in OutageDAQ and CPXDfBuilder, but makes sense for
+          this portion of the function to live here close to the methods used to create mapping table
+        """
+        #-------------------------
+        idx_names_new = []
+        for name in df.index.names:
+            if name.lower().endswith('_gpd_for_sql'):
+                idx_names_new.append(name[:-12])
+            else:
+                idx_names_new.append(name)
+        #-----
+        assert(len(df.index.names)==len(idx_names_new))
+        df.index.names = idx_names_new
+        return df
+
+    #****************************************************************************************************
     #****************************************************************************************************
     #TODO do I need to add add_aggregate_elements kwargs to allow one to tweak e.g.,  comp_table_alias_prefix etc.?
     @staticmethod
@@ -2125,7 +2200,8 @@ class AMI_SQL:
         mapped_cols         ,
         timestamp_cols      = None, 
         consolidated_col    = None, 
-        include_final_comma = False
+        include_final_comma = False, 
+        date_only           = False, 
     ):
         r"""
         Basically, takes df[join_cols+mapped_cols] and makes a string that can be fed to a SQL method to create a temporary table
@@ -2149,6 +2225,9 @@ class AMI_SQL:
                 ROW('103635052','14103171','1866459723680')
         """
         #--------------------------------------------------
+        if mapped_cols is None:
+            mapped_cols = []
+        #-------------------------
         assert(isinstance(join_cols, list))
         assert(isinstance(mapped_cols, list))
         assert(timestamp_cols is None or isinstance(timestamp_cols, list))
@@ -2171,7 +2250,10 @@ class AMI_SQL:
                 df[col_i] = df[col_i].apply(lambda x: f"'{x}'")
             #-----
             for ts_col_i in timestamp_cols:
-                df[ts_col_i] = df[ts_col_i].apply(lambda x: f"CAST({x} as TIMESTAMP)")
+                if date_only:
+                    df[ts_col_i] = df[ts_col_i].apply(lambda x: f"CAST(CAST({x} as TIMESTAMP) as DATE)")
+                else:
+                    df[ts_col_i] = df[ts_col_i].apply(lambda x: f"CAST({x} as TIMESTAMP)")
             #-----
             return_srs = df.apply(
                 lambda x: f"ROW({Utilities.join_list(list_to_join = x.values.tolist(), quotes_needed=False, join_str = ',')}), ", 
@@ -2296,6 +2378,75 @@ class AMI_SQL:
     
     #****************************************************************************************************
     @staticmethod
+    def extract_mapping_taple_from_sql_statement(
+        sql_statement , 
+        alias         = 'mapping_table'
+    ):
+        r"""
+        Mainly for use in OutageDAQ.get_bsln_time_interval_infos_from_summary_file, but makes sense for
+          this portion of the function to live here close to the methods used to create mapping table
+        """
+        #--------------------------------------------------
+        assert(isinstance(sql_statement, str))
+    
+        #--------------------------------------------------
+        n_rows = sql_statement.count('ROW')
+        
+        #--------------------------------------------------
+        mapping_table_regex = r'.*({} AS \(.*AS tmp_table\(.*\)\n*?\)).*'.format(alias)
+        #-----
+        mapping_table_str = re.findall(mapping_table_regex, sql_statement, flags=re.DOTALL)
+        assert(len(mapping_table_str)==1)
+        mapping_table_str = mapping_table_str[0]
+        
+        #--------------------------------------------------
+        fields_regex = r'.*AS tmp_table\((.*)\)\n*?\)'
+        #-----
+        fields_str = re.findall(fields_regex, mapping_table_str, flags=re.DOTALL)
+        assert(len(fields_str)==1)
+        fields_str = fields_str[0]
+        #-----
+        fields = fields_str.split(sep=',')
+        
+        #--------------------------------------------------
+        # TOO MUCH EFFORT to try to find some master regular expression to find everything I need
+        # I'm sure it's possible, but the juice isn't worth the squeeze for me.
+        # Instead, I'll take this procedural approach
+        
+        #--------------------------------------------------
+        rows_regex = r"ROW\((.*)\)"
+        rows       = re.findall(rows_regex, mapping_table_str, flags=0)
+        assert(len(rows)==n_rows)
+        
+        #--------------------------------------------------
+        element_regex = r".*'(.*)'.*"
+        rows_fnl      = []
+        for row_i in rows:
+            elements_i = row_i.split(',')
+            assert(len(elements_i) == len(fields))
+            #-------------------------
+            elements_i_fnl = []
+            for el_j in elements_i:
+                el_j_fnl = re.findall(element_regex, el_j)
+                assert(len(el_j_fnl)==1)
+                el_j_fnl = el_j_fnl[0]
+                elements_i_fnl.append(el_j_fnl)
+            assert(len(elements_i_fnl) == len(fields))
+            rows_fnl.append(elements_i_fnl)
+        
+        #--------------------------------------------------
+        assert(len(rows_fnl)==n_rows)
+        return_df = pd.DataFrame(
+            data    = rows_fnl, 
+            columns = fields
+        )
+    
+        #--------------------------------------------------
+        return return_df
+
+
+    #****************************************************************************************************
+    @staticmethod
     # More general version of build_sql_ami_for_outages
     def build_sql_ami_for_df_with_search_time_window(
         cols_of_interest           , 
@@ -2306,6 +2457,7 @@ class AMI_SQL:
         max_n_prem_per_outg        = None, 
         join_mp_args               = False, 
         date_only                  = False, 
+        output_t_minmax            = False, 
         df_args                    = {}
     ):
         r"""
@@ -2661,7 +2813,10 @@ class AMI_SQL:
             assert(ami_field not in ami_input)
             ami_input[ami_field] = ami_field_values
             #-------------------------
-            if len(df_args['addtnl_groupby_cols']) > 0:
+            if(
+                len(df_args['addtnl_groupby_cols']) > 0 or 
+                output_t_minmax
+            ):
                 map_str_gp_i = AMI_SQL.create_mapping_table_rows(
                     df                  = sub_df, 
                     join_cols           = [
@@ -2675,7 +2830,8 @@ class AMI_SQL:
                         df_args['t_search_max_col']
                     ], 
                     consolidated_col    = consolidated_col, 
-                    include_final_comma = True
+                    include_final_comma = True, 
+                    date_only           = date_only, 
                 )
                 map_strs.append(map_str_gp_i)
             #--------------------------------------------------
@@ -2755,7 +2911,10 @@ class AMI_SQL:
         #       For this method to remove duplicates, I utilize the select_distinct argument
         # NOTE: These duplicates seem to not result from the code or any type of joining etc. on my end, but seem to reflect actual
         #         duplicates within the data themselves.
-        if len(df_args['addtnl_groupby_cols'])==0:
+        if(
+            len(df_args['addtnl_groupby_cols'])==0 and 
+            not output_t_minmax
+        ):
             sql_select_fnl = SQLSelect(
                 field_descs     = ['gnrl.*'], 
                 select_distinct = True
@@ -2763,8 +2922,12 @@ class AMI_SQL:
         else:
             mapped_tag = '_GPD_FOR_SQL'
             #-----
+            field_descs = ['gnrl.*'] + [f"map.{x}{mapped_tag}" for x in df_args['addtnl_groupby_cols']]
+            if output_t_minmax:
+                field_descs.extend([df_args['t_search_min_col'], df_args['t_search_max_col']])
+            #-----
             sql_select_fnl = SQLSelect(
-                field_descs     = ['gnrl.*'] + [f"map.{x}{mapped_tag}" for x in df_args['addtnl_groupby_cols']], 
+                field_descs     = field_descs, 
                 select_distinct = True
             )
             #-------------------------
@@ -2794,11 +2957,18 @@ class AMI_SQL:
             #-----
             sql_join_fnl_stmnt = sql_join_fnl.get_statement_string()
             #-----
-            sql_join_fnl_stmnt += "\nAND gnrl.{} BETWEEN map.{} and map.{}".format(
-                build_sql_function_kwargs['date_col'] if date_only else new_dt_alias, 
-                df_args['t_search_min_col'], 
-                df_args['t_search_max_col']
-            )
+            if date_only:
+                sql_join_fnl_stmnt += "\nAND CAST(gnrl.{} as DATE) BETWEEN map.{} and map.{}".format(
+                    build_sql_function_kwargs['date_col'], 
+                    df_args['t_search_min_col'], 
+                    df_args['t_search_max_col']
+                )
+            else:
+                sql_join_fnl_stmnt += "\nAND gnrl.{} BETWEEN map.{} and map.{}".format(
+                    new_dt_alias, 
+                    df_args['t_search_min_col'], 
+                    df_args['t_search_max_col']
+                )
         #-------------------------
         sql_gnrl_stmnt = sql_gnrl.get_sql_statement(
             insert_n_tabs_to_each_line = 0,
@@ -2847,6 +3017,7 @@ class AMI_SQL:
         max_n_prem_per_outg       = None, 
         join_mp_args              = False, 
         date_only                 = False, 
+        output_t_minmax           = False, 
         df_args                   = {}
     ):
         return AMI_SQL.build_sql_ami_for_df_with_search_time_window(
@@ -2858,6 +3029,7 @@ class AMI_SQL:
             max_n_prem_per_outg        = max_n_prem_per_outg, 
             join_mp_args               = join_mp_args, 
             date_only                  = date_only, 
+            output_t_minmax            = output_t_minmax, 
             df_args                    = df_args
         )
 
@@ -2872,6 +3044,7 @@ class AMI_SQL:
         max_n_prem_per_outg       = None, 
         join_mp_args              = False, 
         date_only                 = False, 
+        output_t_minmax           = False, 
         df_args                   = {}
     ):
         r"""
@@ -2904,5 +3077,6 @@ class AMI_SQL:
             max_n_prem_per_outg        = max_n_prem_per_outg, 
             join_mp_args               = join_mp_args, 
             date_only                  = date_only, 
+            output_t_minmax            = output_t_minmax, 
             df_args                    = df_args
         )

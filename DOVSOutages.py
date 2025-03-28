@@ -9,19 +9,16 @@ __status__ = "Personal"
 
 #--------------------------------------------------
 import Utilities_config
-import sys, os
+import sys
 import re
 
 import pandas as pd
 import numpy as np
-from pandas.api.types import is_numeric_dtype, is_datetime64_dtype, is_timedelta64_dtype
-from scipy import stats
+from pandas.api.types import is_datetime64_dtype
 import datetime
-import time
-from natsort import natsorted, ns
+from natsort import natsorted
 from ast import literal_eval
 #--------------------------------------------------
-import CommonLearningMethods as clm
 from MeterPremise import MeterPremise
 from DOVSOutages_SQL import DOVSOutages_SQL
 from GenAn import GenAn
@@ -30,8 +27,6 @@ sys.path.insert(0, Utilities_config.get_utilities_dir())
 import Utilities
 import Utilities_df
 from Utilities_df import DFConstructType
-import Utilities_dt
-import DataFrameSubsetSlicer
 from DataFrameSubsetSlicer import DataFrameSubsetSlicer as DFSlicer
 #---------------------------------------------------------------------
 sys.path.insert(0, Utilities_config.get_sql_aids_dir())
@@ -80,7 +75,7 @@ class DOVSOutages(GenAn):
         premise_nb_col  = self.build_sql_function_kwargs.get('premise_nb_col', 'PREMISE_NB')
         contstruct_df_args['read_sql_args'] = contstruct_df_args.get(
             'read_sql_args', 
-            dict(dtype={outg_rec_nb_col:np.int32, premise_nb_col:str})
+            dict(dtype={outg_rec_nb_col:np.int64, premise_nb_col:str})
         )
         #--------------------------------------------------
         if not build_consolidated:
@@ -149,11 +144,9 @@ class DOVSOutages(GenAn):
     
     def get_default_cols_and_types_to_convert_dict(self):
         cols_and_types_to_convert_dict = {
-            'CI_NB':np.int32, 
+            'CI_NB':np.int64, 
             'CMI_NB':np.float64, 
-            #'OUTG_REC_NB':[np.float, np.int32], # Annoying intermediate conversion needed for OUTG_REC_NB
-            #'OUTG_REC_NB':np.int32, 
-            'OUTG_REC_NB':str, 
+            'OUTG_REC_NB':[np.int64, str], 
             'START_YEAR':np.int64, 
             'DT_ON_TS':datetime.datetime,
             'DT_OFF_TS_FULL':datetime.datetime
@@ -431,29 +424,35 @@ class DOVSOutages(GenAn):
     #****************************************************************************************************
     @staticmethod
     def set_search_time_in_outage_df(
-        df_outage, 
-        search_time_half_window, 
-        search_time_half_window_col='search_time_half_window', 
-        power_out_col='DT_OFF_TS_FULL', 
-        power_on_col='DT_ON_TS', 
-        t_search_min_col='t_search_min', 
-        t_search_max_col='t_search_max'
+        df_outage          , 
+        search_time_window , 
+        power_out_col      = 'DT_OFF_TS_FULL',          #input column
+        power_on_col       = 'DT_ON_TS',                #input column
+        t_search_min_col   = 't_search_min',            #output column
+        t_search_max_col   = 't_search_max',            #output column
+        wrt_out_only       = False
     ):
         r"""
         The function creates the search time intervals which will be used to retrieve the usage (15-minute interval 
-        and instantaneous), end events, etc. for the meters affected by the outage.
+          and instantaneous), end events, etc. for the meters affected by the outage.
+        The expectation is that the search window will be centered around the outage; i.e., the window creation is as follows:
+            df_outage[t_search_min_col] = df_outage[power_out_col] - search_time_window
+            df_outage[t_search_max_col] = df_outage[power_on_col]  + search_time_window
 
         df_outage:
           - pd.DataFrame object housing the outage data
 
-        search_time_half_window:
+        search_time_window:
           - the amount of time for which to retrieve data before and after the outage.
-          - Can either be 
+          - Can be 
               - an int representing the number of MINUTES
               - a datetime.timedelta object
-        search_time_half_window_col:
-          - the column to be created in df_outage to house search_time_half_window
-          - default = 'search_time_half_window'
+            -OR- (new development)
+              - a list of length-2 representing the left and right Timedeltas (or the columns in which 
+                  the Timedeltas live) to be used in defining the window.
+                IF THIS IS THE CASE, the user needs to be careful to define td_left and td_right
+                  with the appropriate signs (+/-) for the desired output.
+                See Utilities_df.build_range_from_doi_left_right/Utilities_dt.build_range_from_doi_left_right for more information.
 
         power_out_col:
           - the column in df_outage housing the time the power outage began
@@ -470,44 +469,72 @@ class DOVSOutages(GenAn):
         t_search_max_col:
           - the column to be created in df_outage to house the maximum of the search time interval
           - default = 't_search_max'
+
+        wrt_out_only:
+            If True, the search times are taken with respect to (wrt) the power_out time only 
         """
+        #--------------------------------------------------
+        if wrt_out_only:
+            power_on_col = power_out_col
         #--------------------------------------------------
         assert(power_out_col in df_outage.columns)
         assert(power_on_col in df_outage.columns)
         #--------------------------------------------------
-        assert(Utilities.is_object_one_of_types(search_time_half_window, [int, datetime.timedelta]))
-        if isinstance(search_time_half_window, int):
-            search_time_half_window = datetime.timedelta(minutes=search_time_half_window)
-        #--------------------------------------------------
         if not is_datetime64_dtype(df_outage[power_out_col]):
             df_outage = Utilities_df.convert_col_type(df_outage, power_out_col, datetime.datetime)
         if not is_datetime64_dtype(df_outage[power_on_col]):
-            df_outage = Utilities_df.convert_col_type(df_outage, power_on_col, datetime.datetime)        
+            df_outage = Utilities_df.convert_col_type(df_outage, power_on_col, datetime.datetime)
         #--------------------------------------------------
-        df_outage[search_time_half_window_col] = search_time_half_window
-        df_outage[t_search_min_col] = df_outage[power_out_col] - df_outage[search_time_half_window_col]
-        df_outage[t_search_max_col] = df_outage[power_on_col] + df_outage[search_time_half_window_col]
+        if isinstance(search_time_window, list):
+            assert(len(search_time_window)==2)
+            assert(Utilities.are_all_list_elements_one_of_types_and_homogeneous(search_time_window, [int, datetime.timedelta, str]))
+            if Utilities.are_all_list_elements_of_type(search_time_window, str):
+                assert(set(search_time_window).difference(set(df_outage.columns.tolist()))==set())
+            else:
+                search_time_window = [
+                    x if isinstance(x, datetime.timedelta) else datetime.timedelta(minutes=x) 
+                    for x in search_time_window
+                ]
+                assert(Utilities.are_all_list_elements_of_type(search_time_window, datetime.timedelta))
+            #--------------------------------------------------
+            df_outage = Utilities_df.build_range_from_doi_left_right(
+                df                 = df_outage, 
+                doi_col            = None,
+                td_left            = search_time_window[0],
+                td_right           = search_time_window[1], 
+                placement_cols     = [t_search_min_col, t_search_max_col], 
+                doi_col_left       = power_out_col, 
+                doi_col_right      = power_on_col, 
+                assert_makes_sense = True , 
+            )
+        else:
+            assert(Utilities.is_object_one_of_types(search_time_window, [int, datetime.timedelta]))
+            if isinstance(search_time_window, int):
+                search_time_window = datetime.timedelta(minutes=search_time_window)
+            #--------------------------------------------------
+            df_outage[t_search_min_col] = df_outage[power_out_col] - search_time_window
+            df_outage[t_search_max_col] = df_outage[power_on_col]  + search_time_window
         #--------------------------------------------------
         return df_outage
         
         
     def set_search_time(
-        self, 
-        search_time_half_window, 
-        search_time_half_window_col='search_time_half_window', 
-        power_out_col='DT_OFF_TS_FULL', 
-        power_on_col='DT_ON_TS', 
-        t_search_min_col='t_search_min', 
-        t_search_max_col='t_search_max'
+        self               , 
+        search_time_window , 
+        power_out_col      = 'DT_OFF_TS_FULL', 
+        power_on_col       = 'DT_ON_TS', 
+        t_search_min_col   = 't_search_min', 
+        t_search_max_col   = 't_search_max', 
+        wrt_out_only       = False
     ):
         self.df = DOVSOutages.set_search_time_in_outage_df(
-            df_outage                   = self.df, 
-            search_time_half_window     = search_time_half_window, 
-            search_time_half_window_col = search_time_half_window_col, 
-            power_out_col               = power_out_col, 
-            power_on_col                = power_on_col, 
-            t_search_min_col            = t_search_min_col, 
-            t_search_max_col            = t_search_max_col
+            df_outage          = self.df, 
+            search_time_window = search_time_window, 
+            power_out_col      = power_out_col, 
+            power_on_col       = power_on_col, 
+            t_search_min_col   = t_search_min_col, 
+            t_search_max_col   = t_search_max_col, 
+            wrt_out_only       = wrt_out_only
         )
     
     #****************************************************************************************************
@@ -593,24 +620,24 @@ class DOVSOutages(GenAn):
         
     @staticmethod
     def consolidate_df_outage(
-        df_outage, 
-        outg_rec_nb_col='OUTG_REC_NB', 
-        addtnl_grpby_cols=None, 
-        cols_shared_by_group=None, 
-        cols_to_collect_in_lists=None, 
-        allow_duplicates_in_lists=False, 
-        allow_NaNs_in_lists=False, 
-        recover_uniqueness_violators=True, 
-        gpby_dropna=False, 
-        rename_cols=None,     
-        premise_nb_col='PREMISE_NB', 
-        premise_nbs_col='PREMISE_NBS', 
-        cols_to_drop=['OFF_TM', 'REST_TM'], 
-        sort_PNs=True, 
-        drop_null_premise_nbs=True, 
-        set_outg_rec_nb_as_index=True,
-        drop_outg_rec_nb_if_index=False, 
-        verbose=True
+        df_outage                    , 
+        outg_rec_nb_col              = 'OUTG_REC_NB', 
+        addtnl_grpby_cols            = None, 
+        cols_shared_by_group         = None, 
+        cols_to_collect_in_lists     = None, 
+        allow_duplicates_in_lists    = False, 
+        allow_NaNs_in_lists          = False, 
+        recover_uniqueness_violators = True, 
+        gpby_dropna                  = False, 
+        rename_cols                  = None,     
+        premise_nb_col               = 'PREMISE_NB', 
+        premise_nbs_col              = 'PREMISE_NBS', 
+        cols_to_drop                 = ['OFF_TM', 'REST_TM'], 
+        sort_PNs                     = True, 
+        drop_null_premise_nbs        = True, 
+        set_outg_rec_nb_as_index     = True,
+        drop_outg_rec_nb_if_index    = False, 
+        verbose                      = True
     ):
         r"""
         This function consolidates an outage DF which has a lot of repetitive information.
@@ -724,9 +751,9 @@ class DOVSOutages(GenAn):
         premise_nbs_col='PREMISE_NBS', 
         dt_off_ts_col='DT_OFF_TS', 
         cols_and_types_to_convert_dict = {
-            'CI_NB':np.int32, 
+            'CI_NB':np.int64, 
             'CMI_NB':np.float64, 
-            'OUTG_REC_NB':np.int32, 
+            'OUTG_REC_NB':np.int64, 
             'annual_kwh':float, 
             'annual_max_dmnd':float
         }, 
@@ -1176,7 +1203,7 @@ class DOVSOutages(GenAn):
         # So, if len(outg_rec_nbs)>1000, use batches!!!
         dovs_outgs = DOVSOutages(                 
             df_construct_type=DFConstructType.kRunSqlQuery, 
-            contstruct_df_args=dict(read_sql_args=dict(dtype={outg_rec_nb_col:np.int32, premise_nb_col:str})), 
+            contstruct_df_args=dict(read_sql_args=dict(dtype={outg_rec_nb_col:np.int64, premise_nb_col:str})), 
             init_df_in_constructor=True, 
             build_sql_function=DOVSOutages_SQL.build_sql_outage_premises, 
             build_sql_function_kwargs=dict(        
@@ -1249,8 +1276,8 @@ class DOVSOutages(GenAn):
                 to_numeric_errors=to_numeric_errors, 
                 verbose=verbose,
                 return_premise_nbs_col=return_premise_nbs_col, 
-                outg_rec_nb_col=outg_rec_nb_col, 
-                premise_nb_col=premise_nb_col
+                outg_rec_nb_col=dovs_outg_rec_nb_col, 
+                premise_nb_col=dovs_premise_nb_col
             )
             return df
         #----------------------------------------------------------------------------------------------------
@@ -1286,7 +1313,7 @@ class DOVSOutages(GenAn):
             build_sql_function_kwargs = {**build_sql_function_kwargs, **addtnl_build_sql_function_kwargs}
         #-------------------------
         df = DOVSOutages.build_consolidated_outage_df(
-            contstruct_df_args=dict(read_sql_args=dict(dtype={dovs_outg_rec_nb_col:np.int32, dovs_premise_nb_col:str})), 
+            contstruct_df_args=dict(read_sql_args=dict(dtype={dovs_outg_rec_nb_col:np.int64, dovs_premise_nb_col:str})), 
             build_sql_function=DOVSOutages_SQL.build_sql_outage, 
             build_sql_function_kwargs=build_sql_function_kwargs, 
             return_premise_nbs_col=return_premise_nbs_col, 
@@ -1895,13 +1922,23 @@ class DOVSOutages(GenAn):
         #     Use Utilities_df.merge_dfs (general function, but specifically built for this purpose)
         #-------------------------
         og_shape = df.shape
+        #-----
+        idfr_loc = Utilities_df.get_idfr_loc(
+            df   = df, 
+            idfr = outg_rec_nb_idfr
+        )
+        if idfr_loc[1]:
+            final_index = 1
+        else:
+            final_index = None
+        #-----
         return_df = Utilities_df.merge_dfs(
             df_1        = df, 
             df_2        = dovs_outgs_df, 
-            merge_on_1  =  outg_rec_nb_idfr, 
+            merge_on_1  = outg_rec_nb_idfr, 
             merge_on_2  = 'index', 
             how         = 'left', 
-            final_index = 1
+            final_index = final_index
         )
         assert(og_shape[0]==return_df.shape[0])
         #--------------------------------------------------
@@ -2074,10 +2111,10 @@ class DOVSOutages(GenAn):
         
     @staticmethod
     def retrieve_outage_from_dovs_df(
-        dovs_df, 
-        outg_rec_nb, 
-        outg_rec_nb_idfr, 
-        assert_outg_rec_nb_found=True
+        dovs_df                  , 
+        outg_rec_nb              , 
+        outg_rec_nb_idfr         , 
+        assert_outg_rec_nb_found = True
     ):
         r"""
         Retrieve the rows in dovs_df corresponding to outg_rec_nb
