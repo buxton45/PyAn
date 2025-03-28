@@ -1,0 +1,13 @@
+# config yaml file for Analysis
+aep_user_id: s346557
+analysis_dir: C:\Users\s346557\Documents\Analysis
+athena_dev_dsn: Athena Dev
+athena_prod_dsn: Athena Prod
+athena_qa_dsn: Athena QA
+config_verified: true
+eemsp_dsn: EEMSP
+local_data_dir: C:\Users\s346557\Documents\LocalData
+pwd_file_path: C:\Users\s346557\Documents\Analysis\pwd_file.txt
+sql_aids_dir: C:\Users\s346557\Documents\Analysis\SQLAids
+utilities_dir: C:\Users\s346557\Documents\Analysis\Utilities
+utldb01p_dsn: UTLDB01P

@@ -1,0 +1,28 @@
+# config yaml file for Analysis
+analysis_dir:   'C:\Users\s346557\Documents\Analysis'
+utilities_dir:  'C:\Users\s346557\Documents\Analysis\Utilities'
+sql_aids_dir:   'C:\Users\s346557\Documents\Analysis\SQLAids'
+local_data_dir: 'C:\Users\s346557\Documents\LocalData'
+pwd_file_path:  'C:\Users\s346557\Documents\s346557.txt'
+aep_user_id:    's346557'
+config_verified: False
+
+# Below are just here to remind me how to do some other things in yaml
+# calling-birds: &calling-birds
+  # - huey
+  # - dewey
+  # - louie
+  # - fred
+# xmas-fifth-day:
+  # calling-birds: *calling-birds
+  # french-hens: 3
+  # golden-rings: 5
+  # partridges:
+    # count: 1
+    # location: "a pear tree"
+  # turtle-doves: two
+  
+# bill-to: &id001
+    # given  : Chris
+    # family : Dumars
+# ship-to: *id001
