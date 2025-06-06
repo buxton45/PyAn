@@ -28,6 +28,7 @@ from SQLFrom import SQLFrom
 from SQLWhere import SQLWhereElement, SQLWhere
 from SQLGroupBy import SQLGroupBy
 from SQLQuery import SQLQuery
+from SQLQueryGeneric import SQLQueryGeneric
 #--------------------------------------------------
 sys.path.insert(0, Utilities_config.get_utilities_dir())
 import Utilities
@@ -351,14 +352,15 @@ class MeterPremise(GenAn):
         
         
     @staticmethod
-    def add_opco_nm_to_mp_sql(
+    def add_opco_nm_to_mp_sql_OLD(
         mp_sql                 , 
         opcos                  = None, 
         comp_cols              = ['opco_nm', 'opco_nb'], 
         comp_alias             = 'COMP', 
         join_type              = 'LEFT', 
         include_comp_in_select = True, 
-        return_alias           = None
+        return_alias           = None, 
+        include_with           = False
     ):
         r"""
         In order to add opco_nm to default.meter_premise, we must join with default.company.
@@ -431,8 +433,83 @@ class MeterPremise(GenAn):
         if return_alias is not None:
             return_stmnt = Utilities_sql.prepend_tabs_to_each_line(return_stmnt, n_tabs_to_prepend=1)
             return_stmnt = f"{return_alias} AS (\n{return_stmnt}\n)"
+            #-----
+            if include_with:
+                return_stmnt = f"WITH {return_stmnt}"
         #-------------------------
         return return_stmnt
+    
+    @staticmethod
+    def add_opco_nm_to_mp_sql(
+        mp_sql                 , 
+        opcos                  = None, 
+        comp_cols              = ['opco_nm', 'opco_nb'], 
+        comp_alias             = 'COMP', 
+        join_type              = 'LEFT', 
+        include_comp_in_select = True,
+    ):
+        r"""
+        In order to add opco_nm to default.meter_premise, we must join with default.company.
+        mp_sql must be a SQLQuery object.
+        -------
+        opcos:
+            If not None, should be a list of opcos, (e.g., ['ap','ky','oh','im','pso','swp','tx']
+        
+        """
+        #--------------------------------------------------
+        if opcos is None and not include_comp_in_select:
+            return mp_sql
+        #--------------------------------------------------
+        if comp_cols is None:
+            comp_cols = ['opco_nm', 'opco_nb']
+        assert(isinstance(comp_cols, list))
+        # Make sure 'opco_nm' and 'opco_nb' are in select for default.company
+        # NOTE: e.g., if one is only using opco_nm in the where statement (via opcos argument) then
+        #         don't necessarily need opco_nm/opco_nb in final output
+        comp_cols_full = list(set(comp_cols+['opco_nm', 'opco_nb']))
+        #-----
+        if comp_alias is None:
+            comp_alias = 'COMP'
+        #-----
+        sql_opco = "(SELECT {} FROM default.company)".format(
+            Utilities_sql.join_list(comp_cols_full, quotes_needed=False)
+        )
+        #-------------------------
+        if not mp_sql.sql_from.alias:
+            mp_sql.sql_from.alias = Utilities.generate_random_string(str_len=5, letters='letter_only')    
+        #-------------------------
+        if include_comp_in_select:
+            join_cols_to_add_to_select = comp_cols
+        else:
+            join_cols_to_add_to_select = None
+        #-----
+        join_company_args = dict(
+            join_type                  = join_type, 
+            join_table                 = sql_opco, 
+            join_table_alias           = comp_alias, 
+            orig_table_alias           = mp_sql.sql_from.alias, 
+            list_of_columns_to_join    = [['co_cd_ownr', 'opco_nb']], 
+            idx                        = None, 
+            run_check                  = False, 
+            join_cols_to_add_to_select = join_cols_to_add_to_select
+        )
+        mp_sql.build_and_add_join(**join_company_args)
+        #-------------------------
+        if opcos is not None:
+            assert(Utilities.is_object_one_of_types(opcos, [list, str]))
+            if isinstance(opcos, str):
+                opcos = [opcos]
+            mp_sql.sql_where.addtnl_info['field_descs_dict']['opcos'] = 'opco_nm'
+            mp_sql.sql_where = SQLWhere.add_where_statement_equality_or_in(
+                sql_where          = mp_sql.sql_where, 
+                field_desc         = 'opco_nm', 
+                value              = opcos, 
+                needs_quotes       = True, 
+                table_alias_prefix = comp_alias, 
+                idx                = None
+            )        
+        #-------------------------
+        return mp_sql
     
     
     @staticmethod
@@ -468,6 +545,22 @@ class MeterPremise(GenAn):
           - city(ies)
           - city_col
             - default: serv_city_ad
+
+          - station_nb(s)
+          - station_nb_col
+            - default: station_nb
+
+          - station_nm(s)
+          - station_nm_col
+            - default: station_nm
+
+          - circuit_nb(s)
+          - circuit_nb_col
+            - default: circuit_nb
+
+          - circuit_nm(s)
+          - circuit_nm_col
+            - default: circuit_nm
             
           - srvc_addr_2_nm(s)
           - srvc_addr_2_nm_col
@@ -510,8 +603,8 @@ class MeterPremise(GenAn):
           ***** For more info on datetime/inst_ts/rmvl_ts, see MeterPremise.add_inst_rmvl_ts_where_statement *****
           
           - opcos
-            - IMPORTANT: If setting OPCOs, then add_opco_nm_to_mp_sql will be utilized, and the returned object will be a string,
-                           NOT a SQLQuery object!
+          - include_opcos_comp_in_select
+            - default: True
           
           - schema_name
             - default: default
@@ -643,6 +736,70 @@ class MeterPremise(GenAn):
                     value              = serial_numbers, 
                     table_alias_prefix = from_table_alias
                 )
+
+        #***** STATION NUMBERS **************************************************
+        station_nb_col = kwargs.get('station_nb_col', 'station_nb')
+        assert(not('station_nbs' in kwargs and 'station_nb' in kwargs))
+        station_nbs = kwargs.get('station_nbs', kwargs.get('station_nb', None))
+        if station_nbs is not None:
+            field_descs_dict['station_nbs' if 'station_nbs' in kwargs else 'station_nb'] = station_nb_col
+            if isinstance(station_nbs, SQLWhereElement):
+                sql_where.add_where_statement(station_nbs)
+            else:
+                sql_where = SQLWhere.add_where_statement_equality_or_in(
+                    sql_where          = sql_where, 
+                    field_desc         = station_nb_col, 
+                    value              = station_nbs, 
+                    table_alias_prefix = from_table_alias
+                )
+
+        #***** STATION NAMES **************************************************
+        station_nm_col = kwargs.get('station_nm_col', 'station_nm')
+        assert(not('station_nms' in kwargs and 'station_nm' in kwargs))
+        station_nms = kwargs.get('station_nms', kwargs.get('station_nm', None))
+        if station_nms is not None:
+            field_descs_dict['station_nms' if 'station_nms' in kwargs else 'station_nm'] = station_nm_col
+            if isinstance(station_nms, SQLWhereElement):
+                sql_where.add_where_statement(station_nms)
+            else:
+                sql_where = SQLWhere.add_where_statement_equality_or_in(
+                    sql_where          = sql_where, 
+                    field_desc         = station_nm_col, 
+                    value              = station_nms, 
+                    table_alias_prefix = from_table_alias
+                )
+
+        #***** CIRCUIT NUMBERS **************************************************
+        circuit_nb_col = kwargs.get('circuit_nb_col', 'circuit_nb')
+        assert(not('circuit_nbs' in kwargs and 'circuit_nb' in kwargs))
+        circuit_nbs = kwargs.get('circuit_nbs', kwargs.get('circuit_nb', None))
+        if circuit_nbs is not None:
+            field_descs_dict['circuit_nbs' if 'circuit_nbs' in kwargs else 'circuit_nb'] = circuit_nb_col
+            if isinstance(circuit_nbs, SQLWhereElement):
+                sql_where.add_where_statement(circuit_nbs)
+            else:
+                sql_where = SQLWhere.add_where_statement_equality_or_in(
+                    sql_where          = sql_where, 
+                    field_desc         = circuit_nb_col, 
+                    value              = circuit_nbs, 
+                    table_alias_prefix = from_table_alias
+                )
+
+        #***** CIRCUIT NAMES **************************************************
+        circuit_nm_col = kwargs.get('circuit_nm_col', 'circuit_nm')
+        assert(not('circuit_nms' in kwargs and 'circuit_nm' in kwargs))
+        circuit_nms = kwargs.get('circuit_nms', kwargs.get('circuit_nm', None))
+        if circuit_nms is not None:
+            field_descs_dict['circuit_nms' if 'circuit_nms' in kwargs else 'circuit_nm'] = circuit_nm_col
+            if isinstance(circuit_nms, SQLWhereElement):
+                sql_where.add_where_statement(circuit_nms)
+            else:
+                sql_where = SQLWhere.add_where_statement_equality_or_in(
+                    sql_where          = sql_where, 
+                    field_desc         = circuit_nm_col, 
+                    value              = circuit_nms, 
+                    table_alias_prefix = from_table_alias
+                )
                 
         #***** SERVICE ADDRESS 2 NAMES **************************************************
         srvc_addr_2_nm_col = kwargs.get('srvc_addr_2_nm_col', 'srvc_addr_2_nm')
@@ -728,20 +885,34 @@ class MeterPremise(GenAn):
             sql_where  = sql_where, 
             alias      = kwargs.get('alias', None)
         )
-                         
-        #**************************************************
-        #**************************************************
+
+        #***** OPCOS **************************************************
         assert(not('opcos' in kwargs and 'opco' in kwargs))
         opcos = kwargs.get('opcos', kwargs.get('opco', None))
         if opcos is not None:
-            sql_stmnt = MeterPremise.add_opco_nm_to_mp_sql(
-                mp_sql     = mp_sql, 
-                opcos      = opcos, 
-                comp_cols  = ['opco_nm'], 
-                comp_alias = 'COMP', 
-                join_type  = 'LEFT', 
+            field_descs_dict['opcos' if 'opcos' in kwargs else 'opco'] = 'opco_nm'
+            mp_sql = MeterPremise.add_opco_nm_to_mp_sql(
+                mp_sql                 = mp_sql, 
+                opcos                  = opcos, 
+                comp_cols              = ['opco_nm'], 
+                comp_alias             = 'COMP', 
+                join_type              = 'LEFT', 
+                include_comp_in_select = kwargs.get('include_opcos_comp_in_select', True), 
             )
-            return sql_stmnt
+
+        #**************************************************
+        #**************************************************
+        return_args                = kwargs.get('return_args', {})
+        return_statement           = return_args.get('return_statement', False)
+        insert_n_tabs_to_each_line = return_args.get('insert_n_tabs_to_each_line', 0)
+        include_alias              = return_args.get('include_alias', False)
+
+        #**************************************************
+        if return_statement:
+            return mp_sql.get_sql_statement(
+                insert_n_tabs_to_each_line = insert_n_tabs_to_each_line, 
+                include_alias              = include_alias
+            )
         else:
             return mp_sql
         
@@ -2966,49 +3137,6 @@ class MeterPremise(GenAn):
         #-------------------------
         return df
         
-
-    @staticmethod
-    def build_sql_distinct_trsf_pole_nbs_OLD(
-        n_trsf_pole_nbs=None, 
-        **kwargs
-    ):
-        r"""
-        n_trsf_pole_nbs:
-            If set, this will randomly return n_trsf_pole_nbs instead of the full set
-        
-        kwargs can house any build_sql_meter_premise arguments (e.g., premise_nbs, states, etc.)
-
-        NOTE: default.meter_premise_hist does not have trsf_pole_nb information.
-              Therefore, trsf_pole_nbs can only be selected from those currently active.
-        """
-        #-------------------------
-        sql = MeterPremise.build_sql_meter_premise(
-            cols_of_interest=['trsf_pole_nb'], 
-            **kwargs
-        )
-        sql.sql_select.select_distinct=True
-        if n_trsf_pole_nbs is not None:
-            # Obnoxious that I have to overcomplicate things and use a CTE because the following won't work
-            #     SELECT DISTINCT
-            #         MP.trsf_pole_nb
-            #     FROM default.meter_premise MP
-            #     ORDER BY RAND()
-            #     LIMIT 10
-            #  (gives error message, "... EXPRESSION_NOT_IN_DISTINCT ...")
-            # So one cannot simply call the following two lines:
-            #     sql.set_sql_orderby(SQLOrderBy(field_descs=['RAND()']))
-            #     sql.set_limit(n_trsf_pole_nbs)
-            #-------------------------
-            alias = Utilities.generate_random_string(str_len=3, letters='letters_only')
-            sql.alias = alias
-            sql_stmnt = "WITH " + sql.get_sql_statement(include_alias=True)
-            sql_2 = "\nSELECT *\nFROM {}\nORDER BY RAND()\nLIMIT {}".format(alias, n_trsf_pole_nbs)
-            sql_stmnt = sql_stmnt+sql_2
-        else:
-            sql_stmnt = sql.get_sql_statement()
-        #-------------------------
-        return sql_stmnt
-        
         
     @staticmethod
     def build_sql_distinct_trsf_pole_nbs(
@@ -3025,36 +3153,27 @@ class MeterPremise(GenAn):
               Therefore, trsf_pole_nbs can only be selected from those currently active.
         """
         #--------------------------------------------------
-        # At the time of updating this code (20240405), including opcos in build_sql_meter_premise will cause the returned object to 
-        #   collapse down from a SQLQuery object to a string (through the use of MeterPremise.add_opco_nm_to_mp_sql)
-        # At this point in the code, we need sql to remain a SQLQuery object, so we pop off opcos and include it manually later
-        assert(not('opcos' in kwargs and 'opco' in kwargs))
-        opcos = kwargs.pop('opcos', kwargs.pop('opco', None))
-        
-        #--------------------------------------------------
+        kwargs['include_opcos_comp_in_select'] = False
+        #-------------------------
         sql = MeterPremise.build_sql_meter_premise(
             cols_of_interest = ['trsf_pole_nb'], 
             **kwargs
         )
         assert(isinstance(sql, SQLQuery))
-        #-----
-        sql.sql_select.select_distinct=True
+        #-------------------------
+        sql.sql_select.select_distinct = True
         #--------------------------------------------------
         rndm_alias = None
         if n_trsf_pole_nbs is not None:
             rndm_alias = Utilities.generate_random_string(str_len=3, letters='letters_only')
-        #-------------------------
-        # Note: Below, if opcos is None then MeterPremise.add_opco_nm_to_mp_sql will simply
-        #         return sql.get_sql_statement() (since include_comp_in_select==False)
-        sql_stmnt = MeterPremise.add_opco_nm_to_mp_sql(
-            mp_sql                 = sql, 
-            opcos                  = opcos, 
-            comp_cols              = ['opco_nm', 'opco_nb'], 
-            comp_alias             = 'COMP', 
-            join_type              = 'LEFT', 
-            include_comp_in_select = False, 
-            return_alias           = rndm_alias
-        )
+            sql.alias  = rndm_alias
+            sql_stmnt  = sql.get_sql_statement(
+                insert_n_tabs_to_each_line = 0, 
+                include_alias              = True, 
+                include_with               = True
+            )
+        else:
+            sql_stmnt = sql.get_sql_statement()
         #--------------------------------------------------
         if n_trsf_pole_nbs is not None:
             # Obnoxious that I have to overcomplicate things and use a CTE because the following won't work
@@ -3068,8 +3187,6 @@ class MeterPremise(GenAn):
             #     sql.set_sql_orderby(SQLOrderBy(field_descs=['RAND()']))
             #     sql.set_limit(n_trsf_pole_nbs)
             #-------------------------
-            sql_stmnt = "WITH " + sql_stmnt
-            #-----
             sql_2 = "\nSELECT *\nFROM {}\nORDER BY RAND()\nLIMIT {}".format(rndm_alias, n_trsf_pole_nbs)
             sql_stmnt = sql_stmnt+sql_2
         #--------------------------------------------------
@@ -3725,9 +3842,83 @@ class MeterPremise(GenAn):
         
 
     @staticmethod
-    def get_xfmr_meter_cnt_sql_stmnt(
-        trsf_pole_nbs , 
+    def get_meter_cnt_sql_stmnt(
+        group_cols    , 
         return_PN_cnt = False, 
+        **kwargs
+    ):
+        r"""
+        Returns a string containing the SQL statement to be used by MeterPremise.get_meter_cnt
+        More general version of MeterPremise.get_xfmr_meter_cnt_sql_stmnt.
+    
+        kwargs:
+            If user supplies the following keyword arguments, they will be ignore:
+                [cols_of_interest, serial_number(s)\mfr_devc_ser_nbr(s), premise_nb(s)\aep_premise_nb(s), 'groupby_cols']
+        """
+        #--------------------------------------------------
+        assert(isinstance(group_cols, list))
+        #--------------------------------------------------
+        kwargs['include_opcos_comp_in_select'] = False
+        #-------------------------
+        kwargs['from_table_alias']  = kwargs.get('from_table_alias', 'MP')
+        kwargs['serial_number_col'] = kwargs.get('serial_number_col', 'mfr_devc_ser_nbr')
+        kwargs['premise_nb_col']    = kwargs.get('premise_nb_col', 'prem_nb')
+        #-------------------------
+        keys_to_ignore = [
+            'cols_of_interest', 
+            'serial_number', 'serial_numbers', 'mfr_devc_ser_nbr', 'mfr_devc_ser_nbrs', 
+            'premise_nb',    'premise_nbs',    'aep_premise_nb',   'aep_premise_nbs', 
+            'groupby_cols'
+        ]
+        sql_kwargs =  {k:v for k,v in kwargs.items() if k not in keys_to_ignore}
+        #--------------------------------------------------
+        cols_of_interest = copy.deepcopy(group_cols)
+        #-----
+        cols_of_interest.append(
+            dict(
+                field_desc         = (f"COUNT(DISTINCT {kwargs['serial_number_col']})" if kwargs['from_table_alias'] is None else
+                                      f"COUNT(DISTINCT {kwargs['from_table_alias']}.{kwargs['serial_number_col']})"), 
+                alias              = 'group_SN_cnt', 
+                table_alias_prefix = None
+            )
+        )
+        #-----
+        if return_PN_cnt:
+            cols_of_interest.append(
+                dict(
+                    field_desc         = (f"COUNT(DISTINCT {kwargs['premise_nb_col']})" if kwargs['from_table_alias'] is None else
+                                          f"COUNT(DISTINCT {kwargs['from_table_alias']}.{kwargs['premise_nb_col']})"), 
+                    alias              = 'group_PN_cnt', 
+                    table_alias_prefix = None
+                )
+            )
+        
+        #--------------------------------------------------
+        mp_sql = MeterPremise.build_sql_meter_premise(
+            cols_of_interest = cols_of_interest, 
+            **sql_kwargs
+        )
+        
+        #--------------------------------------------------
+        sql_groupby = SQLGroupBy(
+            field_descs               = group_cols, 
+            global_table_alias_prefix = kwargs['from_table_alias'], 
+            idxs                      = None, 
+            run_check                 = True
+        )
+        mp_sql.set_sql_groupby(sql_groupby)
+        
+        #--------------------------------------------------
+        sql_stmnt = mp_sql.get_sql_statement()
+        #-------------------------
+        return sql_stmnt
+    
+
+    @staticmethod
+    def get_xfmr_meter_cnt_sql_stmnt(
+        trsf_pole_nbs     , 
+        return_PN_cnt     = False, 
+        addtnl_group_cols = None, 
         **kwargs
     ):
         r"""
@@ -3738,11 +3929,7 @@ class MeterPremise(GenAn):
                 [cols_of_interest, trsf_pole_nb(s), serial_number(s)\mfr_devc_ser_nbr(s), premise_nb(s)\aep_premise_nb(s), 'groupby_cols']
         """
         #--------------------------------------------------
-        # opcos will be handled after, since including in call to MeterPremise.build_sql_meter_premise
-        #   could collapse it down to a string instead of SQLQuery object
-        opcos = kwargs.pop('opcos', None)
-        #--------------------------------------------------
-        kwargs['from_table_alias']  = kwargs.get('from_table_alias', None)
+        kwargs['from_table_alias']  = kwargs.get('from_table_alias', 'MP')
         kwargs['trsf_pole_nb_col']  = kwargs.get('trsf_pole_nb_col', 'trsf_pole_nb')
         kwargs['serial_number_col'] = kwargs.get('serial_number_col', 'mfr_devc_ser_nbr')
         kwargs['premise_nb_col']    = kwargs.get('premise_nb_col', 'prem_nb')
@@ -3759,70 +3946,37 @@ class MeterPremise(GenAn):
         sql_kwargs['trsf_pole_nbs'] = trsf_pole_nbs
         
         #--------------------------------------------------
-        cols_of_interest = [
-            kwargs['trsf_pole_nb_col'], 
-            dict(
-                field_desc         = (f"COUNT(DISTINCT {kwargs['serial_number_col']})" if kwargs['from_table_alias'] is None else
-                                      f"COUNT(DISTINCT {kwargs['from_table_alias']}.{kwargs['serial_number_col']})"), 
-                alias              = 'xfmr_SN_cnt', 
-                table_alias_prefix = None
-            )
-        ]
-        #-----
-        if return_PN_cnt:
-            cols_of_interest.append(
-                dict(
-                    field_desc         = (f"COUNT(DISTINCT {kwargs['premise_nb_col']})" if kwargs['from_table_alias'] is None else
-                                          f"COUNT(DISTINCT {kwargs['from_table_alias']}.{kwargs['premise_nb_col']})"), 
-                    alias              = 'xfmr_PN_cnt', 
-                    table_alias_prefix = None
-                )
-            )
-        
+        if addtnl_group_cols is None:
+            addtnl_group_cols = []
+        assert(isinstance(addtnl_group_cols, list))
         #--------------------------------------------------
-        mp_sql = MeterPremise.build_sql_meter_premise(
-            cols_of_interest = cols_of_interest, 
+        # No harm always calling [kwargs['trsf_pole_nb_col']]+addtnl_group_cols as [kwargs['trsf_pole_nb_col']]+[] has no effect
+        group_cols = [kwargs['trsf_pole_nb_col']] + addtnl_group_cols
+        #--------------------------------------------------
+        sql_stmnt = MeterPremise.get_meter_cnt_sql_stmnt(
+            group_cols    = group_cols, 
+            return_PN_cnt = return_PN_cnt, 
             **sql_kwargs
         )
-        
         #--------------------------------------------------
-        sql_groupby = SQLGroupBy(
-            field_descs               = [kwargs['trsf_pole_nb_col']], 
-            global_table_alias_prefix = None, 
-            idxs                      = None, 
-            run_check                 = True
-        )
-        mp_sql.set_sql_groupby(sql_groupby)
-        
-        #--------------------------------------------------
-        if opcos is not None:
-            sql_stmnt = MeterPremise.add_opco_nm_to_mp_sql(
-                mp_sql     = mp_sql, 
-                opcos      = opcos, 
-                comp_cols  = ['opco_nm'], 
-                comp_alias = 'COMP', 
-                join_type  = 'LEFT', 
-            )
-        else:
-            sql_stmnt = mp_sql.get_sql_statement()
-        #-------------------------
         return sql_stmnt
     
     
     @staticmethod
     def get_xfmr_meter_cnt(
-        trsf_pole_nbs , 
-        return_PN_cnt = False, 
-        batch_size    = 1000, 
-        verbose       = True, 
-        n_update      = 10, 
-        conn_aws      = None, 
-        return_sql    = False, 
+        trsf_pole_nbs     , 
+        return_PN_cnt     = False, 
+        addtnl_group_cols = None, 
+        batch_size        = 1000, 
+        verbose           = True, 
+        n_update          = 10, 
+        conn_aws          = None, 
+        return_sql        = False, 
         **kwargs
     ):
         r"""
-        Returns a pd.DataFrame containing trsf_pole_nb and the number of meters connected to it (xfmr_SN_cnt)
-        If return_PN_cnt == True, xfmr_PN_cnt will also be included.
+        Returns a pd.DataFrame containing trsf_pole_nb and the number of meters connected to it (group_SN_cnt)
+        If return_PN_cnt == True, group_PN_cnt will also be included.
     
         kwargs:
             If user supplies the following keyword arguments, they will be ignore:
@@ -3854,8 +4008,9 @@ class MeterPremise(GenAn):
             i_end = batch_i[1]
             #-----
             sql_stmnt_i = MeterPremise.get_xfmr_meter_cnt_sql_stmnt(
-                trsf_pole_nbs = trsf_pole_nbs[i_beg:i_end], 
-                return_PN_cnt = return_PN_cnt, 
+                trsf_pole_nbs     = trsf_pole_nbs[i_beg:i_end], 
+                return_PN_cnt     = return_PN_cnt, 
+                addtnl_group_cols = addtnl_group_cols, 
                 **kwargs
             )
             assert(isinstance(sql_stmnt_i, str))
@@ -3876,3 +4031,58 @@ class MeterPremise(GenAn):
             return return_df, sql_stmnts
         else:
             return return_df
+        
+
+    @staticmethod
+    def get_meter_cnt(
+        group_cols        , 
+        return_PN_cnt     = False, 
+        #-----
+        field_to_split    = None, 
+        batch_size        = 1000, 
+        verbose           = True, 
+        n_update          = 10, 
+        #-----
+        conn_aws          = None, 
+        return_sql        = False, 
+        **kwargs
+    ):
+        r"""
+        Returns a pd.DataFrame (and possibly SQL statement) containing group_cols and the number of meters connected to group (group_SN_cnt)
+        If return_PN_cnt == True, group_PN_cnt will also be included.
+    
+        kwargs:
+            If user supplies the following keyword arguments, they will be ignore:
+                [cols_of_interest, serial_number(s)\mfr_devc_ser_nbr(s), premise_nb(s)\aep_premise_nb(s), 'groupby_cols']
+        """
+        #--------------------------------------------------
+        if conn_aws is None:
+            conn_aws = Utilities.get_athena_prod_aws_connection()
+        #--------------------------------------------------
+        # Note: return_content will be:
+        #          return_sql==False ==> pd.DataFrame
+        #          return_sql==True  ==> (pd.DataFrame, string)
+        #-------------------------
+        build_sql_function        = MeterPremise.get_meter_cnt_sql_stmnt
+        build_sql_function_kwargs = dict(
+            group_cols     = group_cols, 
+            return_PN_cnt  = return_PN_cnt, 
+            field_to_split = field_to_split, 
+            batch_size     = batch_size, 
+            verbose        = verbose, 
+            n_update       = n_update,             
+            **kwargs
+        )
+        #-------------------------
+        return_content = GenAn.build_df_general(
+            conn_db                        = conn_aws, 
+            build_sql_function             = build_sql_function, 
+            build_sql_function_kwargs      = build_sql_function_kwargs, 
+            cols_and_types_to_convert_dict = None, 
+            to_numeric_errors              = 'coerce', 
+            save_args                      = False, 
+            return_sql                     = return_sql, 
+            read_sql_args                  = None, 
+        )
+        #-------------------------
+        return return_content

@@ -706,6 +706,7 @@ class GenAn:
                 cols_and_types_to_convert_dict    = cols_and_types_to_convert_dict, 
                 to_numeric_errors                 = to_numeric_errors, 
                 save_args                         = save_args, 
+                return_sql                        = return_sql, 
                 read_sql_args                     = read_sql_args, 
                 exclude_previously_recorded       = True, 
                 ignore_index                      = ignore_index, 
@@ -782,6 +783,7 @@ class GenAn:
         cols_and_types_to_convert_dict    = None, 
         to_numeric_errors                 = 'coerce', 
         save_args                         = False, 
+        return_sql                        = False, 
         read_sql_args                     = None, 
         exclude_previously_recorded       = True, 
         ignore_index                      = False, 
@@ -850,9 +852,10 @@ class GenAn:
                     if x not in prev_rec_coll
                 ]
         #-------------------------
-        return_df  = pd.DataFrame()
-        batch_idxs = Utilities.get_batch_idx_pairs(len(coll_to_split), batch_size)
-        n_batches  = len(batch_idxs)
+        return_df        = pd.DataFrame()
+        return_sql_stmnt = ''
+        batch_idxs       = Utilities.get_batch_idx_pairs(len(coll_to_split), batch_size)
+        n_batches        = len(batch_idxs)
         if verbose:
             print(f'n_coll     = {len(coll_to_split)}')
             print(f'batch_size = {batch_size}')
@@ -929,6 +932,8 @@ class GenAn:
                     collection_i                      = value
                 )
             #-----
+            return_sql_stmnt = return_sql_stmnt + sql_i + '\n' + '-----'*10 + '\n'
+            #-----
             if not save_and_dump:
                 if return_df.shape[0]>0:
                     assert(all(df_i.columns==return_df.columns))
@@ -937,9 +942,12 @@ class GenAn:
         if save_args['save_to_file'] and save_args['save_full_final']:
             if not os.path.exists(save_args['save_dir']):
                 os.makedirs(save_args['save_dir'])
-            return_df.to_csv(save_args['save_path'], index=save_args['index'])
+            return_df.to_csv(save_args['save_path'], index=save_args['index'])   
         #-------------------------
-        return return_df    
+        if not return_sql:
+            return return_df
+        else:
+            return return_df, return_sql_stmnt
     
     #****************************************************************************************************
     def init_df(self):

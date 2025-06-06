@@ -211,11 +211,11 @@ class OutageDataInfo:
 class OutageDAQ:
     def __init__(
         self, 
+        dataset, 
         run_date, 
         date_0, 
         date_1, 
         collect_evs_sum_vw,     # boolean
-        save_sub_dir, 
         td_left                 = pd.Timedelta('-31D'), 
         td_right                = pd.Timedelta('-1D'),      
         states                  = None, 
@@ -229,6 +229,7 @@ class OutageDAQ:
             Utilities.get_local_data_dir(), 
             r'dovs_and_end_events_data'
         ), 
+        run_date_subdir_appndx  = None, 
         dates_subdir_appndx     = None, 
         run_using_slim          = False
     ):
@@ -240,6 +241,9 @@ class OutageDAQ:
         #--------------------------------------------------
         assert(save_dfs_to_file+read_dfs_from_file <=1) # Should never both read and write!
         #--------------------------------------------------
+        OutageDataInfo.assert_dataset(dataset)
+        self.__data_info           = OutageDataInfo(dataset)
+        #--------------------------------------------------
         self.run_date              = run_date
         #--------------------------------------------------
         if not Utilities.is_datetime(obj=date_0, strict=False):
@@ -248,10 +252,10 @@ class OutageDAQ:
             date_1 = pd.to_datetime(date_1, yearfirst=True)
         assert(date_1 > date_0)
         #-----
-        self.date_0                = date_0
-        self.date_1                = date_1
+        self.date_0                 = date_0
+        self.date_1                 = date_1
         #--------------------------------------------------
-        self.collect_evs_sum_vw    = collect_evs_sum_vw
+        self.collect_evs_sum_vw     = collect_evs_sum_vw
         #--------------------------------------------------
         assert(td_left <= td_right)
         # For no great reason, I require td_left and td_right to either both be positive or both be negative.
@@ -268,25 +272,32 @@ class OutageDAQ:
         if not Utilities.is_timedelta(td_right):
             td_right = pd.to_timedelta(td_right)
         #-----
-        self.td_left               = td_left
-        self.td_right              = td_right
+        self.td_left                = td_left
+        self.td_right               = td_right
         #--------------------------------------------------
         assert(self.date_1-self.date_0 > self.window_width)
         #--------------------------------------------------
-        self.states                = states
-        self.opcos                 = opcos
-        self.cities                = cities
+        self.states                 = states
+        self.opcos                  = opcos
+        self.cities                 = cities
         #-------------------------
-        self.single_zip_xfmrs_only = single_zip_xfmrs_only
+        self.single_zip_xfmrs_only  = single_zip_xfmrs_only
         #-------------------------
-        self.dates_subdir_appndx   = dates_subdir_appndx
-        self.save_end_events       = save_end_events
-        self.save_dfs_to_file      = save_dfs_to_file
-        self.read_dfs_from_file    = read_dfs_from_file
-        self.run_using_slim        = run_using_slim
+        self.run_date_subdir_appndx = run_date_subdir_appndx
+        if self.run_date_subdir_appndx is None:
+            self.run_date_subdir_appndx = ''
+        #-----
+        self.dates_subdir_appndx    = dates_subdir_appndx
+        if self.dates_subdir_appndx is None:
+            self.dates_subdir_appndx = ''
+        #-----
+        self.save_end_events        = save_end_events
+        self.save_dfs_to_file       = save_dfs_to_file
+        self.read_dfs_from_file     = read_dfs_from_file
+        self.run_using_slim         = run_using_slim
         #-------------------------
         self.prep_save_locations( 
-            save_sub_dir = save_sub_dir,  
+            save_sub_dir = self.subdir,  
             base_dir     = base_dir
         )
         #--------------------------------------------------
@@ -300,8 +311,25 @@ class OutageDAQ:
         self.df_outage_OG          = None
         self.sql_outage_full       = None
 
+    #---------------------------------------------------------------------------
+    @property
+    def data_info(self):
+        return self.__data_info
+    #-----
+    @property
+    def dataset(self):
+        return self.__data_info.dataset
+    @property
+    def subdir(self):
+        return self.__data_info.subdir
+    @property
+    def naming_tag(self):
+        return self.__data_info.naming_tag
+    @property
+    def is_no_outage(self):
+        return self.__data_info.is_no_outage
 
-
+    #---------------------------------------------------------------------------
     def get_summary_dict(
         self
     ):
@@ -309,50 +337,65 @@ class OutageDAQ:
         DAQ settings with adjustments to a few entries (so they can be easily output into the summary JSON file)
         e.g., Timestamp is not JSON serializable, hence the need for strftime below
         e.g., Timedelta is not JSON serializable, hence the conversion to total seconds
+
+        NOTE: Although unlikely for anyone but me during development, user could collect data for both meter_events.end_device_event
+                and meter_events.events_summary_vw.
+              For that reason, make collect_evs_sum_vw top level of summary dict, allowing for two entries (True and False) if both
+                are collected
         """
         #--------------------------------------------------
         summary_dict = dict()
+        #--------------------------------------------------
+        #--------------------------------------------------
+        summary_dict                           = dict()
+        #--------------------------------------------------
+        summary_dict['run_date']               = self.run_date
         #-------------------------
-        summary_dict['run_date']              = self.run_date
+        summary_dict['date_0']                 = self.date_0.strftime('%Y-%m-%d %H:%M:%S')
+        summary_dict['date_1']                 = self.date_1.strftime('%Y-%m-%d %H:%M:%S')
         #-------------------------
-        summary_dict['date_0']                = self.date_0.strftime('%Y-%m-%d %H:%M:%S')
-        summary_dict['date_1']                = self.date_1.strftime('%Y-%m-%d %H:%M:%S')
+        summary_dict['collect_evs_sum_vw']     = self.collect_evs_sum_vw
         #-------------------------
-        summary_dict['collect_evs_sum_vw']    = self.collect_evs_sum_vw
+        summary_dict['td_left']                = self.td_left.total_seconds()
+        summary_dict['td_right']               = self.td_right.total_seconds()
         #-------------------------
-        summary_dict['td_left']               = self.td_left.total_seconds()
-        summary_dict['td_right']              = self.td_right.total_seconds()
+        summary_dict['states']                 = self.states
+        summary_dict['opcos']                  = self.opcos
+        summary_dict['cities']                 = self.cities
         #-------------------------
-        summary_dict['states']                = self.states
-        summary_dict['opcos']                 = self.opcos
-        summary_dict['cities']                = self.cities
+        summary_dict['single_zip_xfmrs_only']  = self.single_zip_xfmrs_only
         #-------------------------
-        summary_dict['single_zip_xfmrs_only'] = self.single_zip_xfmrs_only
+        summary_dict['run_date_subdir_appndx'] = self.run_date_subdir_appndx
+        summary_dict['dates_subdir_appndx']    = self.dates_subdir_appndx
+        summary_dict['save_end_events']        = self.save_end_events
+        summary_dict['save_dfs_to_file']       = self.save_dfs_to_file
+        summary_dict['read_dfs_from_file']     = self.read_dfs_from_file
+        summary_dict['run_using_slim']         = self.run_using_slim
         #-------------------------
-        summary_dict['dates_subdir_appndx']   = self.dates_subdir_appndx
-        summary_dict['save_end_events']       = self.save_end_events
-        summary_dict['save_dfs_to_file']      = self.save_dfs_to_file
-        summary_dict['read_dfs_from_file']    = self.read_dfs_from_file
-        summary_dict['run_using_slim']        = self.run_using_slim
-        #-------------------------
-        summary_dict['save_dir_base']         = self.save_dir_base
-        summary_dict['end_events_save_args']  = self.end_events_save_args
+        summary_dict['save_dir_base']          = self.save_dir_base
+        summary_dict['end_events_save_args']   = self.end_events_save_args
         #--------------------------------------------------
         return summary_dict
     
+
     @staticmethod
     def read_summary_dict(
         save_dir_base      , 
         summary_dict_fname = 'summary_dict.json'
     ):
         r"""
+        collect_evs_sum_vw:
+            Acceptable values = True, False, None, 'any', 'all'
+            Note: None and 'any' are equivalent
         """
-        #-------------------------
+        #--------------------------------------------------
         assert(os.path.exists(os.path.join(save_dir_base, summary_dict_fname)))
         tmp_f = open(os.path.join(save_dir_base, summary_dict_fname))
         summary_dict = json.load(tmp_f)
         tmp_f.close()
+        #-------------------------
         return summary_dict
+
 
     @property
     def window_width(
@@ -410,15 +453,19 @@ class OutageDAQ:
         # DFs will be saved in save_dir_base
         # Collection of end events files will be saved in os.path.join(save_dir_base, 'EndEvents')
         #-------------------------
-        dates_subdir  = self.date_0.strftime('%Y%m%d') + '_' + self.date_1.strftime('%Y%m%d')
-        if self.dates_subdir_appndx is not None:
-            dates_subdir += self.dates_subdir_appndx
+        dates_subdir  = self.date_0.strftime('%Y%m%d') + '_' + self.date_1.strftime('%Y%m%d') + self.dates_subdir_appndx
+        #-------------------------
+        if self.collect_evs_sum_vw:
+            method_subdir = 'evs_sum_vw_method'
+        else:
+            method_subdir = 'end_events_method'
         #-------------------------
         self.save_dir_base = os.path.join(
             base_dir, 
-            self.run_date, 
+            self.run_date + self.run_date_subdir_appndx, 
             dates_subdir, 
-            save_sub_dir
+            save_sub_dir, 
+            method_subdir
         )
         #-------------------------
         if self.collect_evs_sum_vw:
@@ -1217,8 +1264,7 @@ class OutageDAQ:
         r"""
         data_dir_base should point one directory above that containing the actual data CSV files.
             i.e., should be the save_dir_base attribute of OutageDAQ class
-            e.g., data_dir = r'...\LocalData\dovs_and_end_events_data\20250318\20240401_20240630\Outages'
-            It is expected that the summary files live in os.path.join(data_dir, 'summary_files')
+            e.g., data_dir_base = r'...\LocalData\dovs_and_end_events_data\20250318\20240401_20240630\Outages'
     
         summary_dict_fname:
             Must exist in os.path.join(data_dir_base, summary_dict_fname) and must be a json file (output by OutageDAQ
@@ -1231,7 +1277,8 @@ class OutageDAQ:
         assert(os.path.exists(os.path.join(data_dir_base, summary_dict_fname)))
         summary_dict = OutageDAQ.read_summary_dict(        
             save_dir_base      = data_dir_base, 
-            summary_dict_fname = summary_dict_fname)
+            summary_dict_fname = summary_dict_fname
+        )
         
         #-------------------------
         dataset  = summary_dict['dataset']
@@ -1247,7 +1294,7 @@ class OutageDAQ:
             save_path                     = save_name, 
             appendix                      = r'_[0-9]*', 
             ext_to_find                   = '.csv', 
-            append_to_end_if_ext_no_found = False
+            append_to_end_if_ext_no_found = True
         )
         
         #--------------------------------------------------
@@ -1329,7 +1376,6 @@ class OutageDAQOutg(OutageDAQ):
         date_0                  , 
         date_1                  , 
         collect_evs_sum_vw      ,     # boolean
-        save_sub_dir            , 
         td_left                 = pd.Timedelta('-31D'), 
         td_right                = pd.Timedelta('-1D'),     
         states                  = None, 
@@ -1343,6 +1389,7 @@ class OutageDAQOutg(OutageDAQ):
             Utilities.get_local_data_dir(), 
             r'dovs_and_end_events_data'
         ), 
+        run_date_subdir_appndx  = None, 
         dates_subdir_appndx     = None, 
     ):
         r"""
@@ -1354,11 +1401,11 @@ class OutageDAQOutg(OutageDAQ):
 
         #--------------------------------------------------
         super().__init__(
+            dataset                 = 'outg', 
             run_date                = run_date, 
             date_0                  = date_0, 
             date_1                  = date_1, 
             collect_evs_sum_vw      = collect_evs_sum_vw, 
-            save_sub_dir            = save_sub_dir, 
             td_left                 = td_left, 
             td_right                = td_right, 
             states                  = states, 
@@ -1369,6 +1416,7 @@ class OutageDAQOutg(OutageDAQ):
             save_dfs_to_file        = save_dfs_to_file, 
             read_dfs_from_file      = read_dfs_from_file, 
             base_dir                = base_dir, 
+            run_date_subdir_appndx  = run_date_subdir_appndx, 
             dates_subdir_appndx     = dates_subdir_appndx, 
             run_using_slim          = False, 
         )
@@ -1380,11 +1428,17 @@ class OutageDAQOutg(OutageDAQ):
         DAQ settings with adjustments to a few entries (so they can be easily output into the summary JSON file)
         e.g., Timestamp is not JSON serializable, hence the need for strftime below
         e.g., Timedelta is not JSON serializable, hence the conversion to total seconds
+
+        NOTE: Although unlikely for anyone but me during development, user could collect data for both meter_events.end_device_event
+                and meter_events.events_summary_vw.
+              For that reason, make collect_evs_sum_vw top level of summary dict, allowing for two entries (True and False) if both
+                are collected
         """
         #--------------------------------------------------
         summary_dict = super().get_summary_dict()
         #--------------------------------------------------
-        summary_dict['dataset']    = 'outg'
+        #--------------------------------------------------
+        summary_dict['dataset']    = self.dataset
         summary_dict['rec_nb_col'] = 'outg_rec_nb'
         #--------------------------------------------------
         return summary_dict
@@ -1395,10 +1449,10 @@ class OutageDAQOutg(OutageDAQ):
         r"""
         """
         #-------------------------
-        summary_dict = self.get_summary_dict()
-        #-----
         assert(os.path.isdir(self.save_dir_base))
-        #-----
+        #-------------------------
+        summary_dict = self.get_summary_dict()
+        #-------------------------
         CustomWriter.output_dict_to_json(
             os.path.join(self.save_dir_base, 'summary_dict.json'), 
             summary_dict
@@ -1413,7 +1467,7 @@ class OutageDAQOutg(OutageDAQ):
         df_mp_hist                 = None, 
         assert_all_PNs_found       = True, 
         drop_inst_rmvl_cols        = False, 
-        outg_rec_nb_col            = 'OUTG_REC_NB',  #TODO!!!!!!!!!!!!!!!!!!!!!!! what if index?!
+        rec_nb_col                 = 'OUTG_REC_NB',  #TODO!!!!!!!!!!!!!!!!!!!!!!! what if index?!
         is_slim                    = False, 
         dt_on_ts_col               = 'DT_ON_TS', 
         df_off_ts_full_col         = 'DT_OFF_TS_FULL', 
@@ -1467,7 +1521,7 @@ class OutageDAQOutg(OutageDAQ):
         active_SNs_in_outgs_dfs_dict = {}
     
         if not is_slim:
-            for outg_rec_nb_i, df_i in df_outage.groupby(outg_rec_nb_col):
+            for outg_rec_nb_i, df_i in df_outage.groupby(rec_nb_col):
                 # Don't want to include outg_rec_nb_i=-2147483648
                 if int(outg_rec_nb_i) < 0:
                     continue
@@ -1506,7 +1560,7 @@ class OutageDAQOutg(OutageDAQ):
                     output_groupby         = None, 
                     assert_all_PNs_found   = False
                 )
-                active_SNs_df_i[outg_rec_nb_col] = outg_rec_nb_i
+                active_SNs_df_i[rec_nb_col] = outg_rec_nb_i
                 assert(outg_rec_nb_i not in active_SNs_in_outgs_dfs_dict)
                 active_SNs_in_outgs_dfs_dict[outg_rec_nb_i] = active_SNs_df_i
         else:
@@ -1524,7 +1578,7 @@ class OutageDAQOutg(OutageDAQ):
                     output_groupby         = None, 
                     assert_all_PNs_found   = False
                 )
-                active_SNs_df_i[outg_rec_nb_col] = outg_rec_nb_i
+                active_SNs_df_i[rec_nb_col] = outg_rec_nb_i
                 assert(outg_rec_nb_i not in active_SNs_in_outgs_dfs_dict)
                 active_SNs_in_outgs_dfs_dict[outg_rec_nb_i] = active_SNs_df_i
         #-------------------------
@@ -1612,6 +1666,14 @@ class OutageDAQOutg(OutageDAQ):
             #     self.td_right + pd.Timedelta('1Day')
             # ]
             search_time_window = [self.td_left, self.td_right]            
+            #-----
+            # If collecting from events_summary_vw, only date information (not datetime) ==> convert power_out and power_on
+            if self.collect_evs_sum_vw:
+                self.df_outage['DT_OFF_TS_FULL']      = pd.to_datetime(self.df_outage['DT_OFF_TS_FULL']).dt.floor('D')
+                self.df_outage['DT_ON_TS']            = pd.to_datetime(self.df_outage['DT_ON_TS']).dt.ceil('D')
+                #-----
+                self.df_outage_slim['DT_OFF_TS_FULL'] = pd.to_datetime(self.df_outage_slim['DT_OFF_TS_FULL']).dt.floor('D')
+                self.df_outage_slim['DT_ON_TS']       = pd.to_datetime(self.df_outage_slim['DT_ON_TS']).dt.ceil('D')
             #-----
             self.df_outage_slim = DOVSOutages.set_search_time_in_outage_df(
                 df_outage                   = self.df_outage_slim, 
@@ -1819,7 +1881,6 @@ class OutageDAQOtBL(OutageDAQ):
         date_0, 
         date_1, 
         collect_evs_sum_vw,     # boolean
-        save_sub_dir, 
         groupby_col             = 'trsf_pole_nb', 
         td_left                 = pd.Timedelta('-31D'), 
         td_right                = pd.Timedelta('-1D'),   
@@ -1838,6 +1899,7 @@ class OutageDAQOtBL(OutageDAQ):
             Utilities.get_local_data_dir(), 
             r'dovs_and_end_events_data'
         ), 
+        run_date_subdir_appndx  = None, 
         dates_subdir_appndx     = None, 
         run_using_slim          = False 
     ):
@@ -1881,11 +1943,11 @@ class OutageDAQOtBL(OutageDAQ):
         self.df_no_outage_slim      = None
         #--------------------------------------------------
         super().__init__(
+            dataset                 = 'otbl', 
             run_date                = run_date, 
             date_0                  = date_0, 
             date_1                  = date_1, 
             collect_evs_sum_vw      = collect_evs_sum_vw, 
-            save_sub_dir            = save_sub_dir, 
             td_left                 = td_left, 
             td_right                = td_right, 
             states                  = states, 
@@ -1896,6 +1958,7 @@ class OutageDAQOtBL(OutageDAQ):
             save_dfs_to_file        = save_dfs_to_file, 
             read_dfs_from_file      = read_dfs_from_file, 
             base_dir                = base_dir, 
+            run_date_subdir_appndx  = run_date_subdir_appndx, 
             dates_subdir_appndx     = dates_subdir_appndx, 
             run_using_slim          = run_using_slim
         )
@@ -1909,11 +1972,16 @@ class OutageDAQOtBL(OutageDAQ):
         DAQ settings with adjustments to a few entries (so they can be easily output into the summary JSON file)
         e.g., Timestamp is not JSON serializable, hence the need for strftime below
         e.g., Timedelta is not JSON serializable, hence the conversion to total seconds
+
+        NOTE: Although unlikely for anyone but me during development, user could collect data for both meter_events.end_device_event
+                and meter_events.events_summary_vw.
+              For that reason, make collect_evs_sum_vw top level of summary dict, allowing for two entries (True and False) if both
+                are collected
         """
         #--------------------------------------------------
         summary_dict = super().get_summary_dict()
         #--------------------------------------------------
-        summary_dict['dataset']                = 'otbl'
+        summary_dict['dataset']                = self.dataset
         summary_dict['rec_nb_col']             = 'no_outg_rec_nb'
         #-------------------------
         summary_dict['groupby_col']            = self.groupby_col
@@ -1934,10 +2002,10 @@ class OutageDAQOtBL(OutageDAQ):
         r"""
         """
         #-------------------------
-        summary_dict = self.get_summary_dict()
-        #-----
         assert(os.path.isdir(self.save_dir_base))
-        #-----
+        #-------------------------
+        summary_dict = self.get_summary_dict()
+        #-------------------------
         CustomWriter.output_dict_to_json(
             os.path.join(self.save_dir_base, 'summary_dict.json'), 
             summary_dict
@@ -2538,6 +2606,11 @@ class OutageDAQOtBL(OutageDAQ):
         self.all_outages_df                    = all_outages_df
         self.all_outages_df_for_non_active_pns = all_outages_df_for_non_active_pns
         #--------------------------------------------------
+        # If collecting from events_summary_vw, only date information (not datetime) ==> convert power_out and power_on
+        if self.collect_evs_sum_vw:
+            self.all_outages_df['DT_OFF_TS_FULL'] = pd.to_datetime(self.all_outages_df['DT_OFF_TS_FULL']).dt.floor('D')
+            self.all_outages_df['DT_ON_TS']       = pd.to_datetime(self.all_outages_df['DT_ON_TS']).dt.ceil('D')
+        #--------------------------------------------------
         if self.save_dfs_to_file:
             self.all_outages_df.to_pickle(                   os.path.join(self.save_dir_base, 'all_outages_df.pkl'))
             self.df_mp.to_pickle(                            os.path.join(self.save_dir_base, 'df_mp_no_outg.pkl'))
@@ -2612,8 +2685,8 @@ class OutageDAQOtBL(OutageDAQ):
             inplace             = True
         )
         clean_windows_by_grp_mrg_mp = clean_windows_by_grp_mrg_mp[
-            (clean_windows_by_grp_mrg_mp['inst_ts'].fillna(pd.Timestamp.min)<=clean_windows_by_grp_mrg_mp['t_search_min']) & 
-            (clean_windows_by_grp_mrg_mp['rmvl_ts'].fillna(pd.Timestamp.max)>clean_windows_by_grp_mrg_mp['t_search_max'])
+            (clean_windows_by_grp_mrg_mp['inst_ts'].fillna(pd.Timestamp.min) <= clean_windows_by_grp_mrg_mp['t_search_min']) & 
+            (clean_windows_by_grp_mrg_mp['rmvl_ts'].fillna(pd.Timestamp.max) >  clean_windows_by_grp_mrg_mp['t_search_max'])
         ]
         #--------------------------------------------------
         df_no_outage = clean_windows_by_grp_mrg_mp.copy()
@@ -2886,7 +2959,6 @@ class OutageDAQPrBL(OutageDAQ):
         date_0                  , 
         date_1                  , 
         collect_evs_sum_vw      ,     # boolean
-        save_sub_dir            , 
         td_left                 = pd.Timedelta('-31D'), 
         td_right                = pd.Timedelta('-1D'), 
         return_window_strategy  = 'entire', 
@@ -2902,6 +2974,7 @@ class OutageDAQPrBL(OutageDAQ):
             Utilities.get_local_data_dir(), 
             r'dovs_and_end_events_data'
         ), 
+        run_date_subdir_appndx  = None, 
         dates_subdir_appndx     = None, 
         run_using_slim          = True
     ):
@@ -2924,11 +2997,11 @@ class OutageDAQPrBL(OutageDAQ):
         self.df_mp_no_outg_w_events_slim = None
         #--------------------------------------------------
         super().__init__(
+            dataset                 = 'prbl', 
             run_date                = run_date, 
             date_0                  = date_0, 
             date_1                  = date_1, 
             collect_evs_sum_vw      = collect_evs_sum_vw, 
-            save_sub_dir            = save_sub_dir, 
             td_left                 = td_left, 
             td_right                = td_right, 
             states                  = states, 
@@ -2939,6 +3012,7 @@ class OutageDAQPrBL(OutageDAQ):
             save_dfs_to_file        = save_dfs_to_file, 
             read_dfs_from_file      = read_dfs_from_file, 
             base_dir                = base_dir, 
+            run_date_subdir_appndx  = run_date_subdir_appndx, 
             dates_subdir_appndx     = dates_subdir_appndx, 
             run_using_slim          = run_using_slim
         )
@@ -2951,11 +3025,16 @@ class OutageDAQPrBL(OutageDAQ):
         DAQ settings with adjustments to a few entries (so they can be easily output into the summary JSON file)
         e.g., Timestamp is not JSON serializable, hence the need for strftime below
         e.g., Timedelta is not JSON serializable, hence the conversion to total seconds
+
+        NOTE: Although unlikely for anyone but me during development, user could collect data for both meter_events.end_device_event
+                and meter_events.events_summary_vw.
+              For that reason, make collect_evs_sum_vw top level of summary dict, allowing for two entries (True and False) if both
+                are collected
         """
         #--------------------------------------------------
         summary_dict = super().get_summary_dict()
         #--------------------------------------------------
-        summary_dict['dataset']                 = 'prbl'
+        summary_dict['dataset']                 = self.dataset
         summary_dict['rec_nb_col']              = 'no_outg_rec_nb'
         summary_dict['return_window_strategy']  = self.return_window_strategy
         summary_dict['trsf_pole_nbs_to_ignore'] = self.trsf_pole_nbs_to_ignore
@@ -2968,10 +3047,10 @@ class OutageDAQPrBL(OutageDAQ):
         r"""
         """
         #-------------------------
-        summary_dict = self.get_summary_dict()
-        #-----
         assert(os.path.isdir(self.save_dir_base))
-        #-----
+        #-------------------------
+        summary_dict = self.get_summary_dict()
+        #-------------------------
         CustomWriter.output_dict_to_json(
             os.path.join(self.save_dir_base, 'summary_dict.json'), 
             summary_dict
@@ -3256,6 +3335,13 @@ class OutageDAQPrBL(OutageDAQ):
                 df_mp_no_outg_OG['t_search_max'] = self.date_1
             else:
                 assert(0)
+            #----------------------------------------------------------------------------------------------------
+            # If collecting from events_summary_vw, only date information (not datetime) ==> convert t_search_min and t_search_max
+            # NOTE: Here I use .date instead of .floor/.ceil used elsewhere
+            if self.collect_evs_sum_vw:
+                df_mp_no_outg_OG['t_search_min'] = pd.to_datetime(df_mp_no_outg_OG['t_search_min']).dt.date
+                df_mp_no_outg_OG['t_search_max'] = pd.to_datetime(df_mp_no_outg_OG['t_search_max']).dt.date
+
             #----------------------------------------------------------------------------------------------------
             # Currently, df_mp_no_outg_OG contains all current and historical MeterPremise data.
             # Keep only the data for the meters active during the relevant time periods, as

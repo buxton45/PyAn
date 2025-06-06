@@ -58,18 +58,22 @@ class DOVSAudit:
     Class to adjust DOVS outage times and CI/CMI
     """
     def __init__(
-        self                          , 
-        outg_rec_nb                   , 
-        opco                          = None, 
-        calculate_by_PN               = True, 
-        combine_by_PN_likeness_thresh = pd.Timedelta('15 minutes'), 
-        expand_outg_search_time_tight = pd.Timedelta('1 hours'), 
-        expand_outg_search_time_loose = pd.Timedelta('12 hours'), 
-        use_est_outg_times            = False, 
-        use_full_ede_outgs            = False, 
-        daq_search_time_window        = pd.Timedelta('24 hours'), 
-        init_dfs_to                   = pd.DataFrame(),  # Should be pd.DataFrame() or None
-        verbose_init                  = True
+        self                            , 
+        outg_rec_nb                     , 
+        opco                            = None, 
+        calculate_by_PN                 = True, 
+        combine_by_PN_likeness_thresh   = pd.Timedelta('15 minutes'), 
+        expand_outg_search_time_tight   = pd.Timedelta('1 hours'), 
+        expand_outg_search_time_loose   = pd.Timedelta('12 hours'), 
+        use_est_outg_times              = False, 
+        use_full_ede_outgs              = False, 
+        daq_search_time_window          = pd.Timedelta('24 hours'), 
+        overlaps_addtnl_dovs_sql_kwargs = dict(
+            CI_NB_min  = 0, 
+            CMI_NB_min = 0
+        ), 
+        init_dfs_to                     = pd.DataFrame(),  # Should be pd.DataFrame() or None
+        verbose_init                    = True
     ):
         r"""
         outg_rec_nb:
@@ -85,25 +89,31 @@ class DOVSAudit:
             self.load(file_path = outg_rec_nb)
             return
         else:
-            self.outg_rec_nb                = outg_rec_nb
+            self.outg_rec_nb                 = outg_rec_nb
         #-------------------------
-        self.__can_analyze                  = True
+        self.__can_analyze                   = True
         #-------------------------
-        self.opco                           = opco
-        self.calculate_by_PN                = calculate_by_PN
-        self.combine_by_PN_likeness_thresh  = combine_by_PN_likeness_thresh
+        self.opco                            = opco
+        self.calculate_by_PN                 = calculate_by_PN
+        self.combine_by_PN_likeness_thresh   = combine_by_PN_likeness_thresh
         #-------------------------
-        self.expand_outg_search_time_tight  = expand_outg_search_time_tight
-        self.expand_outg_search_time_loose  = expand_outg_search_time_loose
-        self.use_est_outg_times             = use_est_outg_times
-        self.use_full_ede_outgs             = use_full_ede_outgs
-        self.daq_search_time_window         = daq_search_time_window
+        self.expand_outg_search_time_tight   = expand_outg_search_time_tight
+        self.expand_outg_search_time_loose   = expand_outg_search_time_loose
+        self.use_est_outg_times              = use_est_outg_times
+        self.use_full_ede_outgs              = use_full_ede_outgs
+        self.daq_search_time_window          = daq_search_time_window
+        #-------------------------
+        assert(overlaps_addtnl_dovs_sql_kwargs is None or isinstance(overlaps_addtnl_dovs_sql_kwargs, dict))
+        if overlaps_addtnl_dovs_sql_kwargs is None:
+            self.overlaps_addtnl_dovs_sql_kwargs = dict()
+        else:
+            self.overlaps_addtnl_dovs_sql_kwargs = overlaps_addtnl_dovs_sql_kwargs
         #-------------------------
         # Following two attributes set by run_audit
-        self.run_outg_inclusion_assessment  = None
-        self.max_pct_PNs_missing_allowed    = None
+        self.run_outg_inclusion_assessment   = None
+        self.max_pct_PNs_missing_allowed     = None
         #-------------------------
-        self.expand_outg_est_search_time    = self.expand_outg_search_time_loose
+        self.expand_outg_est_search_time     = self.expand_outg_search_time_loose
         if self.use_est_outg_times:
             self.expand_outg_search_time = self.expand_outg_search_time_tight
         else:
@@ -5496,6 +5506,12 @@ class DOVSAudit:
           use these methods, so makes sense to put in function
         """
         #-------------------------
+        if(
+            overlap_outgs_for_PNs is None or 
+            overlap_outgs_for_PNs.shape[0]==0
+        ):
+            return pd.DataFrame()
+        #-------------------------
         assert(isinstance(overlap_outgs_for_PNs, pd.Series))
         overlap_outgs_for_PNs_df              = overlap_outgs_for_PNs.to_frame(name='overlap_outg_rec_nbs')
         overlap_outgs_for_PNs_df['n_overlap'] = overlap_outgs_for_PNs_df['overlap_outg_rec_nbs'].apply(len)
@@ -5911,7 +5927,11 @@ class DOVSAudit:
                 t_max_col        = t_max_col_dovs, 
                 PN_col_best_ests = PN_col
             )
-            if assert_no_overlaps:
+            if(
+                assert_no_overlaps and 
+                overlap_outgs_for_PNs_df is not None and 
+                overlap_outgs_for_PNs_df.shape[0]>0
+            ):
                 #assert((overlap_outgs_for_PNs_df['n_overlap']>0).sum()==0)
                 assert((overlap_outgs_for_PNs_df[overlap_outgs_for_PNs_df['lost_power']==True]['n_overlap']>0).sum()==0)
             #--------------------------------------------------
@@ -6236,9 +6256,8 @@ class DOVSAudit:
             outg_t_end             = np.max([dovs_outg_t_end, self.best_ests_df['winner_max'].max()]), 
             dovs_sql_fcn           = overlaps_dovs_sql_fcn, 
             addtnl_dovs_sql_kwargs = dict(
-                CI_NB_min  = 0, 
-                CMI_NB_min = 0, 
-                opco       = self.opco
+                opco = self.opco, 
+                **self.overlaps_addtnl_dovs_sql_kwargs
             )
         )
         #-------------------------
@@ -6282,20 +6301,27 @@ class DOVSAudit:
         )
         self.overlap_outgs_for_PNs_df = overlap_outgs_for_PNs_df
         #--------------------------------------------------
-        # Check if any PN has one or more overlapping DOVS events
-        self.n_PNs_w_overlap = (overlap_outgs_for_PNs_df['n_overlap']>0).sum()
-        #------
-        # Check if any PN which lost power has one or more overlapping DOVS events, stop analysis
-        self.n_out_PNs_w_overlap = overlap_outgs_for_PNs_df[overlap_outgs_for_PNs_df['lost_power']==True]['overlap_outg_rec_nbs'].apply(lambda x: len(x)>0).sum()
-        #------
-        if verbose and self.n_PNs_w_overlap>0:
-            print(f'\tWARNING: n_PNs_w_overlap > 0 (= {self.n_PNs_w_overlap})')
-        #------------------------------
-        if self.n_out_PNs_w_overlap>0:
-            if verbose:
-                print(f'\tWARNING: n_out_PNs_w_overlap > 0 (= {self.n_out_PNs_w_overlap})')
-                print(f'\t\tImpossible for outage overlaps procedure to proceed!!!!!')
-            self.__can_analyze = False
+        if(
+            overlap_outgs_for_PNs_df is not None and 
+            overlap_outgs_for_PNs_df.shape[0]>0
+        ):
+            # Check if any PN has one or more overlapping DOVS events
+            self.n_PNs_w_overlap = (overlap_outgs_for_PNs_df['n_overlap']>0).sum()
+            #------
+            # Check if any PN which lost power has one or more overlapping DOVS events, stop analysis
+            self.n_out_PNs_w_overlap = overlap_outgs_for_PNs_df[overlap_outgs_for_PNs_df['lost_power']==True]['overlap_outg_rec_nbs'].apply(lambda x: len(x)>0).sum()
+            #------
+            if verbose and self.n_PNs_w_overlap>0:
+                print(f'\tWARNING: n_PNs_w_overlap > 0 (= {self.n_PNs_w_overlap})')
+            #------------------------------
+            if self.n_out_PNs_w_overlap>0:
+                if verbose:
+                    print(f'\tWARNING: n_out_PNs_w_overlap > 0 (= {self.n_out_PNs_w_overlap})')
+                    print(f'\t\tImpossible for outage overlaps procedure to proceed!!!!!')
+                self.__can_analyze = False
+        else:
+            self.n_PNs_w_overlap     = 0
+            self.n_out_PNs_w_overlap = 0
         #------------------------------
         #---------------------------------------------------------------------------
         # Procedure above ensure that the current outage, as defined by DOVS, does not overlap with any other DOVS outages.
@@ -6311,7 +6337,8 @@ class DOVSAudit:
             opco                        = self.opco, 
             get_ptntl_ovrlp_dovs_kwargs = dict(
                 addtnl_dovs_sql_kwargs = dict(
-                    opco = self.opco
+                    opco = self.opco, 
+                    **self.overlaps_addtnl_dovs_sql_kwargs
                 )
             ), 
             assert_no_overlaps          = False, 
@@ -6742,10 +6769,6 @@ class DOVSAudit:
         dt_off_ts_full_col_dovs         = 'DT_OFF_TS_FULL', 
         dt_on_ts_col_dovs               = 'DT_ON_TS', 
         overlaps_dovs_sql_fcn           = DOVSOutages_SQL.build_sql_outage, 
-        overlaps_addtnl_dovs_sql_kwargs = dict(
-            CI_NB_min  = 0, 
-            CMI_NB_min = 0
-        ), 
         overlap_disagree_cols           = ['ovrlp_disagree_typeA', 'ovrlp_disagree_typeB'], 
         unq_idfr_cols                   = ['PN', 'i_outg'], 
         open_beg_col                    = 'open_beg', 
@@ -6793,6 +6816,18 @@ class DOVSAudit:
         #-------------------------
         outg_rec_nbs = list(set(update_df[overlap_DOVS_col].sum()))+[self.outg_rec_nb]
         #-------------------------
+        # If no overlaps, simply return
+        if outg_rec_nbs == [self.outg_rec_nb]:
+            update_df[keep_col]              = True
+            update_df['adjustment']          = None
+            update_df['resolved']            = True
+            update_df['resolved_details']    = 'Certain'
+            update_df[overlap_disagree_cols] = None
+            #-----
+            self.best_ests_df_w_keep_info    = update_df.copy()
+            #-----
+            return
+        #-------------------------
         if(
             dovs_df is None or 
             set(outg_rec_nbs).difference(set(dovs_df[outg_rec_nb_col_dovs].unique().tolist())) != set()
@@ -6803,17 +6838,17 @@ class DOVSAudit:
                 opco            = self.opco
             )
             #-----
-            if overlaps_addtnl_dovs_sql_kwargs is None:
+            if self.overlaps_addtnl_dovs_sql_kwargs is None:
                 dovs_sql_kwargs = dflt_dovs_sql_kwargs
             else:
-                assert(isinstance(overlaps_addtnl_dovs_sql_kwargs, dict))
+                assert(isinstance(self.overlaps_addtnl_dovs_sql_kwargs, dict))
                 #-----
-                # Make sure none of the dovs_sql_kwargs handled by this function are included in overlaps_addtnl_dovs_sql_kwargs
-                assert(set(dflt_dovs_sql_kwargs.keys()).intersection(set(overlaps_addtnl_dovs_sql_kwargs.keys()))==set())
+                # Make sure none of the dovs_sql_kwargs handled by this function are included in self.overlaps_addtnl_dovs_sql_kwargs
+                assert(set(dflt_dovs_sql_kwargs.keys()).intersection(set(self.overlaps_addtnl_dovs_sql_kwargs.keys()))==set())
                 #-----
                 dovs_sql_kwargs = Utilities.supplement_dict_with_default_values(
                     to_supplmnt_dict    = dflt_dovs_sql_kwargs, 
-                    default_values_dict = overlaps_addtnl_dovs_sql_kwargs, 
+                    default_values_dict = self.overlaps_addtnl_dovs_sql_kwargs, 
                     extend_any_lists    = True, 
                     inplace             = False
                 )
@@ -7026,10 +7061,6 @@ class DOVSAudit:
         outg_rec_nb_col_dovs            = 'OUTG_REC_NB', 
         dt_off_ts_full_col_dovs         = 'DT_OFF_TS_FULL', 
         dt_on_ts_col_dovs               = 'DT_ON_TS', 
-        overlaps_addtnl_dovs_sql_kwargs = dict(
-            CI_NB_min  = 0, 
-            CMI_NB_min = 0
-        ), 
         overlap_disagree_cols           = ['ovrlp_disagree_typeA', 'ovrlp_disagree_typeB'], 
         unq_idfr_cols                   = ['PN', 'i_outg'], 
         open_beg_col                    = 'open_beg', 
@@ -7058,7 +7089,6 @@ class DOVSAudit:
             dt_off_ts_full_col_dovs         = dt_off_ts_full_col_dovs, 
             dt_on_ts_col_dovs               = dt_on_ts_col_dovs, 
             overlaps_dovs_sql_fcn           = overlaps_dovs_sql_fcn, 
-            overlaps_addtnl_dovs_sql_kwargs = overlaps_addtnl_dovs_sql_kwargs, 
             overlap_disagree_cols           = overlap_disagree_cols, 
             unq_idfr_cols                   = unq_idfr_cols, 
             open_beg_col                    = open_beg_col, 
@@ -7299,10 +7329,6 @@ class DOVSAudit:
             outg_rec_nb_col_dovs            = 'OUTG_REC_NB', 
             dt_off_ts_full_col_dovs         = 'DT_OFF_TS_FULL', 
             dt_on_ts_col_dovs               = 'DT_ON_TS', 
-            overlaps_addtnl_dovs_sql_kwargs = dict(
-                CI_NB_min  = 0, 
-                CMI_NB_min = 0
-            ), 
             overlap_disagree_cols           = ['ovrlp_disagree_typeA', 'ovrlp_disagree_typeB'], 
             unq_idfr_cols                   = ['PN', 'i_outg'], 
             open_beg_col                    = 'open_beg', 
@@ -9122,16 +9148,16 @@ class DOVSAudit:
         fig.text(left_text_x, 0.390-shift_text_down, f'CI    = {ci_ami}', fontsize=ci_info_fontsize)
         fig.text(left_text_x, 0.370-shift_text_down, f'CMI = {np.round(cmi_ami, decimals=2)}', fontsize=ci_info_fontsize)
         #-----
-        fig.text(
-            left_text_x, 0.350-shift_text_down, 
-            r'$\Delta$' + f'CI    = {ci_dovs-ci_ami} ({np.round(100*(ci_dovs-ci_ami)/ci_dovs, decimals=2)}%)', 
-            fontsize=ci_info_fontsize
-        )
-        fig.text(
-            left_text_x, 0.330-shift_text_down, 
-            r'$\Delta$' + f'CMI = {np.round(cmi_dovs-cmi_ami, decimals=2)} ({np.round(100*(cmi_dovs-cmi_ami)/cmi_dovs, decimals=2)}%)', 
-            fontsize=ci_info_fontsize
-        )
+        delta_ci_str = r'$\Delta$' + f'CI    = {ci_dovs-ci_ami}'
+        if ci_dovs > 0:
+            delta_ci_str += f' ({np.round(100*(ci_dovs-ci_ami)/ci_dovs, decimals=2)}%)'
+        fig.text(left_text_x, 0.350-shift_text_down, delta_ci_str, fontsize=ci_info_fontsize)
+        #-----
+        delta_cmi_str = r'$\Delta$' + f'CMI = {np.round(cmi_dovs-cmi_ami, decimals=2)}'
+        if cmi_dovs > 0:
+            delta_cmi_str += f' ({np.round(100*(cmi_dovs-cmi_ami)/cmi_dovs, decimals=2)}%)'
+        fig.text(left_text_x, 0.330-shift_text_down, delta_cmi_str, fontsize=ci_info_fontsize)
+        #-----
         if means_df is not None and means_df.shape[0]>0:
             fig.text(left_text_x, 0.310-shift_text_down, f'min(Beg.) = {means_df["winner_min"].min().strftime("%m/%d %H:%M:%S")}', fontsize=ci_info_fontsize)
             fig.text(left_text_x, 0.290-shift_text_down, f'max(End) = {means_df["winner_max"].max().strftime("%m/%d %H:%M:%S")}', fontsize=ci_info_fontsize)
@@ -9144,16 +9170,16 @@ class DOVSAudit:
             fig.text(left_text_x, 0.210-shift_text_down, f'CI    = {results_2_dict["ci_ami"]}', fontsize=ci_info_fontsize)
             fig.text(left_text_x, 0.190-shift_text_down, f'CMI = {np.round(results_2_dict["cmi_ami"], decimals=2)}', fontsize=ci_info_fontsize)
             #-----
-            fig.text(
-                left_text_x, 0.170-shift_text_down, 
-                r'$\Delta$' + f'CI    = {ci_dovs-results_2_dict["ci_ami"]} ({np.round(100*(ci_dovs-results_2_dict["ci_ami"])/ci_dovs, decimals=2)}%)', 
-                fontsize=ci_info_fontsize
-            )
-            fig.text(
-                left_text_x, 0.150-shift_text_down, 
-                r'$\Delta$' + f'CMI = {np.round(cmi_dovs-results_2_dict["cmi_ami"], decimals=2)} ({np.round(100*(cmi_dovs-results_2_dict["cmi_ami"])/cmi_dovs, decimals=2)}%)', 
-                fontsize=ci_info_fontsize
-            )
+            delta_ci_str = r'$\Delta$' + f'CI    = {ci_dovs-results_2_dict["ci_ami"]}'
+            if ci_dovs > 0:
+                delta_ci_str += f' ({np.round(100*(ci_dovs-results_2_dict["ci_ami"])/ci_dovs, decimals=2)}%)'
+            fig.text(left_text_x, 0.170-shift_text_down, delta_ci_str, fontsize=ci_info_fontsize)
+            #-----
+            delta_cmi_str = r'$\Delta$' + f'CMI = {np.round(cmi_dovs-results_2_dict["cmi_ami"], decimals=2)}'
+            if cmi_dovs > 0:
+                delta_cmi_str += f' ({np.round(100*(cmi_dovs-results_2_dict["cmi_ami"])/cmi_dovs, decimals=2)}%)'
+            fig.text(left_text_x, 0.150-shift_text_down, delta_cmi_str, fontsize=ci_info_fontsize)
+            #-----
             if results_2_dict["means_df"] is not None and results_2_dict["means_df"].shape[0]>0:
                 fig.text(left_text_x, 0.130-shift_text_down, f'min(Beg.) = {results_2_dict["means_df"]["winner_min"].min().strftime("%m/%d %H:%M:%S")}', fontsize=ci_info_fontsize)
                 fig.text(left_text_x, 0.110-shift_text_down, f'max(End) = {results_2_dict["means_df"]["winner_max"].max().strftime("%m/%d %H:%M:%S")}', fontsize=ci_info_fontsize)

@@ -55,12 +55,12 @@ class SQLFrom:
                                                       list_of_columns_to_join=list_of_columns_to_join, 
                                                       idx=idx, run_check=run_check)
 
-    def get_join_statement(self, include_leading_whitespace='\t'):
+    def get_join_statement(self, include_leading_whitespace=None):
         return self.sql_join_coll.get_statement_string(include_leading_whitespace=include_leading_whitespace)
                    
         
     @staticmethod
-    def combine_from_and_join_statement_strings(sql_from, sql_join_coll=None, include_leading_join_whitespace='\t'):
+    def combine_from_and_join_statement_strings(sql_from, sql_join_coll=None, include_leading_join_whitespace=None):
         # If sql_join_coll is None, use sql_join_coll from sql_from object
         if sql_join_coll is None:
             sql_join_coll = sql_from.sql_join_coll
@@ -69,13 +69,13 @@ class SQLFrom:
         else:
             return sql_from.get_from_statement()
         
-    def get_statement_string(self, include_leading_join_whitespace='\t'):
+    def get_statement_string(self, include_leading_join_whitespace=None):
         return SQLFrom.combine_from_and_join_statement_strings(self, include_leading_join_whitespace=include_leading_join_whitespace)
         
-    def print_statement_string(self, include_leading_join_whitespace='\t'):
+    def print_statement_string(self, include_leading_join_whitespace=None):
         stmnt_str = self.get_statement_string(include_leading_join_whitespace=include_leading_join_whitespace)
         print(stmnt_str)
         
-    def print(self, include_leading_join_whitespace='\t'):
+    def print(self, include_leading_join_whitespace=None):
         self.print_statement_string(include_leading_join_whitespace=include_leading_join_whitespace)
         

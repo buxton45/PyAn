@@ -991,7 +991,16 @@ class MECPOCollection:
             all_count_series_wo_dups = all_count_series.loc[idx_val_counts[idx_val_counts==1].index]
             assert(all_count_series_w_dups.shape[0]+all_count_series_wo_dups.shape[0]==all_count_series.shape[0])
             #-------------------------
-            all_count_series_w_dups = all_count_series_w_dups.groupby(all_count_series_w_dups.index).apply(max)
+            tmp_idx_names   = all_count_series_w_dups.index.names
+            tmp_idx_nlevels = all_count_series_w_dups.index.nlevels
+            #-----
+            all_count_series_w_dups = all_count_series_w_dups.groupby(all_count_series_w_dups.index).apply(np.maximum.reduce)
+            #-----
+            # If all_count_series_w_dups had MultiIndex index, then groupby will collapse down to single level and original must be reconstructed
+            if tmp_idx_nlevels>1:
+                all_count_series_w_dups.index       = pd.MultiIndex.from_tuples(all_count_series_w_dups.index)
+                all_count_series_w_dups.index.names = tmp_idx_names
+
             #-------------------------
             all_count_series = pd.concat([all_count_series_wo_dups, all_count_series_w_dups])
             assert(all_count_series.index.nunique()==n_unq_idx)

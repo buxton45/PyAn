@@ -195,8 +195,8 @@ def move_cols_to_either_end(
         
 #--------------------------------------------------
 def move_cols_to_front(
-    df, 
-    cols_to_move
+    df           , 
+    cols_to_move , 
 ):
     return move_cols_to_either_end(
         df           = df, 
@@ -2029,10 +2029,12 @@ def get_true_block_begend_idxs_in_srs(
     
 #----------------------------------------------------------------------------------------------------
 def get_continuous_blocks_in_df(
-    df, 
-    col_idfr, 
-    data_sep=pd.Timedelta('15min'), 
-    return_endpoints=True
+    df               , 
+    col_idfr         , 
+    data_sep         = pd.Timedelta('15min'), 
+    return_type      = 'endpoints', 
+    comp_operator    = '==', 
+    assert_unique    = True
 ):
     r"""
     Given some data, find blocks which are sequential.
@@ -2041,6 +2043,9 @@ def get_continuous_blocks_in_df(
     The data are assumed to be separated by data_sep.
     The function finds continuous blocks by identifying locations where the difference between two datapoints is
       not equal to data_sep
+    FUNCTIONALITY EXPANDED
+        Now, instead of testing just for equality, one can instead use '<=' or '<' operators.
+        This allows the function to function similar in spirit to finding fuzzy overlap blocks.
       
     df:
         Input pd.DataFrame
@@ -2060,12 +2065,15 @@ def get_continuous_blocks_in_df(
             block_begend_idxs = [(0, 3), (4,5), ]
     """
     #--------------------------------------------------
+    assert(return_type in ['endpoints', 'block_idxs', 'df'])
+    assert(comp_operator in ['==', '<=', '<'])
+    #--------------------------------------------------
     # In order for method to work, col_idfr information must be in column, not index.
     # This is not absolutely necessary, but it makes life easier
     # If found in index, call reset_index
     col_idfr_loc = get_idfr_loc(
-        df=df, 
-        idfr=col_idfr
+        df   = df, 
+        idfr = col_idfr
     )
     #-------------------------
     # If found in the index, call reset_index (making sure needed level has a name so it can be identified easily
@@ -2088,28 +2096,36 @@ def get_continuous_blocks_in_df(
     assert(sequence_col in df.columns.tolist())
     #--------------------------------------------------
     # This is intended for use when sequence_col contains only unique values!
-    assert(df[sequence_col].nunique()==df.shape[0])
+    if assert_unique:
+        assert(df[sequence_col].nunique()==df.shape[0])
     # Also, the data should be sorted!
     df = df.sort_values(by=sequence_col, key=natsort_keygen(), ascending=True)
     #--------------------------------------------------
     # Generate difference column, then alter column to contain whether or not difference
     #   is equal to data_sep (expected separation of sequence events in data)
-    tmp_diff_col = Utilities.generate_random_string()
-    df[tmp_diff_col] = df[sequence_col].diff()
+    tmp_diff_col     = Utilities.generate_random_string()
+    df[tmp_diff_col] = df[sequence_col].diff(periods=1)
     #-------------------------
     # Overly cautious finding tmp_diff_col_idx instead of just setting equal to df.shape[1]-1
     #   but, safest I suppose
     tmp_diff_col_idx = find_idxs_in_highest_order_of_columns(
-            df            = df, 
-            col           = tmp_diff_col, 
-            exact_match   = True, 
-            assert_single = True
-        )
+        df            = df, 
+        col           = tmp_diff_col, 
+        exact_match   = True, 
+        assert_single = True
+    )
     # Replace NaN in 0th element with data_sep because always beginning of first block
     df.iloc[0, tmp_diff_col_idx] = data_sep
     #-------------------------
     # Don't care about the explicit values in tmp_diff_col, just whether or not they equal data_sep
-    df[tmp_diff_col] = (df[tmp_diff_col]==data_sep)
+    if   comp_operator == '==':
+        df[tmp_diff_col] = (df[tmp_diff_col] == data_sep)
+    elif comp_operator == '<=':
+        df[tmp_diff_col] = (df[tmp_diff_col] <= data_sep)
+    elif comp_operator == '<':
+        df[tmp_diff_col] = (df[tmp_diff_col] <  data_sep)
+    else:
+        assert(0)
     #-------------------------
     # New blocks begin when df[tmp_diff_col]==False (and, the first block, which begins at 0)
     # NOTE: Want index locations, not values (i.e., want values beteween 0 and df.shape[0]-1)
@@ -2122,16 +2138,137 @@ def get_continuous_blocks_in_df(
     #-------------------------
     assert(len(block_beg_idxs)==len(block_end_idxs))
     block_begend_idxs = list(zip(block_beg_idxs, block_end_idxs))
-    block_idxs = [list(range(block_beg_i, block_end_i+1)) for block_beg_i, block_end_i in block_begend_idxs]
+    block_idxs        = [list(range(block_beg_i, block_end_i+1)) for block_beg_i, block_end_i in block_begend_idxs]
     #--------------------------------------------------
     # If .reset_index was called earlier, set index back to original values
     if idx_cols is not None:
         df = df.set_index(idx_cols)
     #--------------------------------------------------
-    if return_endpoints:
+    # Drop temporary column
+    df = df.drop(columns = [tmp_diff_col])
+    #--------------------------------------------------
+    if   return_type == 'endpoints':
         return block_begend_idxs
-    else:
+    elif return_type == 'block_idxs':
         return block_idxs
+    elif return_type == 'df':
+        block_col = 'block'
+        if block_col in df.columns:
+            block_col = block_col + '_' + Utilities.generate_random_string(str_len=4, letters='letters_only')
+        #-------------------------
+        # block_df will initially have simple index (i.e., 0 to len(df)-1) and block column containing the appropriate block group
+        blocks_df = pd.DataFrame(enumerate(block_idxs), columns=[block_col, 'idxs']).explode('idxs').set_index('idxs')
+        assert(blocks_df.shape[0]==df.shape[0])
+        blocks_df.index = df.index
+        #-------------------------
+        df = pd.merge(
+            df, 
+            blocks_df, 
+            how         = 'inner', 
+            left_index  = True, 
+            right_index = True
+        )
+        return df
+    else:
+        assert(0)
+
+#----------------------------------------------------------------------------------------------------
+def get_continuous_blocks_in_df_lite(
+    df               , 
+    col_idfr         , 
+    data_sep         = pd.Timedelta('15min'), 
+    comp_operator    = '==', 
+    assert_unique    = True
+):
+    r"""
+    LITE VERSION:
+        Expects that data already sorted
+        Expects col_idfr to be in columns
+        Returns df in all cases
+        Purpose is for use in groupby().lambda functions
+
+
+    Given some data, find blocks which are sequential.
+    The data are contained in df, and identifed by col_idfr (whether the data are in a column or the index.  See
+      Utilities_df.get_idfr_loc for more information).
+    The data are assumed to be separated by data_sep.
+    The function finds continuous blocks by identifying locations where the difference between two datapoints is
+      not equal to data_sep
+    FUNCTIONALITY EXPANDED
+        Now, instead of testing just for equality, one can instead use '<=' or '<' operators.
+        This allows the function to function similar in spirit to finding fuzzy overlap blocks.
+      
+    df:
+        Input pd.DataFrame
+    col_idfr:
+        Location of data in df to use for block identification.
+        See Utilities_df.get_idfr_loc for more information
+    data_sep:
+        expected separation of sequential events in data
+        e.g., for 15-minute AMI data, data_sep=set pd.Timedelta('15min')
+        e.g., when looking for sequential data in integer index values, set data_sep=1
+    
+    return_endpoints:
+        True:   return only the endpoints of the blocks.
+                These endpoints are INCLUSIVE!
+        False:  return all indices in the blocks
+        EXAMPLE:
+            block_begend_idxs = [(0, 3), (4,5), ]
+    """
+    #--------------------------------------------------
+    assert(comp_operator in ['==', '<=', '<'])
+    #-------------------------
+    sequence_col = col_idfr
+    #--------------------------------------------------
+    # Generate difference column, then alter column to contain whether or not difference
+    #   is equal to data_sep (expected separation of sequence events in data)
+    tmp_diff_col     = Utilities.generate_random_string()
+    df[tmp_diff_col] = df[sequence_col].diff(periods=1)
+    #-------------------------
+    # Replace NaN in 0th element with data_sep because always beginning of first block
+    df.iloc[0, df.shape[1]-1] = data_sep
+    #-------------------------
+    # Don't care about the explicit values in tmp_diff_col, just whether or not they equal data_sep
+    if   comp_operator == '==':
+        df[tmp_diff_col] = (df[tmp_diff_col] == data_sep)
+    elif comp_operator == '<=':
+        df[tmp_diff_col] = (df[tmp_diff_col] <= data_sep)
+    elif comp_operator == '<':
+        df[tmp_diff_col] = (df[tmp_diff_col] <  data_sep)
+    else:
+        assert(0)
+    #-------------------------
+    # New blocks begin when df[tmp_diff_col]==False (and, the first block, which begins at 0)
+    # NOTE: Want index locations, not values (i.e., want values beteween 0 and df.shape[0]-1)
+    #       As such, .reset_index is utilized below
+    block_beg_idxs = [0]+df.reset_index().index[df[tmp_diff_col]==False].tolist()
+    #-------------------------
+    # The ending of block i equals the beginning of block (i+1) minus 1
+    # The ending of the last block is simply df.shape[0]-1
+    block_end_idxs = [x-1 for x in block_beg_idxs][1:] + [df.shape[0]-1]
+    #-------------------------
+    assert(len(block_beg_idxs)==len(block_end_idxs))
+    block_begend_idxs = list(zip(block_beg_idxs, block_end_idxs))
+    block_idxs        = [list(range(block_beg_i, block_end_i+1)) for block_beg_i, block_end_i in block_begend_idxs]
+    #--------------------------------------------------
+    # Drop temporary column
+    df = df.drop(columns = [tmp_diff_col])
+    #--------------------------------------------------
+    block_col = 'block'
+    #-------------------------
+    # block_df will initially have simple index (i.e., 0 to len(df)-1) and block column containing the appropriate block group
+    blocks_df = pd.DataFrame(enumerate(block_idxs), columns=[block_col, 'idxs']).explode('idxs').set_index('idxs')
+    assert(blocks_df.shape[0]==df.shape[0])
+    blocks_df.index = df.index
+    #-------------------------
+    df = pd.merge(
+        df, 
+        blocks_df, 
+        how         = 'inner', 
+        left_index  = True, 
+        right_index = True
+    )
+    return df
         
         
 
@@ -3083,7 +3220,7 @@ def get_dfs_diff_approx_ok(
     precision=0.00001, 
     cols_to_compare=None, 
     sort_by=None, 
-    return_df_only=False, 
+    return_df_only=True, 
     inplace=False
 ):
     # Get the difference between two DataFrames, 
@@ -4521,7 +4658,7 @@ def find_overlap_intervals_in_df(
         test_1 = df.iloc[0][ovrlp_intrvl_1_col]+fuzziness
     except:
         print(f'''
-        In consolidate_df_according_to_fuzzy_overlap_intervals: Incompatible fuzziness type
+        In Utilities_df.find_overlap_intervals_in_df: Incompatible fuzziness type
             type(fuzziness) = {type(fuzziness)}
             df[ovrlp_intrvl_0_col].dtype = {df[ovrlp_intrvl_0_col].dtype}
             df[ovrlp_intrvl_1_col].dtype = {df[ovrlp_intrvl_1_col].dtype}
@@ -4535,7 +4672,7 @@ def find_overlap_intervals_in_df(
     #       Thus, df[ovrlp_intrvl_0_col]<df[ovrlp_intrvl_1_col] will result in False whenever
     #         df[ovrlp_intrvl_1_col] is NaN, and therefore the assertion:
     #           assert(all(df[ovrlp_intrvl_0_col]<df[ovrlp_intrvl_1_col]))
-    #         would fail in in unwanted circumstances, since NaN value means and open ended interval
+    #         would fail in in unwanted circumstances, since NaN value means an open ended interval
     #         and therefore any beginning value should be considered less than a NaN value.
     #       Therefore, instead of the single-line assertion above, I will include two assertions,
     #         one to ensure df[ovrlp_intrvl_0_col] doesn't contain any NaNs, and one to ensure

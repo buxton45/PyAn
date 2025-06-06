@@ -61,21 +61,24 @@ class DABatchOPCO:
         date_0                      , 
         date_1                      , 
         opco                        , # e.g., 'oh'
-        #----------
+        #--------------------
         save_dir_base               , 
         dates_subdir_appndx         = None, 
         save_results                = True, 
-        #----------
+        #--------------------
         # DAQ arguments
         states                      = None, # e.g., ['OH']
         CI_NB_min                   = None, # e.g., 15
         mjr_mnr_cause               = None, 
+        use_sql_std_outage          = True, 
+        addtnl_outg_sql_kwargs      = None, 
+        #--------------------
         daq_search_time_window      = pd.Timedelta('24 hours'), # Both for DAQ and DOVSAudit
         outg_rec_nbs                = None, 
-        #----------
+        #--------------------
         # DOVSAudit arguments (if not None, it should be a dict with possible keys contained in dflt_dovsaudit_args below)
         dovs_audit_args             = None, 
-        #----------
+        #--------------------
         init_dfs_to                 = pd.DataFrame(),  # Should be pd.DataFrame() or None
         conn_aws                    = None,
         conn_dovs                   = None
@@ -152,6 +155,18 @@ class DABatchOPCO:
         self.states                 = states
         self.CI_NB_min              = CI_NB_min
         self.mjr_mnr_cause          = mjr_mnr_cause
+        self.use_sql_std_outage     = use_sql_std_outage
+        #--------------------
+        self.addtnl_outg_sql_kwargs = addtnl_outg_sql_kwargs
+        #-----
+        if self.addtnl_outg_sql_kwargs is None:
+            self.addtnl_outg_sql_kwargs = dict()
+        #-----
+        if not self.use_sql_std_outage:
+            self.addtnl_outg_sql_kwargs['include_DOVS_PREMISE_DIM']         = True
+            self.addtnl_outg_sql_kwargs['select_cols_DOVS_PREMISE_DIM']     = list(set(self.addtnl_outg_sql_kwargs.get('select_cols_DOVS_PREMISE_DIM', [])).union(set(['OFF_TM', 'REST_TM', 'PREMISE_NB'])))
+            self.addtnl_outg_sql_kwargs['include_DOVS_CLEARING_DEVICE_DIM'] = True
+        #--------------------
         self.daq_search_time_window = daq_search_time_window
         self.outg_rec_nbs           = outg_rec_nbs
         self.outg_rec_nbs_ami       = None
@@ -159,13 +174,17 @@ class DABatchOPCO:
         #-------------------------
         # DOVSAudit arguments
         dflt_dovsaudit_args = dict(
-            calculate_by_PN               = True, 
-            combine_by_PN_likeness_thresh = pd.Timedelta('15 minutes'), 
-            expand_outg_search_time_tight = pd.Timedelta('1 hours'), 
-            expand_outg_search_time_loose = pd.Timedelta('12 hours'), 
-            use_est_outg_times            = False, 
-            use_full_ede_outgs            = False, 
-            daq_search_time_window        = self.daq_search_time_window, 
+            calculate_by_PN                 = True, 
+            combine_by_PN_likeness_thresh   = pd.Timedelta('15 minutes'), 
+            expand_outg_search_time_tight   = pd.Timedelta('1 hours'), 
+            expand_outg_search_time_loose   = pd.Timedelta('12 hours'), 
+            use_est_outg_times              = False, 
+            use_full_ede_outgs              = False, 
+            daq_search_time_window          = self.daq_search_time_window, 
+            overlaps_addtnl_dovs_sql_kwargs = dict(
+                CI_NB_min  = 0, 
+                CMI_NB_min = 0
+            ), 
         )
         #-----
         if dovs_audit_args is None:
@@ -178,7 +197,7 @@ class DABatchOPCO:
         dovs_audit_args = Utilities.supplement_dict_with_default_values(
             to_supplmnt_dict    = dovs_audit_args, 
             default_values_dict = dflt_dovsaudit_args, 
-            extend_any_lists    = False, 
+            extend_any_lists    = True, 
             inplace             = False
         )
         #-----
@@ -355,15 +374,28 @@ class DABatchOPCO:
         r"""
         """
         #-------------------------
-        outages_sql = DOVSOutages_SQL.build_sql_std_outage(
-            mjr_mnr_cause   = self.mjr_mnr_cause, 
-            include_premise = True, 
-            date_range      = [self.date_0, self.date_1], 
-            states          = self.states, 
-            opco            = self.opco, 
-            CI_NB_min       = self.CI_NB_min, 
-            outg_rec_nbs    = self.outg_rec_nbs 
-        )
+        if self.use_sql_std_outage:
+            outages_sql = DOVSOutages_SQL.build_sql_std_outage(
+                mjr_mnr_cause   = self.mjr_mnr_cause, 
+                include_premise = True, 
+                date_range      = [self.date_0, self.date_1], 
+                states          = self.states, 
+                opco            = self.opco, 
+                CI_NB_min       = self.CI_NB_min, 
+                outg_rec_nbs    = self.outg_rec_nbs, 
+                **self.addtnl_outg_sql_kwargs
+            )
+        else:
+            outages_sql = DOVSOutages_SQL.build_sql_outage(
+                mjr_mnr_cause   = self.mjr_mnr_cause, 
+                date_range      = [self.date_0, self.date_1], 
+                states          = self.states, 
+                opco            = self.opco, 
+                CI_NB_min       = self.CI_NB_min, 
+                outg_rec_nbs    = self.outg_rec_nbs, 
+                **self.addtnl_outg_sql_kwargs
+            )
+        #-------------------------
         return outages_sql
     
     #--------------------------------------------------
@@ -1070,7 +1102,7 @@ class DABatchOPCO:
         r"""
         Find any pre-existing results in the temporary results directories.
         These will still be around if, e.g., and analysis died partway through.
-        In such a case, it is (expected to be) much quicker to simply grab the needed txt/csv/pdf files
+        In such a case, it is (expected to be) much quicker to simply grab the needed txt/pkl/pdf files
           from these temporary directories than loading in DOVSAudit from pkl file and then grabbing (and
           certainly much quicker than completely reanalyzing!)
     
@@ -1106,7 +1138,7 @@ class DABatchOPCO:
                     return []
                 preex_i = DABatchOPCO.find_preexisting_audits(
                     dovs_audits_dir    = os.path.join(results_dir, subdir_i), 
-                    glob_pattern       = r'*.csv', 
+                    glob_pattern       = r'*.pkl', 
                     regex_pattern      = None
                 )
                 #-----
@@ -1141,7 +1173,10 @@ class DABatchOPCO:
                 if type_i == 'res_w_endpts':
                     # res_w_endpts is a little annoying, as it will save two PDFs for each outg_rec_nb,
                     #   outg_rec_nb_0.pdf and outg_rec_nb_1.pdf
-                    # To be considered found, both must be found!
+                    #-----
+                    # Past functionality:    To be considered found, both must be found!
+                    # Current functionality: To be considered found, _0 must be found!
+                    #     Reason for change:   If algorithm cannot find any outage period, only _0 will be output!
                     found_0s = Utilities.replace_if_found_in_list_else_omit(
                         lst     = preex_i, 
                         pattern = r'(\d*)_0', 
@@ -1150,19 +1185,20 @@ class DABatchOPCO:
                         flags   = 0
                     )
                     #-----
-                    found_1s = Utilities.replace_if_found_in_list_else_omit(
-                        lst     = preex_i, 
-                        pattern = r'(\d*)_1', 
-                        repl    = r'\1',
-                        count   = 0, 
-                        flags   = 0
-                    )
-                    #-------------------------
-                    found_res_w_endpts = Utilities.get_intersection_of_lists(
-                        lol  = [found_0s, found_1s], 
-                        sort = 'ascending'
-                    )
+                    # found_1s = Utilities.replace_if_found_in_list_else_omit(
+                    #     lst     = preex_i, 
+                    #     pattern = r'(\d*)_1', 
+                    #     repl    = r'\1',
+                    #     count   = 0, 
+                    #     flags   = 0
+                    # )
+                    # #-------------------------
+                    # found_res_w_endpts = Utilities.get_intersection_of_lists(
+                    #     lol  = [found_0s, found_1s], 
+                    #     sort = 'ascending'
+                    # )
                     #-----
+                    found_res_w_endpts = found_0s
                     if len(found_res_w_endpts)==0:
                         return []
                     #-----
@@ -1431,13 +1467,10 @@ class DABatchOPCO:
             assert(set(nec_keys).symmetric_difference(set(tmp_summary_subdirs.keys()))==set())
             for type_j, subdir_j in tmp_summary_subdirs.items():
                 #-----
-                path_j = os.path.join(results_dir, subdir_j, f"{outg_rec_nb_i}.csv")
+                path_j = os.path.join(results_dir, subdir_j, f"{outg_rec_nb_i}.pkl")
                 assert(os.path.exists(path_j))
                 #-----
-                df_j = pd.read_csv(
-                    path_j, 
-                    index_col=index_col
-                )
+                df_j = pd.read_pickle(path_j)
                 #-------------------------
                 if type_j   == 'ci_cmi':
                     return_dict['ci_cmi_summary_df_i']            = df_j
@@ -1564,9 +1597,9 @@ class DABatchOPCO:
                 #-------------------------
                 ci_cmi_summary_df_i = audit_i.get_ci_cmi_summary(return_type = pd.DataFrame)
                 #--------------------------------------------------
-                ci_cmi_summary_df_i.to_csv(           os.path.join(base_dirs['save_dir'], tmp_summary_subdirs['ci_cmi'],            f"{audit_i.outg_rec_nb}.csv"))
-                detailed_summary_df_i.to_csv(         os.path.join(base_dirs['save_dir'], tmp_summary_subdirs['detailed'],          f"{audit_i.outg_rec_nb}.csv"))
-                detailed_summary_df_dovs_beg_i.to_csv(os.path.join(base_dirs['save_dir'], tmp_summary_subdirs['detailed_dovs_beg'], f"{audit_i.outg_rec_nb}.csv"))
+                ci_cmi_summary_df_i.to_pickle(           os.path.join(base_dirs['save_dir'], tmp_summary_subdirs['ci_cmi'],            f"{audit_i.outg_rec_nb}.pkl"))
+                detailed_summary_df_i.to_pickle(         os.path.join(base_dirs['save_dir'], tmp_summary_subdirs['detailed'],          f"{audit_i.outg_rec_nb}.pkl"))
+                detailed_summary_df_dovs_beg_i.to_pickle(os.path.join(base_dirs['save_dir'], tmp_summary_subdirs['detailed_dovs_beg'], f"{audit_i.outg_rec_nb}.pkl"))
             else:
                 detailed_summary_df_i          = pd.DataFrame()
                 detailed_summary_df_dovs_beg_i = pd.DataFrame()
@@ -1597,30 +1630,34 @@ class DABatchOPCO:
     #--------------------------------------------------
     @staticmethod
     def analyze_audit_i_for_batch(
-        outg_rec_nb_i                 , 
-        preex_i                       , 
-        opco                          , 
-        dovs_df                       , 
-        base_dirs                     , 
-        tmp_summary_subdirs           ,
-        tmp_pdf_subdirs               , 
-        tmp_warnings_subdir           = 'TMP_warnings', 
-        build_summary_dfs             = True, 
-        perform_plotting              = True, 
+        outg_rec_nb_i                   , 
+        preex_i                         , 
+        opco                            , 
+        dovs_df                         , 
+        base_dirs                       , 
+        tmp_summary_subdirs             ,
+        tmp_pdf_subdirs                 , 
+        tmp_warnings_subdir             = 'TMP_warnings', 
+        build_summary_dfs               = True, 
+        perform_plotting                = True, 
         #-----
-        run_outg_inclusion_assessment = True, 
-        max_pct_PNs_missing_allowed   = 0, 
-        n_PNs_w_power_threshold       = 95, 
-        include_suboutg_endpt_plots   = True, 
-        fig_num                       = 0, 
+        run_outg_inclusion_assessment   = True, 
+        max_pct_PNs_missing_allowed     = 0, 
+        n_PNs_w_power_threshold         = 95, 
+        include_suboutg_endpt_plots     = True, 
+        fig_num                         = 0, 
         #-----
-        calculate_by_PN               = True, 
-        combine_by_PN_likeness_thresh = pd.Timedelta('15 minutes'), 
-        expand_outg_search_time_tight = pd.Timedelta('1 hours'), 
-        expand_outg_search_time_loose = pd.Timedelta('12 hours'), 
-        use_est_outg_times            = False, 
-        use_full_ede_outgs            = False, 
-        daq_search_time_window        = pd.Timedelta('24 hours'), 
+        calculate_by_PN                 = True, 
+        combine_by_PN_likeness_thresh   = pd.Timedelta('15 minutes'), 
+        expand_outg_search_time_tight   = pd.Timedelta('1 hours'), 
+        expand_outg_search_time_loose   = pd.Timedelta('12 hours'), 
+        use_est_outg_times              = False, 
+        use_full_ede_outgs              = False, 
+        daq_search_time_window          = pd.Timedelta('24 hours'), 
+        overlaps_addtnl_dovs_sql_kwargs = dict(
+            CI_NB_min  = 0, 
+            CMI_NB_min = 0
+        ), 
     ):
         r"""
         """
@@ -1629,15 +1666,16 @@ class DABatchOPCO:
             print('\tNo pre-existing audit found ==> building')
             #-------------------------
             audit_i = DOVSAudit(
-                outg_rec_nb                   = outg_rec_nb_i, 
-                opco                          = opco, 
-                calculate_by_PN               = calculate_by_PN, 
-                combine_by_PN_likeness_thresh = combine_by_PN_likeness_thresh, 
-                expand_outg_search_time_tight = expand_outg_search_time_tight, 
-                expand_outg_search_time_loose = expand_outg_search_time_loose, 
-                use_est_outg_times            = use_est_outg_times, 
-                use_full_ede_outgs            = use_full_ede_outgs, 
-                daq_search_time_window        = daq_search_time_window, 
+                outg_rec_nb                     = outg_rec_nb_i, 
+                opco                            = opco, 
+                calculate_by_PN                 = calculate_by_PN, 
+                combine_by_PN_likeness_thresh   = combine_by_PN_likeness_thresh, 
+                expand_outg_search_time_tight   = expand_outg_search_time_tight, 
+                expand_outg_search_time_loose   = expand_outg_search_time_loose, 
+                use_est_outg_times              = use_est_outg_times, 
+                use_full_ede_outgs              = use_full_ede_outgs, 
+                daq_search_time_window          = daq_search_time_window, 
+                overlaps_addtnl_dovs_sql_kwargs = overlaps_addtnl_dovs_sql_kwargs
             )
             
             #-------------------------
@@ -1701,32 +1739,36 @@ class DABatchOPCO:
     #--------------------------------------------------
     @staticmethod
     def analyze_audit_i_from_csvs_for_batch(
-        outg_rec_nb_i                 , 
-        preex_i                       , 
-        opco                          , 
-        outg_rec_nb_to_files_dict     , 
-        outg_rec_nb_to_files_ede_dict , 
-        dovs_df                       , 
-        base_dirs                     , 
-        tmp_summary_subdirs           ,
-        tmp_pdf_subdirs               , 
-        tmp_warnings_subdir           = 'TMP_warnings', 
-        build_summary_dfs             = True, 
-        perform_plotting              = True, 
+        outg_rec_nb_i                   , 
+        preex_i                         , 
+        opco                            , 
+        outg_rec_nb_to_files_dict       , 
+        outg_rec_nb_to_files_ede_dict   , 
+        dovs_df                         , 
+        base_dirs                       , 
+        tmp_summary_subdirs             ,
+        tmp_pdf_subdirs                 , 
+        tmp_warnings_subdir             = 'TMP_warnings', 
+        build_summary_dfs               = True, 
+        perform_plotting                = True, 
         #-----
-        run_outg_inclusion_assessment = True, 
-        max_pct_PNs_missing_allowed   = 0, 
-        n_PNs_w_power_threshold       = 95, 
-        include_suboutg_endpt_plots   = True, 
-        fig_num                       = 0, 
+        run_outg_inclusion_assessment   = True, 
+        max_pct_PNs_missing_allowed     = 0, 
+        n_PNs_w_power_threshold         = 95, 
+        include_suboutg_endpt_plots     = True, 
+        fig_num                         = 0, 
         #-----
-        calculate_by_PN               = True, 
-        combine_by_PN_likeness_thresh = pd.Timedelta('15 minutes'), 
-        expand_outg_search_time_tight = pd.Timedelta('1 hours'), 
-        expand_outg_search_time_loose = pd.Timedelta('12 hours'), 
-        use_est_outg_times            = False, 
-        use_full_ede_outgs            = False, 
-        daq_search_time_window        = pd.Timedelta('24 hours'), # See note below!
+        calculate_by_PN                 = True, 
+        combine_by_PN_likeness_thresh   = pd.Timedelta('15 minutes'), 
+        expand_outg_search_time_tight   = pd.Timedelta('1 hours'), 
+        expand_outg_search_time_loose   = pd.Timedelta('12 hours'), 
+        use_est_outg_times              = False, 
+        use_full_ede_outgs              = False, 
+        daq_search_time_window          = pd.Timedelta('24 hours'), # See note below!
+        overlaps_addtnl_dovs_sql_kwargs = dict(
+            CI_NB_min  = 0, 
+            CMI_NB_min = 0
+        )
     ):
         r"""
         NOTE:
@@ -1739,15 +1781,16 @@ class DABatchOPCO:
         if preex_i == False:
             print('\tNo pre-existing audit found ==> building')
             audit_i = DOVSAudit(
-                outg_rec_nb                   = outg_rec_nb_i, 
-                opco                          = opco, 
-                calculate_by_PN               = calculate_by_PN, 
-                combine_by_PN_likeness_thresh = combine_by_PN_likeness_thresh, 
-                expand_outg_search_time_tight = expand_outg_search_time_tight, 
-                expand_outg_search_time_loose = expand_outg_search_time_loose, 
-                use_est_outg_times            = use_est_outg_times, 
-                use_full_ede_outgs            = use_full_ede_outgs, 
-                daq_search_time_window        = daq_search_time_window
+                outg_rec_nb                     = outg_rec_nb_i, 
+                opco                            = opco, 
+                calculate_by_PN                 = calculate_by_PN, 
+                combine_by_PN_likeness_thresh   = combine_by_PN_likeness_thresh, 
+                expand_outg_search_time_tight   = expand_outg_search_time_tight, 
+                expand_outg_search_time_loose   = expand_outg_search_time_loose, 
+                use_est_outg_times              = use_est_outg_times, 
+                use_full_ede_outgs              = use_full_ede_outgs, 
+                daq_search_time_window          = daq_search_time_window, 
+                overlaps_addtnl_dovs_sql_kwargs = overlaps_addtnl_dovs_sql_kwargs
             )
     
             #--------------------------------------------------
@@ -2239,6 +2282,10 @@ class DABatchOPCO:
             how                 = sort_how, 
         )
         #--------------------------------------------------
+        # Mico asked for flag column to indicate if DOVS CI number (CI_NB column) above 15 
+        detailed_summary_df['CI_NB > 15']          = detailed_summary_df['CI_NB']>15
+        detailed_summary_df_dovs_beg['CI_NB > 15'] = detailed_summary_df_dovs_beg['CI_NB']>15
+        #--------------------------------------------------
         ci_cmi_summary_df['ci_dovs']                     = ci_cmi_summary_df['ci_dovs'].astype(float)
         ci_cmi_summary_df['ci_ami']                      = ci_cmi_summary_df['ci_ami'].astype(float)
         ci_cmi_summary_df['ci_ami_dovs_beg']             = ci_cmi_summary_df['ci_ami_dovs_beg'].astype(float)
@@ -2344,7 +2391,7 @@ class DABatchOPCO:
                 dir_path             = os.path.join(save_dir, tmp_summary_subdirs[k]), 
                 regex_pattern        = None, 
                 ignore_case          = False, 
-                ext                  = '.csv', 
+                ext                  = '.pkl', 
                 make_col_types_equal = False, 
                 index_col            = index_col, 
                 return_paths         = False
@@ -2796,19 +2843,35 @@ class DABatchOPCO:
         dovs_df        = None
         outgs_to_build = [k for k,v in outg_rec_nbs.items() if v==False]
         if len(outgs_to_build)>0:
-            dovs = DOVSOutages(
-                df_construct_type         = DFConstructType.kRunSqlQuery, 
-                contstruct_df_args        = None, 
-                init_df_in_constructor    = True,
-                build_sql_function        = DOVSOutages_SQL.build_sql_std_outage, 
-                build_sql_function_kwargs = dict(
-                    outg_rec_nbs    = outgs_to_build, 
-                    field_to_split  = 'outg_rec_nbs', 
-                    include_premise = True, 
-                    opco            = self.opco
-                ), 
-                build_consolidated        = True
-            )
+            if self.use_sql_std_outage:
+                dovs = DOVSOutages(
+                    df_construct_type         = DFConstructType.kRunSqlQuery, 
+                    contstruct_df_args        = None, 
+                    init_df_in_constructor    = True,
+                    build_sql_function        = DOVSOutages_SQL.build_sql_std_outage, 
+                    build_sql_function_kwargs = dict(
+                        outg_rec_nbs    = outgs_to_build, 
+                        field_to_split  = 'outg_rec_nbs', 
+                        include_premise = True, 
+                        opco            = self.opco, 
+                        **self.addtnl_outg_sql_kwargs
+                    ), 
+                    build_consolidated        = True
+                )
+            else:
+                dovs = DOVSOutages(
+                    df_construct_type         = DFConstructType.kRunSqlQuery, 
+                    contstruct_df_args        = None, 
+                    init_df_in_constructor    = True,
+                    build_sql_function        = DOVSOutages_SQL.build_sql_outage, 
+                    build_sql_function_kwargs = dict(
+                        outg_rec_nbs             = outgs_to_build, 
+                        field_to_split           = 'outg_rec_nbs', 
+                        opco                     = self.opco, 
+                        **self.addtnl_outg_sql_kwargs
+                    ), 
+                    build_consolidated        = True
+                )                
             dovs_df = dovs.df.copy()
         
         #----------------------------------------------------------------------------------------------------
@@ -2947,16 +3010,21 @@ class DABatch:
         date_0                 , 
         date_1                 , 
         opcos                  , # e.g., ['oh'] or {'oh':[]}
+        #--------------------
         save_dir_base          , 
         dates_subdir_appndx    = None, 
+        #--------------------
         CI_NB_min              = None, # e.g., 15
         mjr_mnr_cause          = None, 
+        use_sql_std_outage     = True, 
+        addtnl_outg_sql_kwargs = None, 
+        #--------------------
         daq_search_time_window = pd.Timedelta('24 hours'), 
         outg_rec_nbs           = None, 
-        #----------
+        #--------------------
         # DOVSAudit arguments (if not None, it should be a dict with possible keys contained in dflt_dovsaudit_args below)
         dovs_audit_args        = None, 
-        #-----
+        #--------------------
         init_dfs_to            = pd.DataFrame(),  # Should be pd.DataFrame() or None
         verbose_init           = True, 
     ):
@@ -3031,6 +3099,17 @@ class DABatch:
         #-------------------------
         self.CI_NB_min                   = CI_NB_min
         self.mjr_mnr_cause               = mjr_mnr_cause
+        self.use_sql_std_outage          = use_sql_std_outage
+        #--------------------
+        self.addtnl_outg_sql_kwargs      = addtnl_outg_sql_kwargs
+        #-----
+        if self.addtnl_outg_sql_kwargs is None:
+            self.addtnl_outg_sql_kwargs = dict()
+        #-----
+        if not self.use_sql_std_outage:
+            self.addtnl_outg_sql_kwargs['include_DOVS_PREMISE_DIM']     = True
+            self.addtnl_outg_sql_kwargs['select_cols_DOVS_PREMISE_DIM'] = list(set(self.addtnl_outg_sql_kwargs.get('select_cols_DOVS_PREMISE_DIM', [])).union(set(['OFF_TM', 'REST_TM', 'PREMISE_NB'])))
+        #--------------------
         self.daq_search_time_window      = daq_search_time_window
         self.outg_rec_nbs                = outg_rec_nbs
         #-------------------------
@@ -3043,6 +3122,10 @@ class DABatch:
             use_est_outg_times                = False, 
             use_full_ede_outgs                = False, 
             daq_search_time_window            = self.daq_search_time_window, 
+            overlaps_addtnl_dovs_sql_kwargs   = dict(
+                CI_NB_min  = 0, 
+                CMI_NB_min = 0
+            ), 
         )
         #-----
         if dovs_audit_args is None:
@@ -3055,7 +3138,7 @@ class DABatch:
         dovs_audit_args = Utilities.supplement_dict_with_default_values(
             to_supplmnt_dict    = dovs_audit_args, 
             default_values_dict = dflt_dovsaudit_args, 
-            extend_any_lists    = False, 
+            extend_any_lists    = True, 
             inplace             = False
         )
         #-----
@@ -3165,6 +3248,8 @@ class DABatch:
                 states                      = states_i, 
                 CI_NB_min                   = self.CI_NB_min, 
                 mjr_mnr_cause               = self.mjr_mnr_cause, 
+                use_sql_std_outage          = self.use_sql_std_outage, 
+                addtnl_outg_sql_kwargs      = self.addtnl_outg_sql_kwargs, 
                 daq_search_time_window      = self.daq_search_time_window, 
                 outg_rec_nbs                = self.outg_rec_nbs, 
                 dovs_audit_args             = self.dovs_audit_args, 
@@ -3256,7 +3341,7 @@ class DABatch:
         return opcos
     
     #--------------------------------------------------
-    @staticmethod    
+    @staticmethod
     def merge_opco_summary_files(
         date_0               , 
         date_1               , 
@@ -3411,6 +3496,12 @@ class DABatch:
             #-------------------------
             if reset_indices:
                 df_i = df_i.reset_index()
+            #-------------------------
+            # Mico's team prefers outg_i_beg/_end columns to have "%m/%d/%Y %H:%M" format instead of "%Y-%m-%d %H:%M:%S"
+            if 'outg_i_beg' in df_i.columns:
+                df_i['outg_i_beg'] = pd.to_datetime(df_i['outg_i_beg']).dt.strftime("%m/%d/%Y %H:%M")
+            if 'outg_i_end' in df_i.columns:
+                df_i['outg_i_end'] = pd.to_datetime(df_i['outg_i_end']).dt.strftime("%m/%d/%Y %H:%M")
             #-------------------------
             df_i.to_excel(writer, sheet_name = opco_i)
         #-------------------------
@@ -3808,6 +3899,8 @@ class DABatch:
                 states                      = states_i, 
                 CI_NB_min                   = self.CI_NB_min, 
                 mjr_mnr_cause               = self.mjr_mnr_cause, 
+                use_sql_std_outage          = self.use_sql_std_outage, 
+                addtnl_outg_sql_kwargs      = self.addtnl_outg_sql_kwargs, 
                 daq_search_time_window      = self.daq_search_time_window, 
                 outg_rec_nbs                = self.outg_rec_nbs, 
                 dovs_audit_args             = self.dovs_audit_args, 
@@ -3937,6 +4030,8 @@ class DABatch:
                 states                      = states_i, 
                 CI_NB_min                   = None, # Not needed, only for DAQ
                 mjr_mnr_cause               = None, # Not needed, only for DAQ
+                use_sql_std_outage          = self.use_sql_std_outage, 
+                addtnl_outg_sql_kwargs      = self.addtnl_outg_sql_kwargs, 
                 daq_search_time_window      = None, # Not needed, only for DAQ
                 outg_rec_nbs                = None, # Not needed, only for DAQ 
                 dovs_audit_args             = self.dovs_audit_args, 

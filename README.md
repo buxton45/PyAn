@@ -1,2 +1,2 @@
-# PyAn
-Current spot for main Python methods.
+# Learning
+Temporary directory.  Once methods are more concrete an Analysis repository will be added

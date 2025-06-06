@@ -10,7 +10,7 @@ __status__ = "Personal"
 
 #--------------------------------------------------
 import Utilities_config
-import sys
+import sys, os
 
 import pandas as pd
 import numpy as np
@@ -1969,7 +1969,7 @@ class CPXDfBuilder:
         end_events_df              ,
         mp_df                      , 
         threshold_pct              = 1.0, 
-        outg_rec_nb_col            = 'outg_rec_nb',
+        rec_nb_col                 = 'outg_rec_nb',
         trsf_pole_nb_col           = 'trsf_pole_nb', 
         prem_nb_col                = 'aep_premise_nb', 
         serial_number_col          = 'serialnumber',
@@ -1977,7 +1977,7 @@ class CPXDfBuilder:
             serial_number_col = 'mfr_devc_ser_nbr', 
             prem_nb_col       = 'prem_nb', 
             trsf_pole_nb_col  = 'trsf_pole_nb', 
-            outg_rec_nb_col   = 'OUTG_REC_NB'
+            rec_nb_col        = 'OUTG_REC_NB'
         ), 
         cols_to_drop               = None, 
         rename_cols_dict           = None, 
@@ -2023,11 +2023,11 @@ class CPXDfBuilder:
         merge_on_mp  = [mp_df_cols['serial_number_col'], mp_df_cols['prem_nb_col']]
         merge_on_ede = [serial_number_col, prem_nb_col]
         if(
-            mp_df_cols['outg_rec_nb_col'] in mp_df.columns.tolist() and 
-            outg_rec_nb_col               in end_events_df.columns.tolist()
+            mp_df_cols['rec_nb_col'] in mp_df.columns.tolist() and 
+            rec_nb_col               in end_events_df.columns.tolist()
         ):
-            merge_on_mp.append(mp_df_cols['outg_rec_nb_col'])
-            merge_on_ede.append(outg_rec_nb_col)
+            merge_on_mp.append(mp_df_cols['rec_nb_col'])
+            merge_on_ede.append(rec_nb_col)
         #-------------------------
         end_events_df = CPXDfBuilder.perform_std_col_renames_and_drops(
             df                         = end_events_df, 
@@ -2074,7 +2074,7 @@ class CPXDfBuilder:
         ede_file_paths             ,
         mp_df                      , 
         threshold_pct              = 1.0, 
-        outg_rec_nb_col            = 'outg_rec_nb',
+        rec_nb_col                 = 'outg_rec_nb',
         trsf_pole_nb_col           = 'trsf_pole_nb', 
         prem_nb_col                = 'aep_premise_nb', 
         serial_number_col          = 'serialnumber',
@@ -2082,7 +2082,7 @@ class CPXDfBuilder:
             serial_number_col = 'mfr_devc_ser_nbr', 
             prem_nb_col       = 'prem_nb', 
             trsf_pole_nb_col  = 'trsf_pole_nb', 
-            outg_rec_nb_col   = 'OUTG_REC_NB'
+            rec_nb_col        = 'OUTG_REC_NB'
         ), 
         assert_all_cols_equal      = True, 
         cols_to_drop               = None, 
@@ -2148,11 +2148,11 @@ class CPXDfBuilder:
         )
         #-------------------------
         if(
-            mp_df_cols['outg_rec_nb_col'] in mp_df.columns.tolist() and 
-            outg_rec_nb_col               in end_events_df_0.columns.tolist()
+            mp_df_cols['rec_nb_col'] in mp_df.columns.tolist() and 
+            rec_nb_col               in end_events_df_0.columns.tolist()
         ):
-            merge_on_mp.append(mp_df_cols['outg_rec_nb_col'])
-            merge_on_ede.append(outg_rec_nb_col)
+            merge_on_mp.append(mp_df_cols['rec_nb_col'])
+            merge_on_ede.append(rec_nb_col)
         #-------------------------
         if trsf_pole_nb_col in end_events_df_0.columns:
             assert(mp_df_cols['trsf_pole_nb_col'] in mp_df.columns)
@@ -2255,7 +2255,7 @@ class CPXDfBuilder:
     def identify_ede_cols_of_interest_to_update_andor_drop(
         end_events_df,  
         grp_by_cols                = 'outg_rec_nb', 
-        outg_rec_nb_col            = 'outg_rec_nb',
+        rec_nb_col                 = 'outg_rec_nb',
         trsf_pole_nb_col           = 'trsf_pole_nb', 
         prem_nb_col                = 'aep_premise_nb', 
         serial_number_col          = 'serialnumber',
@@ -2268,11 +2268,11 @@ class CPXDfBuilder:
           The columns in end events may sometimes be appended with _gpd_for_sql (e.g., typically one will see outg_rec_nb_gpd_for_sql 
             not outg_rec_nb in the raw CSV files).
           The _gpd_for_sql was appended during data acquisition.
-          However, the user typically does not remember this, and will usually input, e.g., outg_rec_nb_col='outg_rec_nb'
+          However, the user typically does not remember this, and will usually input, e.g., rec_nb_col='outg_rec_nb'
             Such a scenario will obviously lead to an error, as 'outg_rec_nb' is not found in the columns
           The below methods serve to remedy that issue.
           
-        ede_cols_of_interest consist of grp_by_cols+[outg_rec_nb_col, trsf_pole_nb_col, prem_nb_col, serial_number_col]
+        ede_cols_of_interest consist of grp_by_cols+[rec_nb_col, trsf_pole_nb_col, prem_nb_col, serial_number_col]
           
         NOTE: In the case that column_i and column_i_gpd_for_sql are for whatever reason BOTH found in the DF, the parameter
             trust_sql_grouping directs the code on which to use (the other will be dropped)
@@ -2285,7 +2285,7 @@ class CPXDfBuilder:
                     'aep_event_dt', 'trsf_pole_nb', 'trsf_pole_nb_gpd_for_sql', 'no_outg_rec_nb_gpd_for_sql', 'is_first_after_outg_gpd_for_sql'
                 ]
                 grp_by_cols        = ['trsf_pole_nb', 'no_outg_rec_nb']
-                outg_rec_nb_col    = 'no_outg_rec_nb'
+                rec_nb_col         = 'no_outg_rec_nb'
                 trsf_pole_nb_col   = 'trsf_pole_nb'
                 prem_nb_col        = 'aep_premise_nb'
                 serial_number_col  = 'serialnumber'
@@ -2294,7 +2294,7 @@ class CPXDfBuilder:
             Output:
                 ede_gpd_coi_dict_updates = {
                     'grp_by_cols'      : ['trsf_pole_nb_gpd_for_sql', 'no_outg_rec_nb_gpd_for_sql'], 
-                    'outg_rec_nb_col'  : 'outg_rec_nb', 
+                    'rec_nb_col'       : 'outg_rec_nb', 
                     'trsf_pole_nb_col' : 'trsf_pole_nb_gpd_for_sql', 
                     'prem_nb_col'      : 'aep_premise_nb', 
                     'serial_number_col': 'serialnumber'
@@ -2313,17 +2313,17 @@ class CPXDfBuilder:
         #-------------------------
         # Below called ede_gpd_coi_dict because the columns of interest are grouped by their input parameter in build_rcpx_df_from_EndEvents_in_csvs.
         #   e.g., key value grp_by_cols should contain a list of columns (strings)
-        #         key value outg_rec_nb_col contains a single string for the outg_rec_nb_col
-        # The values, coi, can stand for column of interest (e.g., outg_rec_nb_col) or columns of interest (e.g., grp_by_cols)
+        #         key value rec_nb_col contains a single string for the rec_nb_col
+        # The values, coi, can stand for column of interest (e.g., rec_nb_col) or columns of interest (e.g., grp_by_cols)
         ede_gpd_coi_dict = dict(
             grp_by_cols       = grp_by_cols, 
-            outg_rec_nb_col   = outg_rec_nb_col, 
+            rec_nb_col        = rec_nb_col, 
             trsf_pole_nb_col  = trsf_pole_nb_col, 
             prem_nb_col       = prem_nb_col, 
             serial_number_col = serial_number_col
         )
         #-------------------------
-        # Values are allowed to be None (e.g., outg_rec_nb_col/trsf_pole_nb_col aren't always needed separately from grp_by_cols)
+        # Values are allowed to be None (e.g., rec_nb_col/trsf_pole_nb_col aren't always needed separately from grp_by_cols)
         # Life is much easier if we remove any entries with None values and add back at end
         none_vals  = {k:v for k,v in ede_gpd_coi_dict.items() if v is None}
         #-------------------------
@@ -2339,7 +2339,7 @@ class CPXDfBuilder:
                 ede_cols_of_interest.append(coi)
             else:
                 ede_cols_of_interest.extend(coi)
-        # NOTE: grp_by_cols can contain the others (e.g., outg_rec_nb_col), so set operation needed to removed duplicates
+        # NOTE: grp_by_cols can contain the others (e.g., rec_nb_col), so set operation needed to removed duplicates
         ede_cols_of_interest = list(set(ede_cols_of_interest))
         #--------------------------------------------------
         # Below, found_cols_w_gpd_for_sql_appendix has keys equal to any columns found containing _gpd_for_sql appendix and
@@ -2348,7 +2348,7 @@ class CPXDfBuilder:
         found_cols_w_gpd_for_sql_appendix     = AMI_SQL.get_rename_dict_for_gpd_for_sql_cols(end_events_df)
         found_cols_w_gpd_for_sql_appendix_inv = Utilities.invert_dict(found_cols_w_gpd_for_sql_appendix)
         #--------------------------------------------------
-        # NOTE: No harm below if ede_coi not actually found in end_events_df (e.g., when running over baseline data, outg_rec_nb_col 
+        # NOTE: No harm below if ede_coi not actually found in end_events_df (e.g., when running over baseline data, rec_nb_col 
         #       will not be found), as updates are only made to those whose values change (and can only change if found)
         ede_cols_of_interest_updates = dict()
         cols_to_drop = []
@@ -2432,9 +2432,13 @@ class CPXDfBuilder:
                 for param_grp, cols_of_interest in ede_gpd_coi_dict_updates_fnl.items():
                     assert(Utilities.is_object_one_of_types(cols_of_interest, [str,list,tuple]))
                     if isinstance(cols_of_interest, str):
+                        if not cols_of_interest in test_df.columns.tolist():
+                            print(f"ERROR: coi = {cols_of_interest} not found in test_df!")
                         assert(cols_of_interest in test_df.columns.tolist())
                     else:
                         for coi in cols_of_interest:
+                            if not coi in test_df.columns.tolist():
+                                print(f"ERROR: coi = {coi} not found in test_df!")
                             assert(coi in test_df.columns.tolist())
                 #-------------------------
                 ede_gpd_coi_dict_updates = ede_gpd_coi_dict_updates_fnl
@@ -2455,7 +2459,7 @@ class CPXDfBuilder:
         mp_df                         = None, 
         ede_mp_mismatch_threshold_pct = 1.0, 
         grp_by_cols                   = 'outg_rec_nb', 
-        outg_rec_nb_col               = 'outg_rec_nb',
+        rec_nb_col                    = 'outg_rec_nb',
         trsf_pole_nb_col              = 'trsf_pole_nb', 
         prem_nb_col                   = 'aep_premise_nb', 
         serial_number_col             = 'serialnumber',
@@ -2463,7 +2467,7 @@ class CPXDfBuilder:
             serial_number_col = 'mfr_devc_ser_nbr', 
             prem_nb_col       = 'prem_nb', 
             trsf_pole_nb_col  = 'trsf_pole_nb', 
-            outg_rec_nb_col   = 'OUTG_REC_NB'
+            rec_nb_col        = 'OUTG_REC_NB'
         ), 
         trust_sql_grouping            = True, 
         drop_gpd_for_sql_appendix     = True, 
@@ -2472,8 +2476,8 @@ class CPXDfBuilder:
         r"""
         Prepares for running build_rcpx_from_end_events_df.
         
-        1. Adjust grp_by_cols and outg_rec_nb_col to handle cases where _gpd_for_sql appendix was added during data acquisition.
-           If there is an instance where, e.g., outg_rec_nb_col and f'{outg_rec_nb_col}_gpd_for_sql' are both present, it settles
+        1. Adjust grp_by_cols and rec_nb_col to handle cases where _gpd_for_sql appendix was added during data acquisition.
+           If there is an instance where, e.g., rec_nb_col and f'{rec_nb_col}_gpd_for_sql' are both present, it settles
              the discrepancy (according to the trust_sql_grouping parameter) and compiles a list of columns which will need 
              to be dropped.
         2. Determine merge_on_ede and merge_on_mp columns (done within CPXDfBuilder.check_end_events_from_CSVs_merge_with_mp).
@@ -2493,7 +2497,7 @@ class CPXDfBuilder:
         ede_cols_of_interest_updates, cols_to_drop, rename_cols_dict = CPXDfBuilder.identify_ede_cols_of_interest_to_update_andor_drop(
             end_events_df              = end_events_df,  
             grp_by_cols                = grp_by_cols, 
-            outg_rec_nb_col            = outg_rec_nb_col,
+            rec_nb_col                 = rec_nb_col,
             trsf_pole_nb_col           = trsf_pole_nb_col, 
             prem_nb_col                = prem_nb_col, 
             serial_number_col          = serial_number_col,
@@ -2502,7 +2506,7 @@ class CPXDfBuilder:
             make_all_columns_lowercase = make_all_columns_lowercase
         )
         grp_by_cols       = ede_cols_of_interest_updates['grp_by_cols']
-        outg_rec_nb_col   = ede_cols_of_interest_updates.get('outg_rec_nb_col', None)  # Not always needed, hence the get call
+        rec_nb_col        = ede_cols_of_interest_updates.get('rec_nb_col', None)  # Not always needed, hence the get call
         trsf_pole_nb_col  = ede_cols_of_interest_updates.get('trsf_pole_nb_col', None) # Not always needed, hence the get call
         prem_nb_col       = ede_cols_of_interest_updates['prem_nb_col']
         serial_number_col = ede_cols_of_interest_updates['serial_number_col']
@@ -2513,7 +2517,7 @@ class CPXDfBuilder:
                 end_events_df              = end_events_df,
                 mp_df                      = mp_df, 
                 threshold_pct              = ede_mp_mismatch_threshold_pct, 
-                outg_rec_nb_col            = outg_rec_nb_col,
+                rec_nb_col                 = rec_nb_col,
                 trsf_pole_nb_col           = trsf_pole_nb_col, 
                 prem_nb_col                = prem_nb_col, 
                 serial_number_col          = serial_number_col,
@@ -2528,7 +2532,7 @@ class CPXDfBuilder:
         #--------------------------------------------------
         return_dict = dict(
             grp_by_cols       = grp_by_cols, 
-            outg_rec_nb_col   = outg_rec_nb_col, 
+            rec_nb_col        = rec_nb_col, 
             trsf_pole_nb_col  = trsf_pole_nb_col, 
             prem_nb_col       = prem_nb_col, 
             serial_number_col = serial_number_col,
@@ -2550,7 +2554,7 @@ class CPXDfBuilder:
         mp_df                         = None, 
         ede_mp_mismatch_threshold_pct = 1.0, 
         grp_by_cols                   = 'outg_rec_nb', 
-        outg_rec_nb_col               = 'outg_rec_nb',
+        rec_nb_col                    = 'outg_rec_nb',
         trsf_pole_nb_col              = 'trsf_pole_nb', 
         prem_nb_col                   = 'aep_premise_nb', 
         serial_number_col             = 'serialnumber',
@@ -2558,7 +2562,7 @@ class CPXDfBuilder:
             serial_number_col = 'mfr_devc_ser_nbr', 
             prem_nb_col       = 'prem_nb', 
             trsf_pole_nb_col  = 'trsf_pole_nb', 
-            outg_rec_nb_col   = 'OUTG_REC_NB'
+            rec_nb_col        = 'OUTG_REC_NB'
         ), 
         assert_all_cols_equal         = True, 
         trust_sql_grouping            = True, 
@@ -2571,8 +2575,8 @@ class CPXDfBuilder:
           was really unnecessary.  
           This will improve performance (although, likely not much as none of the operations are super heavy) and simplify the code.
         
-        1. Adjust grp_by_cols and outg_rec_nb_col to handle cases where _gpd_for_sql appendix was added during data acquisition.
-           If there is an instance where, e.g., outg_rec_nb_col and f'{outg_rec_nb_col}_gpd_for_sql' are both present, it settles
+        1. Adjust grp_by_cols and rec_nb_col to handle cases where _gpd_for_sql appendix was added during data acquisition.
+           If there is an instance where, e.g., rec_nb_col and f'{rec_nb_col}_gpd_for_sql' are both present, it settles
              the discrepancy (according to the trust_sql_grouping parameter) and compiles a list of columns which will need 
              to be dropped.
         2. Determine merge_on_ede and merge_on_mp columns (done within CPXDfBuilder.check_end_events_from_CSVs_merge_with_mp).
@@ -2634,7 +2638,7 @@ class CPXDfBuilder:
         ede_cols_of_interest_updates, cols_to_drop, rename_cols_dict = CPXDfBuilder.identify_ede_cols_of_interest_to_update_andor_drop(
             end_events_df              = end_events_df,  
             grp_by_cols                = grp_by_cols, 
-            outg_rec_nb_col            = outg_rec_nb_col,
+            rec_nb_col                 = rec_nb_col,
             trsf_pole_nb_col           = trsf_pole_nb_col, 
             prem_nb_col                = prem_nb_col, 
             serial_number_col          = serial_number_col,
@@ -2643,7 +2647,7 @@ class CPXDfBuilder:
             make_all_columns_lowercase = make_all_columns_lowercase
         )
         grp_by_cols       = ede_cols_of_interest_updates['grp_by_cols']
-        outg_rec_nb_col   = ede_cols_of_interest_updates['outg_rec_nb_col']
+        rec_nb_col        = ede_cols_of_interest_updates['rec_nb_col']
         trsf_pole_nb_col  = ede_cols_of_interest_updates['trsf_pole_nb_col']
         prem_nb_col       = ede_cols_of_interest_updates['prem_nb_col']
         serial_number_col = ede_cols_of_interest_updates['serial_number_col']
@@ -2654,7 +2658,7 @@ class CPXDfBuilder:
                 ede_file_paths             = paths,
                 mp_df                      = mp_df, 
                 threshold_pct              = ede_mp_mismatch_threshold_pct, 
-                outg_rec_nb_col            = outg_rec_nb_col,
+                rec_nb_col                 = rec_nb_col,
                 trsf_pole_nb_col           = trsf_pole_nb_col, 
                 prem_nb_col                = prem_nb_col, 
                 serial_number_col          = serial_number_col,
@@ -2671,7 +2675,7 @@ class CPXDfBuilder:
         return_dict = dict(
             paths             = paths, 
             grp_by_cols       = grp_by_cols, 
-            outg_rec_nb_col   = outg_rec_nb_col, 
+            rec_nb_col        = rec_nb_col, 
             trsf_pole_nb_col  = trsf_pole_nb_col, 
             prem_nb_col       = prem_nb_col, 
             serial_number_col = serial_number_col,
@@ -2682,6 +2686,90 @@ class CPXDfBuilder:
             merge_on_mp       = merge_on_mp
         )
         return return_dict
+
+    #----------------------------------------------------------------------------------------------------
+    @staticmethod
+    def identify_and_update_ede_columns(
+        end_events_df              , 
+        grp_by_cols                = ['outg_rec_nb', 'trsf_pole_nb'], 
+        rec_nb_col                 = 'outg_rec_nb',
+        trsf_pole_nb_col           = 'trsf_pole_nb', 
+        prem_nb_col                = 'aep_premise_nb', 
+        serial_number_col          = 'serialnumber',
+        trust_sql_grouping         = True, 
+        drop_gpd_for_sql_appendix  = True, 
+        make_all_columns_lowercase = True, 
+        return_cols_info           = False
+    ):
+        r"""
+        Simply runs CPXDfBuilder.identify_ede_cols_of_interest_to_update_andor_drop and applies the results to end_events_df
+        It applies the results of the aforementioned by using CPXDfBuilder.perform_std_col_renames_and_drops
+        -----
+        NOTE: This was built mainly for CPXDfBuilder.update_time_infos_columns function, but could be valuable on its own
+        """
+        #--------------------------------------------------
+        cols_of_interest_updates, cols_to_drop, rename_cols_dict = CPXDfBuilder.identify_ede_cols_of_interest_to_update_andor_drop(
+            end_events_df              = end_events_df,  
+            grp_by_cols                = grp_by_cols, 
+            rec_nb_col                 = rec_nb_col,
+            trsf_pole_nb_col           = trsf_pole_nb_col, 
+            prem_nb_col                = prem_nb_col, 
+            serial_number_col          = serial_number_col,
+            trust_sql_grouping         = trust_sql_grouping, 
+            drop_gpd_for_sql_appendix  = drop_gpd_for_sql_appendix, 
+            make_all_columns_lowercase = make_all_columns_lowercase
+        )
+        #--------------------------------------------------
+        end_events_df = CPXDfBuilder.perform_std_col_renames_and_drops(
+            df                         = end_events_df, 
+            cols_to_drop               = cols_to_drop, 
+            rename_cols_dict           = rename_cols_dict, 
+            make_all_columns_lowercase = make_all_columns_lowercase
+        )
+        #--------------------------------------------------
+        if return_cols_info:
+            return end_events_df, cols_of_interest_updates, cols_to_drop, rename_cols_dict
+        return end_events_df
+    
+    
+    #----------------------------------------------------------------------------------------------------
+    @staticmethod
+    def update_time_infos_columns(
+        time_infos_df              , 
+        grp_by_cols                = ['outg_rec_nb', 'trsf_pole_nb'], 
+        rec_nb_col                 = 'outg_rec_nb',
+        trsf_pole_nb_col           = 'trsf_pole_nb', 
+        trust_sql_grouping         = True, 
+        drop_gpd_for_sql_appendix  = True, 
+        make_all_columns_lowercase = True, 
+        return_cols_info           = False
+    ):
+        r"""
+        Simply runs CPXDfBuilder.identify_ede_cols_of_interest_to_update_andor_drop and applies the results
+          to time_infos_df so the naming conventions can remain consistent with those in evsSum_df/end_events_df
+        It applies the results of the aforementioned by using CPXDfBuilder.perform_std_col_renames_and_drops
+        -----
+        Trying to blindly apply the results from CPXDfBuilder.perform_build_rcpx_from_end_events_df_prereqs run with
+          evsSum_df/end_events_df could lead to issues if, e.g., gpd_for_sql appendices already dropped from time_infos_df
+        This method is more fail-proof
+        """
+        #--------------------------------------------------
+        time_infos_df, cols_of_interest_updates, cols_to_drop, rename_cols_dict = CPXDfBuilder.identify_and_update_ede_columns(
+            end_events_df              = time_infos_df, 
+            grp_by_cols                = grp_by_cols, 
+            rec_nb_col                 = rec_nb_col,
+            trsf_pole_nb_col           = trsf_pole_nb_col, 
+            prem_nb_col                = None, 
+            serial_number_col          = None,
+            trust_sql_grouping         = trust_sql_grouping, 
+            drop_gpd_for_sql_appendix  = drop_gpd_for_sql_appendix, 
+            make_all_columns_lowercase = make_all_columns_lowercase, 
+            return_cols_info           = True
+        )
+        #--------------------------------------------------
+        if return_cols_info:
+            return time_infos_df, cols_of_interest_updates, cols_to_drop, rename_cols_dict
+        return time_infos_df
     
 
     #----------------------------------------------------------------------------------------------------
@@ -3134,7 +3222,7 @@ class CPXDfBuilder:
         edetypeid_col                 = 'enddeviceeventtypeid', 
         SN_col                        = 'serialnumber', 
         PN_col                        = 'aep_premise_nb', 
-        outg_rec_nb_col               = None,  # only needed when mp_df is included!
+        rec_nb_col                    = None,  # only needed when mp_df is included!
         trsf_pole_nb_col              = None , # only needed when mp_df is included!
         total_counts_col              = 'total_counts',  # TODO CURRENTLY DOES NOTHING!
         addtnl_dropna_subset_cols     = None, 
@@ -3147,7 +3235,7 @@ class CPXDfBuilder:
             serial_number_col = 'mfr_devc_ser_nbr', 
             prem_nb_col       = 'prem_nb', 
             trsf_pole_nb_col  = 'trsf_pole_nb', 
-            outg_rec_nb_col   = 'OUTG_REC_NB'
+            rec_nb_col        = 'OUTG_REC_NB'
         ), 
         make_all_columns_lowercase    = True, 
         date_only                     = False, 
@@ -3187,7 +3275,7 @@ class CPXDfBuilder:
             mp_df                         = None, 
             ede_mp_mismatch_threshold_pct = 1.0, 
             grp_by_cols                   = group_cols, 
-            outg_rec_nb_col               = outg_rec_nb_col,
+            rec_nb_col                    = rec_nb_col,
             trsf_pole_nb_col              = trsf_pole_nb_col, 
             prem_nb_col                   = PN_col, 
             serial_number_col             = SN_col,
@@ -3197,7 +3285,7 @@ class CPXDfBuilder:
             make_all_columns_lowercase    = make_all_columns_lowercase
         )
         group_cols        = prereq_dict['grp_by_cols']
-        outg_rec_nb_col   = prereq_dict['outg_rec_nb_col']  # only needed when mp_df is included!
+        rec_nb_col        = prereq_dict['rec_nb_col']  # only needed when mp_df is included!
         trsf_pole_nb_col  = prereq_dict['trsf_pole_nb_col'] # only needed when mp_df is included!
         PN_col            = prereq_dict['prem_nb_col']
         SN_col            = prereq_dict['serial_number_col']
@@ -3504,7 +3592,7 @@ class CPXDfBuilder:
         edetypeid_col                 = 'enddeviceeventtypeid', 
         SN_col                        = 'serialnumber', 
         PN_col                        = 'aep_premise_nb', 
-        outg_rec_nb_col               = None,  # only needed when mp_df is included!
+        rec_nb_col                    = None,  # only needed when mp_df is included!
         trsf_pole_nb_col              = None , # only needed when mp_df is included!
         total_counts_col              = 'total_counts',  # TODO CURRENTLY DOES NOTHING!
         addtnl_dropna_subset_cols     = None, 
@@ -3517,7 +3605,7 @@ class CPXDfBuilder:
             serial_number_col = 'mfr_devc_ser_nbr', 
             prem_nb_col       = 'prem_nb', 
             trsf_pole_nb_col  = 'trsf_pole_nb', 
-            outg_rec_nb_col   = 'OUTG_REC_NB'
+            rec_nb_col        = 'OUTG_REC_NB'
         ), 
         make_all_columns_lowercase    = True, 
         date_only                     = False, 
@@ -3555,12 +3643,14 @@ class CPXDfBuilder:
         # rel_date_col will essentially replace valuesinterval_local_col in build_rcpx_from_end_events_df
         #-----
         rel_date_col                = Utilities.generate_random_string(letters='letters_only')
-        end_events_df[rel_date_col] = end_events_df[pred_date_col]-end_events_df[valuesinterval_local_col]
+        end_events_df[rel_date_col] = end_events_df[valuesinterval_local_col] - end_events_df[pred_date_col]
         #-----
         # Shift everything relative to a common dummy prediction date
-        dummy_date                    = pd.to_datetime('2 Nov. 1987')
+        #   Below, putting dummy_date at end of day just helps me to more easily wrap my head around things if I have to
+        #   go into the data to check things out.  It is by no means strictly necessary.
+        dummy_date                    = pd.to_datetime('2 Nov. 1987 23:59:59') 
         dummy_date_col                = Utilities.generate_random_string(letters='letters_only')
-        end_events_df[dummy_date_col] = dummy_date - end_events_df[rel_date_col]
+        end_events_df[dummy_date_col] = dummy_date + end_events_df[rel_date_col]
         #-----
         cols_to_drop  = list(set([valuesinterval_col, valuesinterval_local_col, rel_date_col, pred_date_col]).intersection(set(end_events_df.columns)))
         end_events_df = end_events_df.drop(columns=cols_to_drop)
@@ -3587,7 +3677,7 @@ class CPXDfBuilder:
             edetypeid_col                 = edetypeid_col, 
             SN_col                        = SN_col, 
             PN_col                        = PN_col, 
-            outg_rec_nb_col               = outg_rec_nb_col,  
+            rec_nb_col                    = rec_nb_col,  
             trsf_pole_nb_col              = trsf_pole_nb_col, 
             total_counts_col              = total_counts_col, 
             addtnl_dropna_subset_cols     = addtnl_dropna_subset_cols, 
@@ -3612,7 +3702,7 @@ class CPXDfBuilder:
     #----------------------------------------------------------------------------------------------------
     @staticmethod
     def build_rcpx_df_from_end_events_in_dir(    
-        files_dir                      , 
+        files_dir_base                 , 
         pred_date                      = None, 
         file_path_glob                 = r'end_events_[0-9]*.csv', 
         file_path_regex                = None, 
@@ -3632,7 +3722,7 @@ class CPXDfBuilder:
         edetypeid_col                  = 'enddeviceeventtypeid', 
         SN_col                         = 'serialnumber', 
         PN_col                         = 'aep_premise_nb', 
-        outg_rec_nb_col                = 'outg_rec_nb',
+        rec_nb_col                     = 'outg_rec_nb',
         trsf_pole_nb_col               = 'trsf_pole_nb', 
         total_counts_col               = 'total_counts', # TODO CURRENTLY DOES NOTHING!
         list_cols                      = None, 
@@ -3654,15 +3744,19 @@ class CPXDfBuilder:
             serial_number_col = 'mfr_devc_ser_nbr', 
             prem_nb_col       = 'prem_nb', 
             trsf_pole_nb_col  = 'trsf_pole_nb', 
-            outg_rec_nb_col   = 'OUTG_REC_NB'
+            rec_nb_col        = 'OUTG_REC_NB'
         ), 
         make_all_columns_lowercase     = True, 
         date_only                      = False
     ):
         r"""
+        files_dir_base should point one directory above that containing the actual data CSV files.
+            i.e., should be the save_dir_base attribute of OutageDAQ class
+            e.g., files_dir_base = r'...\LocalData\dovs_and_end_events_data\20250318\20240401_20240630\Outages'
+
         Note: The larger the batch_size, the more memory that will be consumed during building
     
-        Any rows with NaNs in outg_rec_nb_col+addtnl_dropna_subset_cols will be dropped
+        Any rows with NaNs in rec_nb_col+addtnl_dropna_subset_cols will be dropped
     
         #NOTE: Currently, only set up for the case return_normalized_separately==False
 
@@ -3685,8 +3779,12 @@ class CPXDfBuilder:
         #----------------------------------------------------------------------------------------------------
         assert(Utilities.is_object_one_of_types(group_cols, [str, list, tuple]))
         if isinstance(group_cols, str):
-            group_cols = [group_cols]        
+            group_cols = [group_cols]
         #-------------------------
+        data_evs_sum_vw = False
+        files_dir       = os.path.join(files_dir_base, 'EndEvents')
+        assert(os.path.exists(files_dir))
+        #--------------------------------------------------
         prereq_dict = CPXDfBuilder.perform_build_rcpx_from_end_events_in_dir_prereqs(
             files_dir                     = files_dir, 
             file_path_glob                = file_path_glob, 
@@ -3694,7 +3792,7 @@ class CPXDfBuilder:
             mp_df                         = mp_df, 
             ede_mp_mismatch_threshold_pct = 1.0, 
             grp_by_cols                   = group_cols, 
-            outg_rec_nb_col               = outg_rec_nb_col,
+            rec_nb_col                    = rec_nb_col,
             trsf_pole_nb_col              = trsf_pole_nb_col, 
             prem_nb_col                   = PN_col, 
             serial_number_col             = SN_col,
@@ -3706,7 +3804,7 @@ class CPXDfBuilder:
         )
         paths             = prereq_dict['paths']
         group_cols        = prereq_dict['grp_by_cols']
-        outg_rec_nb_col   = prereq_dict['outg_rec_nb_col']
+        rec_nb_col        = prereq_dict['rec_nb_col']
         trsf_pole_nb_col  = prereq_dict['trsf_pole_nb_col']
         PN_col            = prereq_dict['prem_nb_col']
         SN_col            = prereq_dict['serial_number_col']
@@ -3760,9 +3858,9 @@ class CPXDfBuilder:
                     # Should only need to grab time_infos_df once, since built for entire directory
                     if time_infos_df is None:
                         time_infos_df = OutageDAQ.build_baseline_time_infos_df(
-                            data_dir                = files_dir, 
+                            data_dir_base           = files_dir_base, 
                             min_req                 = True, 
-                            file_path_glob          = file_path_glob, 
+                            summary_dict_fname      = 'summary_dict.json', 
                             alias                   = 'mapping_table', 
                             include_summary_paths   = False, 
                             consolidate             = False, 
@@ -3816,7 +3914,7 @@ class CPXDfBuilder:
                     edetypeid_col                 = edetypeid_col, 
                     SN_col                        = SN_col, 
                     PN_col                        = PN_col, 
-                    outg_rec_nb_col               = outg_rec_nb_col, 
+                    rec_nb_col                    = rec_nb_col, 
                     trsf_pole_nb_col              = trsf_pole_nb_col , 
                     total_counts_col              = total_counts_col, 
                     addtnl_dropna_subset_cols     = addtnl_dropna_subset_cols, 
@@ -3850,7 +3948,7 @@ class CPXDfBuilder:
                     edetypeid_col                 = edetypeid_col, 
                     SN_col                        = SN_col, 
                     PN_col                        = PN_col, 
-                    outg_rec_nb_col               = outg_rec_nb_col, 
+                    rec_nb_col                    = rec_nb_col, 
                     trsf_pole_nb_col              = trsf_pole_nb_col , 
                     total_counts_col              = total_counts_col, 
                     addtnl_dropna_subset_cols     = addtnl_dropna_subset_cols, 
@@ -4311,7 +4409,7 @@ class CPXDfBuilder:
         date_col                    = 'aep_event_dt', 
         xf_meter_cnt_col            = 'xf_meter_cnt', 
         events_tot_col              = 'events_tot', 
-        outg_rec_nb_col             = 'outg_rec_nb',
+        rec_nb_col                  = 'outg_rec_nb',
         trsf_pole_nb_col            = 'trsf_pole_nb', 
         prem_nb_col                 = 'aep_premise_nb', 
         serial_number_col           = 'serialnumber',
@@ -4354,7 +4452,7 @@ class CPXDfBuilder:
             mp_df                         = None, 
             ede_mp_mismatch_threshold_pct = 1.0, 
             grp_by_cols                   = group_cols, 
-            outg_rec_nb_col               = outg_rec_nb_col,
+            rec_nb_col                    = rec_nb_col,
             trsf_pole_nb_col              = trsf_pole_nb_col, 
             prem_nb_col                   = prem_nb_col, 
             serial_number_col             = serial_number_col,
@@ -4364,7 +4462,7 @@ class CPXDfBuilder:
             make_all_columns_lowercase    = make_all_columns_lowercase
         )
         group_cols        = prereq_dict['grp_by_cols']
-        outg_rec_nb_col   = prereq_dict['outg_rec_nb_col']
+        rec_nb_col        = prereq_dict['rec_nb_col']
         trsf_pole_nb_col  = prereq_dict['trsf_pole_nb_col']
         prem_nb_col       = prereq_dict['prem_nb_col']
         serial_number_col = prereq_dict['serial_number_col']
@@ -4598,7 +4696,7 @@ class CPXDfBuilder:
                     td_left        = td_left_i, 
                     td_right       = td_right_i, 
                     cols_to_adjust = None, 
-                    SNs_tags       = None, 
+                    XNs_tags       = None, 
                     inplace        = True
                 )
                 #-----
@@ -4657,103 +4755,6 @@ class CPXDfBuilder:
 
     #---------------------------------------------------------------------------
     @staticmethod
-    def build_rcpx_from_evsSum_dfs_in_dir(
-        files_dir                      , 
-        prediction_date                , 
-        td_left                        , 
-        td_right                       , 
-        return_evsSum_df               = True, 
-        #-----
-        file_path_glob                 = r'events_summary_[0-9]*.csv', 
-        file_path_regex                = None, 
-        batch_size                     = 50, 
-        cols_and_types_to_convert_dict = None, 
-        to_numeric_errors              = 'coerce', 
-        make_all_columns_lowercase     = True, 
-        assert_all_cols_equal          = True,  
-        n_update                       = 1, 
-        #-----
-        cr_trans_dict                  = None, 
-        freq                           = '5D', 
-        group_cols                     = ['OUTG_REC_NB_GPD_FOR_SQL', 'trsf_pole_nb_GPD_FOR_SQL'], 
-        date_col                       = 'aep_event_dt', 
-        normalize_by_SNs               = True, 
-        normalize_by_time              = True, 
-        xf_meter_cnt_col               = 'xf_meter_cnt', 
-        events_tot_col                 = 'events_tot', 
-        trsf_pole_nb_col               = 'trsf_pole_nb', 
-        outg_rec_nb_col                = 'outg_rec_nb',
-        prem_nb_col                    = 'aep_premise_nb', 
-        serial_number_col              = 'serialnumber',
-        total_counts_col               = 'total_counts', 
-        nSNs_col                       = '_nSNs', 
-        trust_sql_grouping             = True, 
-        drop_gpd_for_sql_appendix      = True, 
-        verbose                        = True, 
-    ):
-        r"""
-        This function only permits uniform time periods; i.e., all periods will have length equal to freq.
-        If one wants to use variable spacing (e.g., maybe the first group is one day in width, the second is
-          three days, all others equal to five days), a new function will need to be built.
-          
-        NOTE: td_left, td_right, and freq must all be in DAYS
-    
-        data_structure_df:
-            If supplied, it will be used to determine the set of final columns desired in rcpx_0_pd_i, and the method
-              MECPODf.get_reasons_subset_from_cpo_df will be used to adjust rcpx_0_pd_i accordingly.
-            If not supplied, MECPODf.get_reasons_subset_from_cpo_df is not calleds
-    
-        cr_trans_dict:
-            If not supplied, will be grabbed via the CPXDfBuilder.get_regex_setup() method
-        """
-        #--------------------------------------------------
-        evsSum_df = CPXDfBuilder.concat_evsSum_dfs_in_dir(
-            files_dir                      = files_dir, 
-            file_path_glob                 = file_path_glob, 
-            file_path_regex                = file_path_regex, 
-            batch_size                     = batch_size, 
-            cols_and_types_to_convert_dict = cols_and_types_to_convert_dict, 
-            to_numeric_errors              = to_numeric_errors, 
-            make_all_columns_lowercase     = make_all_columns_lowercase, 
-            assert_all_cols_equal          = assert_all_cols_equal,  
-            n_update                       = n_update, 
-            verbose                        = verbose
-        )
-        #--------------------------------------------------
-        if evsSum_df is None or evsSum_df.shape[0]==0:
-            return None
-        #--------------------------------------------------
-        rcpx_df = CPXDfBuilder.build_rcpx_from_evsSum_df(
-            evsSum_df                   = evsSum_df, 
-            prediction_date             = prediction_date, 
-            td_left                     = td_left, 
-            td_right                    = td_right, 
-            cr_trans_dict               = cr_trans_dict, 
-            freq                        = freq, 
-            group_cols                  = group_cols, 
-            date_col                    = date_col, 
-            normalize_by_SNs            = normalize_by_SNs, 
-            normalize_by_time           = normalize_by_time, 
-            xf_meter_cnt_col            = xf_meter_cnt_col, 
-            events_tot_col              = events_tot_col, 
-            outg_rec_nb_col             = outg_rec_nb_col,
-            trsf_pole_nb_col            = trsf_pole_nb_col, 
-            prem_nb_col                 = prem_nb_col, 
-            serial_number_col           = serial_number_col, 
-            total_counts_col            = total_counts_col, 
-            nSNs_col                    = nSNs_col, 
-            trust_sql_grouping          = trust_sql_grouping, 
-            drop_gpd_for_sql_appendix   = drop_gpd_for_sql_appendix, 
-            make_all_columns_lowercase  = make_all_columns_lowercase
-        )
-        #--------------------------------------------------
-        if return_evsSum_df:
-            return rcpx_df, evsSum_df
-        return rcpx_df
-    
-
-    #---------------------------------------------------------------------------
-    @staticmethod
     def build_rcpx_from_evsSum_df_wpreddates_simple(
         evsSum_df                   , 
         pred_date_col               , 
@@ -4767,7 +4768,7 @@ class CPXDfBuilder:
         date_col                    = 'aep_event_dt', 
         xf_meter_cnt_col            = 'xf_meter_cnt', 
         events_tot_col              = 'events_tot', 
-        outg_rec_nb_col             = 'outg_rec_nb',
+        rec_nb_col                  = 'outg_rec_nb',
         trsf_pole_nb_col            = 'trsf_pole_nb', 
         prem_nb_col                 = 'aep_premise_nb', 
         serial_number_col           = 'serialnumber',
@@ -4811,7 +4812,7 @@ class CPXDfBuilder:
             date_col                    = dummy_date_col, 
             xf_meter_cnt_col            = xf_meter_cnt_col, 
             events_tot_col              = events_tot_col, 
-            outg_rec_nb_col             = outg_rec_nb_col,
+            rec_nb_col                  = rec_nb_col,
             trsf_pole_nb_col            = trsf_pole_nb_col, 
             prem_nb_col                 = prem_nb_col, 
             serial_number_col           = serial_number_col,
@@ -4841,7 +4842,7 @@ class CPXDfBuilder:
         date_col                    = 'aep_event_dt', 
         xf_meter_cnt_col            = 'xf_meter_cnt', 
         events_tot_col              = 'events_tot', 
-        outg_rec_nb_col             = 'outg_rec_nb',
+        rec_nb_col                  = 'outg_rec_nb',
         trsf_pole_nb_col            = 'trsf_pole_nb', 
         prem_nb_col                 = 'aep_premise_nb', 
         serial_number_col           = 'serialnumber',
@@ -4891,7 +4892,7 @@ class CPXDfBuilder:
             mp_df                         = None, 
             ede_mp_mismatch_threshold_pct = 1.0, 
             grp_by_cols                   = group_cols, 
-            outg_rec_nb_col               = outg_rec_nb_col,
+            rec_nb_col                    = rec_nb_col,
             trsf_pole_nb_col              = trsf_pole_nb_col, 
             prem_nb_col                   = prem_nb_col, 
             serial_number_col             = serial_number_col,
@@ -4901,7 +4902,7 @@ class CPXDfBuilder:
             make_all_columns_lowercase    = make_all_columns_lowercase
         )
         group_cols        = prereq_dict['grp_by_cols']
-        outg_rec_nb_col   = prereq_dict['outg_rec_nb_col']
+        rec_nb_col        = prereq_dict['rec_nb_col']
         trsf_pole_nb_col  = prereq_dict['trsf_pole_nb_col']
         prem_nb_col       = prereq_dict['prem_nb_col']
         serial_number_col = prereq_dict['serial_number_col']
@@ -4985,7 +4986,7 @@ class CPXDfBuilder:
         #-------------------------
         # No need in wasting time grouping data we won't use
         # So, reduce evsSum_df to only the dates we're interested in 
-        # Note: Closed left (does include endpoint), open right (does not include endpoint) below
+        # Note: Open left (does not include endpoint), closed right (does include endpoint) below
         #       e.g., '-06 to -01 Days' = (-6 Days, -1 Day]
         evsSum_df = evsSum_df[
             (evsSum_df[rel_date_col] >  td_left) &
@@ -5162,7 +5163,7 @@ class CPXDfBuilder:
                     td_left        = 0, 
                     td_right       = width_i, 
                     cols_to_adjust = None, 
-                    SNs_tags       = None, 
+                    XNs_tags       = None, 
                     inplace        = True
                 )
                 #-----
@@ -5235,7 +5236,7 @@ class CPXDfBuilder:
         date_col                    = 'aep_event_dt', 
         xf_meter_cnt_col            = 'xf_meter_cnt', 
         events_tot_col              = 'events_tot', 
-        outg_rec_nb_col             = 'outg_rec_nb',
+        rec_nb_col                  = 'outg_rec_nb',
         trsf_pole_nb_col            = 'trsf_pole_nb', 
         prem_nb_col                 = 'aep_premise_nb', 
         serial_number_col           = 'serialnumber',
@@ -5263,7 +5264,7 @@ class CPXDfBuilder:
                 date_col                    = date_col, 
                 xf_meter_cnt_col            = xf_meter_cnt_col, 
                 events_tot_col              = events_tot_col, 
-                outg_rec_nb_col             = outg_rec_nb_col,
+                rec_nb_col                  = rec_nb_col,
                 trsf_pole_nb_col            = trsf_pole_nb_col, 
                 prem_nb_col                 = prem_nb_col, 
                 serial_number_col           = serial_number_col,
@@ -5292,7 +5293,7 @@ class CPXDfBuilder:
                 date_col                    = date_col, 
                 xf_meter_cnt_col            = xf_meter_cnt_col, 
                 events_tot_col              = events_tot_col, 
-                outg_rec_nb_col             = outg_rec_nb_col,
+                rec_nb_col                  = rec_nb_col,
                 trsf_pole_nb_col            = trsf_pole_nb_col, 
                 prem_nb_col                 = prem_nb_col, 
                 serial_number_col           = serial_number_col,
@@ -5306,3 +5307,307 @@ class CPXDfBuilder:
         except:
             print('CPXDfBuilder.build_rcpx_from_evsSum_df_wpreddates: _full method failed, CRASH IMMINENT!')
             assert(0)
+
+
+    #---------------------------------------------------------------------------
+    @staticmethod
+    def build_rcpx_from_evsSum_dfs_in_dir(
+        files_dir_base                 , 
+        pred_date                      , 
+        td_left                        , 
+        td_right                       , 
+        return_evsSum_df               = True, 
+        #-----
+        batch_size                     = 50, 
+        cols_and_types_to_convert_dict = None, 
+        to_numeric_errors              = 'coerce', 
+        make_all_columns_lowercase     = True, 
+        assert_all_cols_equal          = True,  
+        n_update                       = 1, 
+        #-----
+        cr_trans_dict                  = None, 
+        freq                           = '5D', 
+        group_cols                     = ['OUTG_REC_NB_GPD_FOR_SQL', 'trsf_pole_nb_GPD_FOR_SQL'], 
+        date_col                       = 'aep_event_dt', 
+        normalize_by_SNs               = True, 
+        normalize_by_time              = True, 
+        xf_meter_cnt_col               = 'xf_meter_cnt', 
+        events_tot_col                 = 'events_tot', 
+        trsf_pole_nb_col               = 'trsf_pole_nb', 
+        prem_nb_col                    = 'aep_premise_nb', 
+        serial_number_col              = 'serialnumber',
+        total_counts_col               = 'total_counts', 
+        nSNs_col                       = '_nSNs', 
+        trust_sql_grouping             = True, 
+        verbose                        = True, 
+    ):
+        r"""
+        files_dir_base should point one directory above that containing the actual data CSV files.
+            i.e., should be the save_dir_base attribute of OutageDAQ class
+            e.g., files_dir_base = r'...\LocalData\dovs_and_end_events_data\20250318\20240401_20240630\Outages'
+
+        This function only permits uniform time periods; i.e., all periods will have length equal to freq.
+        If one wants to use variable spacing (e.g., maybe the first group is one day in width, the second is
+          three days, all others equal to five days), a new function will need to be built.
+          
+        NOTE: td_left, td_right, and freq must all be in DAYS
+    
+        data_structure_df:
+            If supplied, it will be used to determine the set of final columns desired in rcpx_0_pd_i, and the method
+              MECPODf.get_reasons_subset_from_cpo_df will be used to adjust rcpx_0_pd_i accordingly.
+            If not supplied, MECPODf.get_reasons_subset_from_cpo_df is not calleds
+    
+        cr_trans_dict:
+            If not supplied, will be grabbed via the CPXDfBuilder.get_regex_setup() method
+        """
+        #----------------------------------------------------------------------------------------------------
+        data_evs_sum_vw = True
+        files_dir       = os.path.join(files_dir_base, 'EvsSums')
+        assert(os.path.exists(files_dir))
+        #-------------------------
+        time_infos_df = None # Included for if/when I implement batches as in build_rcpx_df_from_end_events_in_dir
+        #-------------------------
+        summary_dict = OutageDAQ.read_summary_dict(
+            save_dir_base      = files_dir_base, 
+            summary_dict_fname = 'summary_dict.json'
+        )
+        #-------------------------
+        file_path_glob = summary_dict['end_events_save_args']['save_name']
+        file_path_glob = Utilities.append_to_path(
+            save_path                     = file_path_glob, 
+            appendix                      = r'_[0-9]*', 
+            ext_to_find                   = '.csv', 
+            append_to_end_if_ext_no_found = True
+        )
+        #-------------------------
+        dataset    = summary_dict['dataset']
+        rec_nb_col = summary_dict['rec_nb_col']
+        #-------------------------
+        return_window_strategy = None
+        if dataset == 'prbl':
+            return_window_strategy = summary_dict['return_window_strategy']
+        #--------------------------------------------------
+        evsSum_df = CPXDfBuilder.concat_evsSum_dfs_in_dir(
+            files_dir                      = files_dir, 
+            file_path_glob                 = file_path_glob, 
+            file_path_regex                = None, 
+            batch_size                     = batch_size, 
+            cols_and_types_to_convert_dict = cols_and_types_to_convert_dict, 
+            to_numeric_errors              = to_numeric_errors, 
+            make_all_columns_lowercase     = make_all_columns_lowercase, 
+            assert_all_cols_equal          = assert_all_cols_equal,  
+            n_update                       = n_update, 
+            verbose                        = verbose
+        )
+        #--------------------------------------------------
+        if evsSum_df is None or evsSum_df.shape[0]==0:
+            return None
+        #--------------------------------------------------
+        prereq_dict = CPXDfBuilder.perform_build_rcpx_from_end_events_df_prereqs(
+            end_events_df                 = evsSum_df, 
+            mp_df                         = None, 
+            ede_mp_mismatch_threshold_pct = 1.0, 
+            grp_by_cols                   = group_cols, 
+            rec_nb_col                    = rec_nb_col,
+            trsf_pole_nb_col              = trsf_pole_nb_col, 
+            prem_nb_col                   = prem_nb_col, 
+            serial_number_col             = serial_number_col,
+            mp_df_cols                    = None,  # Only needed if mp_df is not None
+            trust_sql_grouping            = trust_sql_grouping, 
+            drop_gpd_for_sql_appendix     = True, 
+            make_all_columns_lowercase    = make_all_columns_lowercase
+        )
+        group_cols        = prereq_dict['grp_by_cols']
+        rec_nb_col        = prereq_dict['rec_nb_col']
+        trsf_pole_nb_col  = prereq_dict['trsf_pole_nb_col']
+        prem_nb_col       = prereq_dict['prem_nb_col']
+        serial_number_col = prereq_dict['serial_number_col']
+        cols_to_drop      = prereq_dict['cols_to_drop']
+        rename_cols_dict  = prereq_dict['rename_cols_dict']
+        mp_df             = prereq_dict['mp_df']
+        merge_on_ede      = prereq_dict['merge_on_ede']
+        merge_on_mp       = prereq_dict['merge_on_mp']
+        #--------------------------------------------------
+        #-------------------------
+        if make_all_columns_lowercase:
+            date_col          = date_col.lower()
+            xf_meter_cnt_col  = xf_meter_cnt_col.lower()
+            events_tot_col    = events_tot_col.lower()
+        
+        #--------------------------------------------------
+        # Look for any columns ending in _GPD_FOR_SQL and if not included in grpyby cols, then print warning!
+        found_gpd_for_sql_cols = AMI_SQL.find_gpd_for_sql_cols(
+            df        = evsSum_df, 
+            col_level = -1
+        )
+        if len(found_gpd_for_sql_cols)>0:
+            # make loweercase, if needed
+            if make_all_columns_lowercase:
+                found_gpd_for_sql_cols = [x.lower() for x in found_gpd_for_sql_cols]
+            # change names, if needed
+            found_gpd_for_sql_cols = [rename_cols_dict.get(x, x) for x in found_gpd_for_sql_cols]
+            #-----
+            not_included = list(set(found_gpd_for_sql_cols).difference(set(group_cols)))
+            if len(not_included)>0:
+                print('\n!!!!! WARNING !!!!!\nCPXDfBuilder.build_rcpx_from_evsSum_df\nFOUND POSSIBLE GROUPBY COLUMNS NOT INCLUDED IN group_cols argument')
+                print(f"\tnot_included           = {not_included}\n\tfound_gpd_for_sql_cols = {found_gpd_for_sql_cols}\n\tgroup_cols             = {group_cols}")   
+                print('!!!!!!!!!!!!!!!!!!!\n')
+        
+        #-------------------------
+        evsSum_df = CPXDfBuilder.perform_std_col_renames_and_drops(
+            df                         = evsSum_df.copy(), 
+            cols_to_drop               = cols_to_drop, 
+            rename_cols_dict           = rename_cols_dict, 
+            make_all_columns_lowercase = make_all_columns_lowercase
+        )
+        
+        #---------------------------------------------------------------------------
+        if pred_date is None:
+            nec_cols = ['doi', 't_search_min', 't_search_max']
+            #--------------------------------------------------
+            if(
+                set(nec_cols).difference(set(evsSum_df.columns)) != set() or 
+                (dataset == 'prbl' and return_window_strategy == 'entire')
+            ):
+                # Need to merge time_infos_df with end_events_df_i
+                #-------------------------
+                # Should only need to grab time_infos_df once, since built for entire directory
+                if time_infos_df is None:
+                    time_infos_df = OutageDAQ.build_baseline_time_infos_df(
+                        data_dir_base           = files_dir_base, 
+                        min_req                 = True, 
+                        summary_dict_fname      = 'summary_dict.json', 
+                        alias                   = 'mapping_table', 
+                        include_summary_paths   = False, 
+                        consolidate             = False, 
+                        PN_regex                = r"prem(?:ise)?_nbs?", 
+                        t_min_regex             = r"t(?:_search)?_min", 
+                        t_max_regex             = r"t(?:_search)?_max", 
+                        drop_gpd_for_sql        = True, 
+                        return_gpd_cols         = False, 
+                        verbose                 = verbose
+                    )
+                    #-------------------------
+                    # I suppose there could be a situation where misalignment occurs between columns in evsSum_df and time_infos_df
+                    # I think that possibility should be slim, so I'm not going to waste effort building things out for that case.
+                    # But, if that happens, one would want to set return_cols_info=True below, and set, e.g., 
+                    #   group_cols_ti = cols_of_interest_updates_ti['grp_by_cols']
+                    #   rec_nb_col_ti = cols_of_interest_updates_ti['rec_nb_col']
+                    #   etc.
+                    time_infos_df = CPXDfBuilder.update_time_infos_columns(
+                        time_infos_df              = time_infos_df, 
+                        grp_by_cols                = group_cols, 
+                        rec_nb_col                 = rec_nb_col,
+                        trsf_pole_nb_col           = trsf_pole_nb_col, 
+                        trust_sql_grouping         = trust_sql_grouping, 
+                        drop_gpd_for_sql_appendix  = True, 
+                        make_all_columns_lowercase = make_all_columns_lowercase, 
+                        return_cols_info           = False
+                    )
+                    #-------------------------
+                    assert(rec_nb_col in group_cols)
+                    assert(set(group_cols).difference(set(time_infos_df.columns))==set())
+                    assert(set(nec_cols).difference(set(time_infos_df.columns))==set())
+            
+                    #-------------------------
+                    if (dataset == 'prbl' and return_window_strategy == 'entire'):
+                        assert(
+                            rec_nb_col        in time_infos_df.columns and 
+                            f"{rec_nb_col}_0" in time_infos_df.columns
+                        )
+                        time_infos_df = time_infos_df.rename(columns={rec_nb_col : f'{rec_nb_col}_new'})
+                        #-------------------------
+                        # NOTE  : nec_cols will come from time_infos_df, so drop if contained in evsSum_df
+                        # NOTE 2: Below, in most all cases, joining on ['(no_)outg_rec_nb',   'trsf_pole_nb'] and ['(no_)outg_rec_nb_0', 'trsf_pole_nb']
+                        #         But, written to be a little more general, if group_cols changes in future
+                        evsSum_df = pd.merge(
+                            evsSum_df.drop(columns = list(set(nec_cols).intersection(set(evsSum_df.columns)))), 
+                            time_infos_df, 
+                            how      = 'left', 
+                            left_on  = natsorted(group_cols), 
+                            right_on = natsorted([f"{rec_nb_col}_0"] + [x for x in group_cols if x != rec_nb_col])
+                        )
+                        #-------------------------
+                        evsSum_df = evsSum_df.drop(columns=[rec_nb_col, f'{rec_nb_col}_0']).rename(columns={f'{rec_nb_col}_new':rec_nb_col})
+                    else:
+                        evsSum_df = pd.merge(
+                            evsSum_df.drop(columns = list(set(nec_cols).intersection(set(evsSum_df.columns)))), 
+                            time_infos_df, 
+                            how      = 'left', 
+                            left_on  = natsorted(group_cols), 
+                            right_on = natsorted(group_cols)
+                        )
+            #--------------------------------------------------
+            assert(set(nec_cols).difference(set(evsSum_df.columns))==set())
+            #-------------------------
+            # Make sure all nec_cols are date/datetimes
+            for nec_col_i in nec_cols:
+                evsSum_df[nec_col_i] = pd.to_datetime(evsSum_df[nec_col_i])
+            #-------------------------
+            assert(
+                (evsSum_df['t_search_min'] - evsSum_df['doi'] <= td_left).all() and 
+                (evsSum_df['t_search_max'] - evsSum_df['doi'] >= td_right).all()
+            )
+        
+            #-------------------------
+            # When running the SQL queries, I use between, which uses >= and <=
+            # To be consistent, I'll do that here as well
+            # NOTE: The result will likely have a few more rows than the original, due to this inclusion at both ends.
+            #       This should be fine, as everything will be sorted out when rcpx_dfs built
+            evsSum_df = evsSum_df[
+                (evsSum_df['aep_event_dt']>=evsSum_df['t_search_min']) &
+                (evsSum_df['aep_event_dt']<=evsSum_df['t_search_max'])
+            ]
+            #--------------------------------------------------
+            rcpx_df = CPXDfBuilder.build_rcpx_from_evsSum_df_wpreddates(
+                evsSum_df                   = evsSum_df, 
+                pred_date_col               = 'doi', 
+                td_left                     = td_left, 
+                td_right                    = td_right, 
+                group_cols                  = group_cols, 
+                freq                        = freq, 
+                cr_trans_dict               = cr_trans_dict, 
+                normalize_by_SNs            = normalize_by_SNs, 
+                normalize_by_time           = normalize_by_time, 
+                date_col                    = date_col, 
+                xf_meter_cnt_col            = xf_meter_cnt_col, 
+                events_tot_col              = events_tot_col, 
+                rec_nb_col                  = rec_nb_col,
+                trsf_pole_nb_col            = trsf_pole_nb_col, 
+                prem_nb_col                 = prem_nb_col, 
+                serial_number_col           = serial_number_col, 
+                total_counts_col            = total_counts_col, 
+                nSNs_col                    = nSNs_col, 
+                trust_sql_grouping          = trust_sql_grouping, 
+                drop_gpd_for_sql_appendix   = True, 
+                make_all_columns_lowercase  = make_all_columns_lowercase
+            )
+        #---------------------------------------------------------------------------
+        else:
+            rcpx_df = CPXDfBuilder.build_rcpx_from_evsSum_df(
+                evsSum_df                   = evsSum_df, 
+                prediction_date             = pred_date, 
+                td_left                     = td_left, 
+                td_right                    = td_right, 
+                cr_trans_dict               = cr_trans_dict, 
+                freq                        = freq, 
+                group_cols                  = group_cols, 
+                date_col                    = date_col, 
+                normalize_by_SNs            = normalize_by_SNs, 
+                normalize_by_time           = normalize_by_time, 
+                xf_meter_cnt_col            = xf_meter_cnt_col, 
+                events_tot_col              = events_tot_col, 
+                rec_nb_col                  = rec_nb_col,
+                trsf_pole_nb_col            = trsf_pole_nb_col, 
+                prem_nb_col                 = prem_nb_col, 
+                serial_number_col           = serial_number_col, 
+                total_counts_col            = total_counts_col, 
+                nSNs_col                    = nSNs_col, 
+                trust_sql_grouping          = trust_sql_grouping, 
+                drop_gpd_for_sql_appendix   = True, 
+                make_all_columns_lowercase  = make_all_columns_lowercase
+            )
+        #--------------------------------------------------
+        if return_evsSum_df:
+            return rcpx_df, evsSum_df
+        return rcpx_df

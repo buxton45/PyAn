@@ -1150,25 +1150,32 @@ class AMI_SQL:
             join_mp_args = {}
         #-------------------------
         if 'build_mp_kwargs' in join_mp_args:
-            join_table_alias = join_mp_args['build_mp_kwargs'].get('alias', 'MP')
-            join_col_mp      = join_mp_args['build_mp_kwargs'].get('serialnumber_col', 'mfr_devc_ser_nbr')
+            join_table_alias   = join_mp_args['build_mp_kwargs'].get('alias',            'MP')
+            join_col_mp_0      = join_mp_args['build_mp_kwargs'].get('serialnumber_col', 'mfr_devc_ser_nbr')
+            join_col_mp_1      = join_mp_args['build_mp_kwargs'].get('premise_nb_col',   'prem_nb')
         else:
-            join_table_alias = 'MP'
-            join_col_mp      = 'mfr_devc_ser_nbr'            
+            join_table_alias   = 'MP'
+            join_col_mp_0      = 'mfr_devc_ser_nbr'
+            join_col_mp_1      = 'prem_nb'
         #-------------------------
         if build_usg_kwargs is None:
-            orig_table_alias = 'USG'
-            join_col_usg     = 'serialnumber'
+            orig_table_alias   = 'USG'
+            join_col_usg_0     = 'serialnumber'
+            join_col_usg_1     = 'aep_premise_nb'
         else:
-            orig_table_alias = build_usg_kwargs['from_table_alias']
-            join_col_usg     = build_usg_kwargs['serialnumber_col']
+            orig_table_alias   = build_usg_kwargs.get('from_table_alias', 'USG')
+            join_col_usg_0     = build_usg_kwargs.get('serialnumber_col', 'serialnumber')
+            join_col_usg_1     = build_usg_kwargs.get('premise_nb_col'  , 'aep_premise_nb')
         #-------------------------
         dflt_join_mp_args = dict(
             join_type                  = 'INNER', 
             join_table                 = None, 
             join_table_alias           = join_table_alias, 
             orig_table_alias           = orig_table_alias, 
-            list_of_columns_to_join    = [[join_col_usg, join_col_mp]], 
+            list_of_columns_to_join    = [
+                [join_col_usg_0, join_col_mp_0], 
+                [join_col_usg_1, join_col_mp_1]
+            ], 
             idx                        = None, 
             run_check                  = False, 
             join_cols_to_add_to_select = ['*']
@@ -1478,6 +1485,7 @@ class AMI_SQL:
         #--------------------------------------------------
         # Serial numbers columns must be included in usg and mp as this is how the two are joined
         build_sql_ami_kwargs['serialnumber_col'] = build_sql_ami_kwargs.get('serialnumber_col', 'serialnumber')
+        build_sql_ami_kwargs['premise_nb_col']   = build_sql_ami_kwargs.get('premise_nb_col',   'aep_premise_nb')
         build_sql_ami_kwargs['from_table_alias'] = build_sql_ami_kwargs.get('from_table_alias', 'AMI')
         build_sql_ami_kwargs['alias']            = build_sql_ami_kwargs.get('alias', 'AMI_join_MP')
         
@@ -1486,12 +1494,24 @@ class AMI_SQL:
         join_mp_args['build_mp_kwargs']['cols_of_interest'] = join_mp_args['build_mp_kwargs'].get('cols_of_interest', 
                                                                                                   TableInfos.MeterPremise_TI.std_columns_of_interest)
         join_mp_args['build_mp_kwargs']['serialnumber_col'] = join_mp_args['build_mp_kwargs'].get('serialnumber_col', 'mfr_devc_ser_nbr')
+        join_mp_args['build_mp_kwargs']['premise_nb_col']   = join_mp_args['build_mp_kwargs'].get('premise_nb_col',   'prem_nb')
+        
         join_mp_args['build_mp_kwargs']['alias']            = join_mp_args['build_mp_kwargs'].get('alias', 'MP')
         #-------------------------------------
         join_mp_args_for_SQLQuery = AMI_SQL.compile_join_mp_args_for_SQLQuery(
             join_mp_args     = join_mp_args, 
             build_usg_kwargs = build_sql_ami_kwargs
         )
+        #-------------------------------------
+        # Need to make some special adjustments if opco is included in join_mp_args['build_mp_kwargs']
+        assert(not('opcos' in join_mp_args['build_mp_kwargs'] and 'opco' in join_mp_args['build_mp_kwargs']))
+        opcos = join_mp_args['build_mp_kwargs'].get('opcos', join_mp_args['build_mp_kwargs'].get('opco', None))
+        if opcos is not None:
+            mp_return_args = join_mp_args['build_mp_kwargs'].get('return_args', None)
+            if mp_return_args is None:
+                mp_return_args = dict()
+            mp_return_args['return_statement'] = False # So SQLQueryGeneric object is returned instead of string!
+            join_mp_args['build_mp_kwargs']['return_args'] = mp_return_args
         #-------------------------------------
         # Note: MeterPremise.build_sql_meter_premise will handle the case where a huge number of premise_nbs are fed
         # as input (see the max_n_prem_nbs, default value = 10000, argument in the aforementioned function)
@@ -1505,7 +1525,7 @@ class AMI_SQL:
         include_alias              = return_args.get('include_alias', False)
         prepend_with_to_stmnt      = return_args.get('prepend_with_to_stmnt', True)
         #-------------------------------------
-        join_with_CTE = join_mp_args.get('join_with_CTE', False)
+        join_with_CTE = join_mp_args.get('join_with_CTE', True)
         if not join_with_CTE:
             if return_statement:
                 return usg_sql.get_sql_statement(
@@ -2385,6 +2405,10 @@ class AMI_SQL:
         r"""
         Mainly for use in OutageDAQ.get_bsln_time_interval_infos_from_summary_file, but makes sense for
           this portion of the function to live here close to the methods used to create mapping table
+
+        EASIEST METHOD BY FAR would be to create a temporary table in memory using the syntax extracted in mapping_table_str below.
+        However, I could only find a way to achieve this using sqlite3 and a shared memory connection.
+        Unfortunately, the syntax is different between the SQL call in mapping_table_str and that needed for sqlite3
         """
         #--------------------------------------------------
         assert(isinstance(sql_statement, str))
@@ -2420,6 +2444,7 @@ class AMI_SQL:
         
         #--------------------------------------------------
         element_regex = r".*'(.*)'.*"
+        date_catcher  = r"CAST\(.*\) as DATE"
         rows_fnl      = []
         for row_i in rows:
             elements_i = row_i.split(',')
@@ -2430,6 +2455,12 @@ class AMI_SQL:
                 el_j_fnl = re.findall(element_regex, el_j)
                 assert(len(el_j_fnl)==1)
                 el_j_fnl = el_j_fnl[0]
+                #-----
+                caught_date_i = re.findall(date_catcher, el_j)
+                if len(caught_date_i)>0:
+                    assert(len(caught_date_i)==1)
+                    el_j_fnl = pd.to_datetime(el_j_fnl).strftime('%Y-%m-%d')
+                #-----                
                 elements_i_fnl.append(el_j_fnl)
             assert(len(elements_i_fnl) == len(fields))
             rows_fnl.append(elements_i_fnl)

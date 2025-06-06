@@ -182,7 +182,7 @@ class SQLQuery:
             include_with = False
         #-------------------------
         select_stmnt  = self.sql_select.get_statement_string(include_alias=True, include_table_alias_prefix=True)
-        from_stmnt    = self.sql_from.get_statement_string(include_leading_join_whitespace='\t')
+        from_stmnt    = self.sql_from.get_statement_string(include_leading_join_whitespace=None)
         where_stmnt   = self.sql_where.get_statement_string(include_table_alias_prefix=True)
         groupby_stmnt = self.sql_groupby.get_statement_string(include_table_alias_prefix=True)
         having_stmnt  = self.sql_having.get_statement_string(include_table_alias_prefix=True)

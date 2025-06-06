@@ -80,6 +80,7 @@ class OutageModeler:
     """
     def __init__(
         self,
+        data_evs_sum_vw              = True, 
         include_prbl                 = True, 
         save_base_dir                = None, 
         save_sub_dir                 = None, 
@@ -236,6 +237,7 @@ class OutageModeler:
         self.__omi_otbl  = None
         self.__omi_prbl  = None
         
+        self.data_evs_sum_vw          = data_evs_sum_vw
         self.include_prbl             = include_prbl
         self.combine_reasons_kwargs   = OutageModeler.get_default_combine_reasons_kwargs() #TODO need to implement way for user to alter
         self.__mecpx_build_info_dict  = OutageModeler.get_default_mecpx_build_info_dict()
@@ -260,6 +262,7 @@ class OutageModeler:
             acq_run_date               = self.mecpx_build_info_dict['acq_run_date_outg'], 
             data_date_ranges           = self.mecpx_build_info_dict['data_date_ranges_outg'], 
             grp_by_cols                = self.mecpx_build_info_dict['grp_by_cols_outg'], 
+            data_evs_sum_vw            = self.mecpx_build_info_dict['data_evs_sum_vw'], 
             cpx_dfs_name               = self.mecpx_build_info_dict['cpx_dfs_name_outg'], 
             acq_run_date_subdir_appndx = self.mecpx_build_info_dict['acq_run_date_subdir_appndx_outg'], 
             data_dir_base              = self.mecpx_build_info_dict['data_dir_base_outg'], 
@@ -271,6 +274,7 @@ class OutageModeler:
             acq_run_date               = self.mecpx_build_info_dict['acq_run_date_otbl'], 
             data_date_ranges           = self.mecpx_build_info_dict['data_date_ranges_otbl'], 
             grp_by_cols                = self.mecpx_build_info_dict['grp_by_cols_otbl'], 
+            data_evs_sum_vw            = self.mecpx_build_info_dict['data_evs_sum_vw'], 
             cpx_dfs_name               = self.mecpx_build_info_dict['cpx_dfs_name_otbl'], 
             acq_run_date_subdir_appndx = self.mecpx_build_info_dict['acq_run_date_subdir_appndx_otbl'], 
             data_dir_base              = self.mecpx_build_info_dict['data_dir_base_otbl'], 
@@ -283,6 +287,7 @@ class OutageModeler:
                 acq_run_date               = self.mecpx_build_info_dict['acq_run_date_prbl'], 
                 data_date_ranges           = self.mecpx_build_info_dict['data_date_ranges_prbl'], 
                 grp_by_cols                = self.mecpx_build_info_dict['grp_by_cols_prbl'], 
+                data_evs_sum_vw            = self.mecpx_build_info_dict['data_evs_sum_vw'], 
                 cpx_dfs_name               = self.mecpx_build_info_dict['cpx_dfs_name_prbl'], 
                 acq_run_date_subdir_appndx = self.mecpx_build_info_dict['acq_run_date_subdir_appndx_prbl'], 
                 data_dir_base              = self.mecpx_build_info_dict['data_dir_base_prbl'], 
@@ -711,6 +716,7 @@ class OutageModeler:
         self.combine_reasons_kwargs          = Utilities.general_copy(outg_mdlr.combine_reasons_kwargs)
         self.__mecpx_build_info_dict         = Utilities.general_copy(outg_mdlr.__mecpx_build_info_dict)
         #--------------------------------------------------
+        self.data_evs_sum_vw                 = OutageModeler.general_copy(outg_mdlr.data_evs_sum_vw)
         self.include_prbl                    = Utilities.general_copy(outg_mdlr.include_prbl)
         #-----
         self.time_infos_df                   = Utilities.general_copy(outg_mdlr.time_infos_df)
@@ -1720,8 +1726,10 @@ class OutageModeler:
         #-------------------------
         assert(isinstance(mecpx_coll_outg, MECPOCollection))
         assert(isinstance(mecpx_coll_otbl, MECPOCollection))
-        if mecpx_coll_prbl is not None:
+        if self.include_prbl:
             assert(isinstance(mecpx_coll_prbl, MECPOCollection))
+        else:
+            assert(mecpx_coll_prbl is None)
         #-------------------------
         self.mecpx_coll_outg = mecpx_coll_outg
         self.mecpx_coll_otbl = mecpx_coll_otbl
@@ -1794,7 +1802,7 @@ class OutageModeler:
         with open(os.path.join(self.save_base_dir, 'mecpo_coll_otbl.pkl'), 'wb') as handle:
             pickle.dump(self.mecpx_coll_otbl, handle, protocol=pickle.HIGHEST_PROTOCOL)
         #-----
-        if self.mecpx_coll_prbl is not None:
+        if self.include_prbl:
             with open(os.path.join(self.save_base_dir, 'mecpo_coll_prbl.pkl'), 'wb') as handle:
                 pickle.dump(self.mecpx_coll_prbl, handle, protocol=pickle.HIGHEST_PROTOCOL)
         #-------------------------
@@ -1829,7 +1837,7 @@ class OutageModeler:
         self.merged_df_outg.to_pickle(os.path.join(self.save_base_dir, f'merged_df_outg{appndx}.pkl'))
         self.merged_df_otbl.to_pickle(os.path.join(self.save_base_dir, f'merged_df_otbl{appndx}.pkl'))
         #-----
-        if self.merged_df_prbl is not None:
+        if self.include_prbl:
             self.merged_df_prbl.to_pickle(os.path.join(self.save_base_dir, f'merged_df_prbl{appndx}.pkl'))
         #-------------------------  
         if tag is None:
@@ -1945,7 +1953,8 @@ class OutageModeler:
             f"mecpo_coll_otbl: {os.path.join(self.save_base_dir, 'mecpo_coll_otbl.pkl')}"
         ]
         #-------------------------
-        if os.path.exists(os.path.join(self.save_base_dir, 'mecpo_coll_prbl.pkl')):
+        if self.include_prbl:
+            assert(os.path.exists(os.path.join(self.save_base_dir, 'mecpo_coll_prbl.pkl')))
             with open(os.path.join(self.save_base_dir, 'mecpo_coll_prbl.pkl'), 'rb') as handle:
                 mecpx_coll_prbl = pickle.load(handle)
             loaded.append(f"mecpo_coll_prbl: {os.path.join(self.save_base_dir, 'mecpo_coll_prbl.pkl')}")
@@ -2080,7 +2089,7 @@ class OutageModeler:
             [self.mecpx_coll_otbl, self.cpx_dfs_name_otbl]
         ]
         #-----
-        if self.mecpx_coll_prbl is not None:
+        if self.include_prbl:
             mecpo_colls_with_cpo_df_names.append([self.mecpx_coll_prbl, self.cpx_dfs_name_prbl])
         #----------------------------------------------------------------------------------------------------
         if verbose:
@@ -2136,7 +2145,7 @@ class OutageModeler:
             [self.mecpx_coll_otbl, self.cpx_dfs_name_otbl]
         ]
         #-----
-        if self.mecpx_coll_prbl is not None:
+        if self.include_prbl:
             mecpo_colls_with_cpo_df_names.append([self.mecpx_coll_prbl, self.cpx_dfs_name_prbl])
         #----------------------------------------------------------------------------------------------------
         if verbose:
@@ -2270,7 +2279,7 @@ class OutageModeler:
                 self.merged_df_otbl.index.unique().tolist()
             ))
             #-------------------------
-            if self.merged_df_prbl is not None and self.merged_df_prbl.shape[0]>0:
+            if self.include_prbl:
                 assert(self.merged_df_prbl.index.names==self.time_infos_df.index.names)
                 rec_nb_trsf_pole_tuples = natsorted(set(
                     rec_nb_trsf_pole_tuples + 
@@ -2341,7 +2350,7 @@ class OutageModeler:
                 counts_series = self.counts_series_otbl
             )
         
-        if self.merged_df_prbl is not None and self.merged_df_prbl.shape[0]>0:
+        if self.include_prbl:
             self.merged_df_prbl = self.gnrl_slicer.perform_slicing(self.merged_df_prbl)
             #-----
             if self.counts_series_prbl is not None and self.counts_series_prbl.shape[0]>0:
@@ -2414,7 +2423,7 @@ class OutageModeler:
         merged_df_otbl     = merged_df_otbl.reorder_levels(order=idx_names_common, axis=0)
         counts_series_otbl = counts_series_otbl.reorder_levels(order=idx_names_common)
         #-------------------------
-        if self.mecpx_coll_prbl is not None:
+        if self.include_prbl:
             merged_df_prbl = self.mecpx_coll_prbl.get_merged_cpo_dfs(
                 cpo_df_name                         = self.cpx_dfs_name_prbl, 
                 cpo_df_subset_by_mjr_mnr_cause_args = None, 
@@ -2438,13 +2447,14 @@ class OutageModeler:
             merged_df_prbl     = merged_df_prbl.reorder_levels(order=idx_names_common, axis=0)
             counts_series_prbl = counts_series_prbl.reorder_levels(order=idx_names_common)
         else:
+            merged_df_prbl     = None
             counts_series_prbl = None
         #----------------------------------------------------------------------------------------------------
         assert(
             merged_df_outg.index.names == counts_series_outg.index.names == 
             merged_df_otbl.index.names == counts_series_otbl.index.names
         )
-        if self.mecpx_coll_prbl is not None:
+        if self.include_prbl:
             assert(
                 merged_df_outg.index.names == counts_series_outg.index.names == 
                 merged_df_prbl.index.names == counts_series_prbl.index.names
@@ -2503,10 +2513,10 @@ class OutageModeler:
             isinstance(self.mecpx_coll_outg, MECPOCollection) and 
             isinstance(self.mecpx_coll_otbl, MECPOCollection)
         )
-        if self.mecpx_coll_prbl is not None:
+        if self.include_prbl:
             assert(isinstance(self.mecpx_coll_prbl, MECPOCollection))
         #-------------------------
-        self.compile_merged_dfs()
+        self.compile_merged_dfs_0()
 
     #---------------------------------------------------------------------------    
     def reduce_merged_dfs_to_top_reasons(
@@ -2528,7 +2538,7 @@ class OutageModeler:
         counts_series_outg = self.counts_series_outg
         #-------------------------
         other_dfs_w_counts_series = [[self.merged_df_otbl, self.counts_series_otbl]]
-        if self.merged_df_prbl.shape[0]>0 and self.counts_series_prbl.shape[0]>0:
+        if self.include_prbl:
             other_dfs_w_counts_series.append([self.merged_df_prbl, self.counts_series_prbl])
         #-------------------------
         # NOTE: Cannot do get_top_reasons_subset_from_merged_cpo_df for each, as they will then in general have unequal columns!
@@ -2546,7 +2556,7 @@ class OutageModeler:
         #-------------------------
         self.merged_df_outg = merged_df_outg
         self.merged_df_otbl = other_dfs[0]
-        if self.merged_df_prbl.shape[0]>0:
+        if self.include_prbl:
             assert(len(other_dfs)==2)
             self.merged_df_prbl = other_dfs[1]
             
@@ -2571,7 +2581,7 @@ class OutageModeler:
             output_col = 'total_counts', 
             SNs_tags   = None
         )
-        if self.merged_df_prbl is not None and self.merged_df_prbl.shape[0]>0:
+        if self.include_prbl:
             self.merged_df_prbl=MECPOCollection.get_total_event_counts_for_merged_cpo_df(
                 merged_df  = self.merged_df_prbl, 
                 output_col = 'total_counts', 
@@ -2602,7 +2612,7 @@ class OutageModeler:
             self.counts_series_otbl.to_frame(name=('nSNs', 'nSNs')), 
             left_index=True, right_index=True, how='inner')
         #--------------------------------------------------
-        if self.merged_df_prbl.shape[0]>0 and self.counts_series_prbl.shape[0]>0:
+        if self.include_prbl:
             assert(len(set(self.merged_df_prbl.index).difference(set(self.counts_series_prbl.index)))==0)
             self.merged_df_prbl = pd.merge(
                 self.merged_df_prbl, 
@@ -2652,7 +2662,7 @@ class OutageModeler:
         #--------------------------------------------------
         ti_dfs = [ti_df_outg, ti_df_otbl]
         #--------------------------------------------------
-        if ti_df_prbl is not None and ti_df_prbl.shape[0]>0:
+        if self.include_prbl:
             assert(tuple(self.mecpx_build_info_dict['grp_by_cols_prbl']) == self.mecpx_coll_prbl.grp_by)
             #-------------------------
             assert(set(self.mecpx_build_info_dict['std_dict_grp_by_cols_prbl'].values())==set(self.mecpx_build_info_dict['std_dict_grp_by_cols_outg'].values()))
@@ -2694,7 +2704,7 @@ class OutageModeler:
         """
         #-------------------------
         needed_idxs = self.merged_df_outg.index.tolist()+self.merged_df_otbl.index.tolist()
-        if self.merged_df_prbl is not None and self.merged_df_prbl.shape[0]>0:
+        if self.include_prbl:
             needed_idxs.extend(self.merged_df_prbl.index.tolist())
         #-------------------------
         if set(needed_idxs).difference(set(time_infos_df.index))==set():
@@ -2769,7 +2779,7 @@ class OutageModeler:
         ti_df_outg = self.mecpx_coll_outg.time_infos_df
         ti_df_otbl = self.mecpx_coll_otbl.time_infos_df
         #--------------------------------------------------
-        if self.mecpx_coll_prbl is not None:
+        if self.include_prbl:
             self.mecpx_coll_prbl.build_time_infos_df(save_to_pkl=self.__save_data, build_all=build_all)
             ti_df_prbl = self.mecpx_coll_prbl.time_infos_df
         else:
@@ -2821,7 +2831,7 @@ class OutageModeler:
         ti_df_outg = self.mecpx_coll_outg.time_infos_df
         ti_df_otbl = self.mecpx_coll_otbl.time_infos_df
         #--------------------------------------------------
-        if self.mecpx_coll_prbl is not None:
+        if self.include_prbl:
             self.mecpx_coll_prbl.build_or_load_time_infos_df(save_to_pkl=self.__save_data, verbose=verbose)
             ti_df_prbl = self.mecpx_coll_prbl.time_infos_df
         else:
@@ -2873,7 +2883,8 @@ class OutageModeler:
             f"merged_df_otbl{appndx}: {os.path.join(self.save_base_dir, f'merged_df_otbl{appndx}.pkl')}"
         ]
         #-------------------------
-        if os.path.exists(os.path.join(self.save_base_dir, f'merged_df_prbl{appndx}.pkl')):
+        if self.include_prbl:
+            assert(os.path.exists(os.path.join(self.save_base_dir, f'merged_df_prbl{appndx}.pkl')))
             self.merged_df_prbl=pd.read_pickle(os.path.join(self.save_base_dir, f'merged_df_prbl{appndx}.pkl'))
             loaded.append(f"merged_df_prbl{appndx}: {os.path.join(self.save_base_dir, f'merged_df_prbl{appndx}.pkl')}")
         #-------------------------
@@ -2971,7 +2982,7 @@ class OutageModeler:
             self.merged_df_outg.index.get_level_values(trsf_pole_idx_lvl).unique().tolist()+
             self.merged_df_otbl.index.get_level_values(trsf_pole_idx_lvl).unique().tolist()
         ))
-        if self.merged_df_prbl is not None and self.merged_df_prbl.shape[0]>0:
+        if self.include_prbl:
             assert(trsf_pole_idx_lvl in self.merged_df_prbl.index.names)
             trsf_pole_nbs = list(set(trsf_pole_nbs + self.merged_df_prbl.index.get_level_values(trsf_pole_idx_lvl).unique().tolist()))
         #--------------------------------------------------
@@ -3143,10 +3154,8 @@ class OutageModeler:
         assert(set([rec_idx_lvl, trsf_pole_idx_lvl]).difference(set(self.merged_df_outg.index.names))==set())
         assert(set([rec_idx_lvl, trsf_pole_idx_lvl]).difference(set(self.merged_df_otbl.index.names))==set())
         #-----
-        include_prbl=False
-        if self.merged_df_otbl is not None and self.merged_df_otbl.shape[0]>0:
+        if self.include_prbl:
             assert(set([rec_idx_lvl, trsf_pole_idx_lvl]).difference(set(self.merged_df_prbl.index.names))==set())
-            include_prbl = True
         #--------------------------------------------------
         # Build, load, or simply pass through (if self.eemsp_df exists and build_eemsp_df=False)
         if build_eemsp_df:
@@ -3176,7 +3185,7 @@ class OutageModeler:
             print("\nShapes BEFORE merging")
             print(f"self.merged_df_outg.shape = {self.merged_df_outg.shape}")
             print(f"self.merged_df_otbl.shape = {self.merged_df_otbl.shape}")
-            if include_prbl:
+            if self.include_prbl:
                 print(f"self.merged_df_prbl.shape = {self.merged_df_prbl.shape}")
         #--------------------------------------------------
         self.merged_df_outg = EEMSP.merge_rcpx_with_eemsp(
@@ -3195,7 +3204,7 @@ class OutageModeler:
             set_index     = True
         )
         #-------------------------
-        if include_prbl:
+        if self.include_prbl:
             self.merged_df_prbl = EEMSP.merge_rcpx_with_eemsp(
                 df_rcpx       = self.merged_df_prbl, 
                 df_eemsp      = self.eemsp_df, 
@@ -3208,7 +3217,8 @@ class OutageModeler:
             print("\nShapes AFTER merging")
             print(f"self.merged_df_outg.shape = {self.merged_df_outg.shape}")
             print(f"self.merged_df_otbl.shape = {self.merged_df_otbl.shape}")
-            print(f"self.merged_df_prbl.shape = {self.merged_df_prbl.shape}")
+            if self.include_prbl:
+                print(f"self.merged_df_prbl.shape = {self.merged_df_prbl.shape}")
             
 
     #---------------------------------------------------------------------------        
@@ -3440,7 +3450,7 @@ class OutageModeler:
             keep_time_infos     = False
         )
         #-------------------------
-        if self.merged_df_prbl.shape[0]>0:
+        if self.include_prbl:
             self.merged_df_prbl = OutageModeler.add_time_infos_features_to_df(
                 cpx_df              = self.merged_df_prbl, 
                 time_infos_df       = self.time_infos_df, 
@@ -3701,7 +3711,7 @@ class OutageModeler:
             ).isin(self.trsf_pole_nbs_to_remove)
         ].copy()
         #-------------------------
-        if self.merged_df_prbl is not None and self.merged_df_prbl.shape[0]>0:
+        if self.include_prbl:
             self.merged_df_prbl = self.merged_df_prbl.loc[
                 ~self.merged_df_prbl.index.get_level_values(
                     self.mecpx_build_info_dict['trsf_pole_nb_idfr'][1]
@@ -3774,7 +3784,7 @@ class OutageModeler:
             
         """
         #----------------------------------------------------------------------------------------------------
-        assert(Utilities.is_object_one_of_types(df, [pd.DataFrame, list]))
+        assert(df is None or Utilities.is_object_one_of_types(df, [pd.DataFrame, list]))
         if isinstance(df, list):
             return_dfs = []
             for df_i in df:
@@ -3845,10 +3855,6 @@ class OutageModeler:
             self.merged_df_outg.shape[0]>0 and 
             self.merged_df_otbl.shape[0]>0 
         )
-        #-----
-        include_prbl=False
-        if self.merged_df_prbl is not None and self.merged_df_prbl.shape[0]>0:
-            include_prbl = True
         #--------------------------------------------------
         if self.include_month or self.merge_eemsp:
             self.add_time_infos_features()
@@ -3871,7 +3877,7 @@ class OutageModeler:
             #-----
             self.merged_df_outg = self.merged_df_outg.drop(columns=self.an_keys_to_drop, level=0)
             self.merged_df_otbl = self.merged_df_otbl.drop(columns=self.an_keys_to_drop, level=0)
-            if include_prbl:
+            if self.include_prbl:
                 self.merged_df_prbl = self.merged_df_prbl.drop(columns=self.an_keys_to_drop, level=0)  
     
         #--------------------------------------------------
@@ -3882,7 +3888,7 @@ class OutageModeler:
             #-----
             self.merged_df_outg[self.from_outg_col] = 1
             self.merged_df_otbl[self.from_outg_col] = 0
-            if include_prbl:
+            if self.include_prbl:
                 self.merged_df_prbl[self.from_outg_col] = 0
                 
         #--------------------------------------------------
@@ -3916,7 +3922,7 @@ class OutageModeler:
             self.merged_df_outg[[self.target_col, self.from_outg_col]], 
             self.merged_df_otbl[[self.target_col, self.from_outg_col]]
         ])
-        if include_prbl:
+        if self.include_prbl:
             self.__df_target = pd.concat([
                 self.__df_target, 
                 self.merged_df_prbl[[self.target_col, self.from_outg_col]]
@@ -3926,7 +3932,7 @@ class OutageModeler:
         # Make sure DFs end with self.from_outg_col, self.target_col
         self.merged_df_outg = Utilities_df.move_cols_to_back(df=self.merged_df_outg, cols_to_move=[self.from_outg_col, self.target_col])
         self.merged_df_otbl = Utilities_df.move_cols_to_back(df=self.merged_df_otbl, cols_to_move=[self.from_outg_col, self.target_col])
-        if include_prbl:
+        if self.include_prbl:
             self.merged_df_prbl = Utilities_df.move_cols_to_back(df=self.merged_df_prbl, cols_to_move=[self.from_outg_col, self.target_col])
             
         #--------------------------------------------------
@@ -4521,7 +4527,7 @@ class OutageModeler:
             return
         #-----
         include_prbl = False
-        if self.merged_df_prbl is not None and self.merged_df_prbl.shape[0]>0:
+        if self.include_prbl:
             include_prbl = True
         #----------------------------------------------------------------------------------------------------
         if self.date_0_holdout is not None or self.date_1_holdout is not None:

@@ -50,6 +50,7 @@ class OMInput:
         acq_run_date               , 
         data_date_ranges           , 
         grp_by_cols                , 
+        data_evs_sum_vw            = True, 
         cpx_dfs_name               = 'rcpo_df_norm_by_xfmr_nSNs', 
         acq_run_date_subdir_appndx = None, 
         data_dir_base              = r'C:\Users\s346557\Documents\LocalData\dovs_and_end_events_data', 
@@ -107,6 +108,7 @@ class OMInput:
             acq_run_date               = acq_run_date, 
             data_date_ranges           = data_date_ranges, 
             grp_by_cols                = grp_by_cols, 
+            data_evs_sum_vw            = data_evs_sum_vw, 
             acq_run_date_subdir_appndx = acq_run_date_subdir_appndx, 
             data_dir_base              = data_dir_base,
             cpx_dfs_name               = cpx_dfs_name, 
@@ -116,6 +118,7 @@ class OMInput:
             'acq_run_date', 
             'data_date_ranges',
             'grp_by_cols', 
+            'data_evs_sum_vw', 
             'acq_run_date_subdir_appndx', 
             'data_dir_base', 
             'cpx_dfs_name'
@@ -170,6 +173,9 @@ class OMInput:
     @property
     def grp_by_cols(self):
         return self.__mecpx_build_info_dict['grp_by_cols']
+    @property
+    def data_evs_sum_vw(self):
+        return self.__mecpx_build_info_dict['data_evs_sum_vw']
     @property
     def acq_run_date_subdir_appndx(self):
         return self.__mecpx_build_info_dict['acq_run_date_subdir_appndx']
@@ -388,6 +394,7 @@ class OMInput:
         mecpx_build_info_dict                                 = dict()
         #-------------------------
         mecpx_build_info_dict['acq_run_date']                 = '20240101'
+        mecpx_build_info_dict['data_evs_sum_vw']              = True
         mecpx_build_info_dict['acq_run_date_subdir_appndx']   = None
         mecpx_build_info_dict['data_date_ranges']             = [
             ['2023-01-01', '2023-12-31']
@@ -516,6 +523,7 @@ class OMInput:
         dataset                    , 
         acq_run_date               , 
         data_date_ranges           , 
+        data_evs_sum_vw            , 
         acq_run_date_subdir_appndx = None, 
         data_dir_base              = r'C:\Users\s346557\Documents\LocalData\dovs_and_end_events_data', 
         assert_found               = True
@@ -527,7 +535,8 @@ class OMInput:
                 data_dir_base, 
                 acq_run_date_subdir, 
                 date_pd_subdir, 
-                ODI.get_subdir(dataset)
+                ODI.get_subdir(dataset), 
+                end_events_method or evs_sum_vw_method (depending on data_evs_sum_vw value)
             )
         where acq_run_date_subdir = acq_run_date + acq_run_date_subdir_appndx (or, = acq_run_date if acq_run_date_subdir_appndx is None)
         and   date_pd_subdir corresponds to the particular date range, dataset_subdirs can be found in OutageDataInfo class (in OutageDAQ module)
@@ -559,6 +568,11 @@ class OMInput:
         if acq_run_date_subdir_appndx is not None:
             acq_run_date_subdir += acq_run_date_subdir_appndx
         #-------------------------
+        if data_evs_sum_vw:
+            method_subdir = 'evs_sum_vw_method'
+        else:
+            method_subdir = 'end_events_method'
+        #-------------------------
         data_dirs_dict = {}
         for date_0, date_1 in data_date_ranges:
             date_pd_subdir = f"{date_0.replace('-','')}_{date_1.replace('-','')}"
@@ -566,7 +580,8 @@ class OMInput:
                 data_dir_base, 
                 acq_run_date_subdir, 
                 date_pd_subdir, 
-                ODI.get_subdir(dataset)
+                ODI.get_subdir(dataset), 
+                method_subdir
             )
             if assert_found and not os.path.isdir(data_dir_i):
                 print(f'Directory DNE!\n\t{data_dir_i}\nCRASH IMMINENT!!!!!!')
@@ -601,6 +616,7 @@ class OMInput:
             dataset                    = self.dataset, 
             acq_run_date               = self.acq_run_date, 
             data_date_ranges           = self.data_date_ranges, 
+            data_evs_sum_vw            = self.data_evs_sum_vw, 
             acq_run_date_subdir_appndx = self.acq_run_date_subdir_appndx, 
             data_dir_base              = self.data_dir_base, 
             assert_found               = assert_found
@@ -616,6 +632,7 @@ class OMInput:
         acq_run_date               , 
         data_date_ranges           , 
         grp_by_cols                , 
+        data_evs_sum_vw            , 
         acq_run_date_subdir_appndx = None, 
         data_dir_base              = r'C:\Users\s346557\Documents\LocalData\dovs_and_end_events_data'
     ):
@@ -682,6 +699,7 @@ class OMInput:
             dataset                    = dataset, 
             acq_run_date               = acq_run_date, 
             data_date_ranges           = data_date_ranges, 
+            data_evs_sum_vw            = data_evs_sum_vw, 
             acq_run_date_subdir_appndx = acq_run_date_subdir_appndx, 
             data_dir_base              = data_dir_base, 
             assert_found               = True
@@ -729,6 +747,7 @@ class OMInput:
             acq_run_date               = self.acq_run_date, 
             data_date_ranges           = self.data_date_ranges, 
             grp_by_cols                = self.grp_by_cols, 
+            data_evs_sum_vw            = self.data_evs_sum_vw, 
             acq_run_date_subdir_appndx = self.acq_run_date_subdir_appndx,  
             data_dir_base              = self.data_dir_base
         )
@@ -745,6 +764,7 @@ class OMInput:
         grp_by_cols                  , 
         days_min_max_outg_td_windows , 
         old_to_new_keys_dict         , 
+        data_evs_sum_vw              , 
         acq_run_date_subdir_appndx   = None, 
         coll_label                   = None, 
         barplot_kwargs_shared        = None, 
@@ -776,6 +796,7 @@ class OMInput:
             acq_run_date               = acq_run_date, 
             data_date_ranges           = data_date_ranges, 
             grp_by_cols                = grp_by_cols, 
+            data_evs_sum_vw            = data_evs_sum_vw, 
             acq_run_date_subdir_appndx = acq_run_date_subdir_appndx, 
             data_dir_base              = data_dir_base
         )
@@ -839,6 +860,7 @@ class OMInput:
             acq_run_date                 = self.acq_run_date, 
             data_date_ranges             = self.data_date_ranges, 
             grp_by_cols                  = self.grp_by_cols, 
+            data_evs_sum_vw              = self.data_evs_sum_vw, 
             days_min_max_outg_td_windows = self.days_min_max_outg_td_windows, 
             old_to_new_keys_dict         = self.old_to_new_keys_dict, 
             acq_run_date_subdir_appndx   = self.acq_run_date_subdir_appndx, 

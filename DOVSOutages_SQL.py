@@ -511,32 +511,56 @@ class DOVSOutages_SQL:
         MNR_CAUSE_CD_col = kwargs.get('MNR_CAUSE_CD_col', 'MNR_CAUSE_CD')
         MJR_CAUSE_CD     = kwargs.get('MJR_CAUSE_CD', None)
         MNR_CAUSE_CD     = kwargs.get('MNR_CAUSE_CD', None)
-        mjr_mnr_cause = kwargs.get('mjr_mnr_cause', None)
+        mjr_mnr_cause    = kwargs.get('mjr_mnr_cause', None)
         if mjr_mnr_cause is not None:
             sql.sql_where.add_where_statements([dict(field_desc=MJR_CAUSE_CD_col, table_alias_prefix=kwargs['from_table_alias'], comparison_operator='=', value=mjr_mnr_cause[0]), 
                                                 dict(field_desc=MNR_CAUSE_CD_col, table_alias_prefix=kwargs['from_table_alias'], comparison_operator='=', value=mjr_mnr_cause[1])], 
                                                idxs=None, run_check=True)
         if MJR_CAUSE_CD is not None:
-            assert(Utilities.is_object_one_of_types(MJR_CAUSE_CD, [dict, SQLWhere]))
-            if isinstance(MJR_CAUSE_CD, SQLWhere):
+            if isinstance(MJR_CAUSE_CD, SQLWhereElement):
                 sql.sql_where.add_where_statement(MJR_CAUSE_CD, idx=None, run_check=True)
-            else:
+            elif isinstance(MJR_CAUSE_CD, dict):
                 sql.sql_where.add_where_statement(**MJR_CAUSE_CD, idx=None, run_check=True)
-        if MNR_CAUSE_CD is not None:
-            assert(Utilities.is_object_one_of_types(MNR_CAUSE_CD, [dict, SQLWhere]))
-            if isinstance(MNR_CAUSE_CD, SQLWhere):
-                sql.sql_where.add_where_statement(MNR_CAUSE_CD, idx=None, run_check=True)
             else:
-                sql.sql_where.add_where_statement(**MNR_CAUSE_CD, idx=None, run_check=True)                                                     
+                sql.sql_where = SQLWhere.add_where_statement_equality_or_in(
+                    sql_where          = sql.sql_where, 
+                    field_desc         = MJR_CAUSE_CD_col, 
+                    value              = MJR_CAUSE_CD, 
+                    needs_quotes       = True, 
+                    table_alias_prefix = kwargs['from_table_alias'], 
+                    idx                = None
+                )
+        if MNR_CAUSE_CD is not None:
+            if isinstance(MNR_CAUSE_CD, SQLWhereElement):
+                sql.sql_where.add_where_statement(MNR_CAUSE_CD, idx=None, run_check=True)
+            elif isinstance(MNR_CAUSE_CD, dict):
+                sql.sql_where.add_where_statement(**MNR_CAUSE_CD, idx=None, run_check=True)
+            else:
+                sql.sql_where = SQLWhere.add_where_statement_equality_or_in(
+                    sql_where          = sql.sql_where, 
+                    field_desc         = MNR_CAUSE_CD_col, 
+                    value              = MNR_CAUSE_CD, 
+                    needs_quotes       = True, 
+                    table_alias_prefix = kwargs['from_table_alias'], 
+                    idx                = None
+                )                                                   
         #-----                                          
         DEVICE_CD_col = kwargs.get('DEVICE_CD_col', 'DEVICE_CD')
         DEVICE_CD     = kwargs.get('DEVICE_CD', None)
         if DEVICE_CD is not None:
-            assert(Utilities.is_object_one_of_types(DEVICE_CD, [dict, SQLWhere]))
-            if isinstance(DEVICE_CD, SQLWhere):
+            if isinstance(DEVICE_CD, SQLWhereElement):
                 sql.sql_where.add_where_statement(DEVICE_CD, idx=None, run_check=True)
-            else:
+            elif isinstance(DEVICE_CD, dict):
                 sql.sql_where.add_where_statement(**DEVICE_CD, idx=None, run_check=True)
+            else:
+                sql.sql_where = SQLWhere.add_where_statement_equality_or_in(
+                    sql_where          = sql.sql_where, 
+                    field_desc         = DEVICE_CD_col, 
+                    value              = DEVICE_CD, 
+                    needs_quotes       = True, 
+                    table_alias_prefix = kwargs['from_table_alias'], 
+                    idx                = None
+                )      
         #-----
         CI_NB_col = kwargs.get('CI_NB_col', 'CI_NB')
         CI_NB_min = kwargs.get('CI_NB_min', None)

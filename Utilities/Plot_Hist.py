@@ -400,7 +400,10 @@ def plot_hist(
         In such a case, the first plotted should handle the general kwargs, and all
         others should leave them alone.
     """
-    #-------------------------
+    #--------------------------------------------------
+    # Likely be clipping or altering df in some way.  Copy so isn't affected outside
+    df = df.copy()
+    #--------------------------------------------------
     assert(orient=='v' or orient=='h')
     #-------------------------
     n_patches_beg = len(ax.patches) # Needed in case properties of over/underflow bins need changed

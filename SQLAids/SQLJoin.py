@@ -303,19 +303,29 @@ class SQLJoinCollection():
         
     def get_statement_string(
         self                       , 
-        include_leading_whitespace = '\t'
+        include_leading_whitespace = None
     ):
+        r"""
+        include_leading_whitespace:
+            If included, this should be the whitespace to include, e.g., '\t'
+            If True, '\t' will be used
+        """
         #---------------
         if len(self.joins_dict)==0:
             return ''
         #---------------
         _ = SQLJoinCollection.check_joins_dict(self.joins_dict, enforce_pass=True)
         #---------------
+        if include_leading_whitespace == True:
+            include_leading_whitespace = '\t'
+        if include_leading_whitespace == False:
+            include_leading_whitespace = None
+        #---------------
         sql = ""
         for idx in range(len(self.joins_dict)):
             stmnt_i = self.joins_dict[idx].get_statement_string()
             if include_leading_whitespace is not None:
-                stmnt_i = f"\t{stmnt_i}"
+                stmnt_i = f"{include_leading_whitespace}{stmnt_i}"
             if idx>0:
                 stmnt_i = f"\n{stmnt_i}"
             sql += stmnt_i

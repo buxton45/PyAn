@@ -6,7 +6,6 @@ import re
 import pathlib
 from pathlib import Path
 from importlib.machinery import SourceFileLoader
-import pyarmor
 
 
 #--------------------------------------------------------------------
@@ -158,23 +157,6 @@ def get_config_entry(field):
     #-------------------------
     assert(field in config)
     return config[field]
-
-def check_creds(
-    aep_user_id, 
-    analysis_dir
-):
-    r"""
-    """
-    #-------------------------
-    try:
-        sys.path.insert(0, os.path.join(analysis_dir, 'dist'))
-        import ConfigCheck
-        ConfigCheck.check_config(
-            aep_user_id  = aep_user_id, 
-            analysis_dir = analysis_dir
-        )
-    except:
-        return
         
 def check_config():
     config_path = os.path.join(pathlib.Path(__file__).parent.resolve(), r'config.yaml')
@@ -203,11 +185,6 @@ def check_config():
     config['config_verified'] = True
     with open(config_path, 'w') as file:
         yaml.dump(config, file)
-    #-------------------------
-    check_creds(
-        aep_user_id  = config['aep_user_id'], 
-        analysis_dir = analysis_dir
-    )
 
 #--------------------------------------------------------------------
 def get_analysis_dir():

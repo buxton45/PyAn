@@ -23,6 +23,7 @@ import Utilities_config
 #-----
 from MeterPremise import MeterPremise
 #-----
+from AMI_SQL import AMI_SQL
 from DOVSOutages_SQL import DOVSOutages_SQL
 #-----
 from GenAn import GenAn
@@ -1443,7 +1444,7 @@ class OutageMdlrPrep:
             mp_df                         = mp_df, 
             ede_mp_mismatch_threshold_pct = 1.0, 
             grp_by_cols                   = grp_by_cols, 
-            outg_rec_nb_col               = outg_rec_nb_col,
+            rec_nb_col                    = outg_rec_nb_col,
             trsf_pole_nb_col              = trsf_pole_nb_col, 
             prem_nb_col                   = prem_nb_col, 
             serial_number_col             = serial_number_col,
@@ -1455,7 +1456,7 @@ class OutageMdlrPrep:
         )
         paths             = prereq_dict['paths']
         grp_by_cols       = prereq_dict['grp_by_cols']
-        outg_rec_nb_col   = prereq_dict['outg_rec_nb_col']
+        outg_rec_nb_col   = prereq_dict['rec_nb_col']
         trsf_pole_nb_col  = prereq_dict['trsf_pole_nb_col']
         prem_nb_col       = prereq_dict['prem_nb_col']
         serial_number_col = prereq_dict['serial_number_col']
@@ -1727,7 +1728,7 @@ class OutageMdlrPrep:
                 )
         #-------------------------
         # Drop _gpd_for_sql appendix from any index names 
-        rcpo_full = CPXDfBuilder.rename_all_index_names_with_gpd_for_sql_appendix(rcpo_full)
+        rcpo_full = AMI_SQL.rename_all_index_names_with_gpd_for_sql_appendix(rcpo_full)
         #-------------------------
         if not build_ede_typeid_to_reason_df:
             return rcpo_full

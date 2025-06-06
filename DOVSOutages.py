@@ -2626,8 +2626,10 @@ class DOVSOutages(GenAn):
                 if int(outg_rec_nb_i) < 0:
                     continue
                 # There should only be a single unique dt_on_ts and dt_off_ts_full for each outage
-                if(df_i[dt_on_ts_col].nunique()!=1 or 
-                   df_i[df_off_ts_full_col].nunique()!=1):
+                if(
+                    df_i[dt_on_ts_col].nunique()       > 1 or 
+                    df_i[df_off_ts_full_col].nunique() > 1
+                ):
                     print(f'outg_rec_nb_i = {outg_rec_nb_i}')
                     print(f'df_i[dt_on_ts_col].nunique()       = {df_i[dt_on_ts_col].nunique()}')
                     print(f'df_i[df_off_ts_full_col].nunique() = {df_i[df_off_ts_full_col].nunique()}')

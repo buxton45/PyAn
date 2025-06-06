@@ -1748,7 +1748,6 @@ class AMIEndEvents(GenAn):
                 final_col_i_idx_level = rcpo_df_long.index.names.index(final_col_i)
                 rcpo_df_long          = rcpo_df_long.reset_index(level=final_col_i_idx_level)
         #-------------------------
-        assert(len(set(rcpo_df_long.columns).difference(set(final_cols)))==1)
         rcpo_df_wide = rcpo_df_long.pivot(columns=final_cols)
         #-------------------------
         if fillna_w_0:

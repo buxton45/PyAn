@@ -1266,7 +1266,7 @@ class AMINonVee(GenAn):
                 df               = data_i, 
                 col_idfr         = x, 
                 data_sep         = data_sep, 
-                return_endpoints = True
+                return_type      = 'endpoints'
             )
             #-----
             for block_beg_j, block_end_j in cont_blocks_i:

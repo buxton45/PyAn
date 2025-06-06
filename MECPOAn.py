@@ -25,6 +25,7 @@ import itertools
 from AMIEndEvents import AMIEndEvents
 from DOVSOutages import DOVSOutages
 from MECPODf import MECPODf, OutageDType
+from OutageDAQ import OutageDAQ
 #--------------------------------------------------
 sys.path.insert(0, Utilities_config.get_utilities_dir())
 import Utilities
@@ -916,7 +917,9 @@ class MECPOAn:
             pkls_dir = os.path.join(base_dir, pkls_subdir)
         else:
             pkls_dir=base_dir
-        assert(os.path.isdir(pkls_dir))
+        if not os.path.isdir(pkls_dir):
+            print(f'DIRECTORY DNE! pkls_dir = {pkls_dir}')
+            assert(0)
         #----------------------------------------------------------------------------------------------------
         rcpo_df_OG                = MECPOAn.read_pickle_if_exists(pkls_dir, f'rcpo{naming_tag}_df_OG.pkl', verbose=True)
         #-------------------------
@@ -1076,181 +1079,20 @@ class MECPOAn:
         pkls_base_dir = str(Path(self.cpx_pkls_dir).parent)
         #-----
         base_dir = str(Path(pkls_base_dir).parent)
-        assert(os.path.isdir(base_dir))
+        if not os.path.isdir(base_dir):
+            print(f'DIRECTORY DNE! base_dir = {base_dir}')
+            assert(0)
         self.base_dir = base_dir
         #-----
         end_events_dir = os.path.join(self.base_dir, 'EndEvents')
-        assert(os.path.isdir(end_events_dir))
+        if not os.path.isdir(end_events_dir):
+            print(f'DIRECTORY DNE! end_events_dir = {end_events_dir}')
+            assert(0)
         self.end_events_dir = end_events_dir
         #-------------------------
         self.load_dfs_from_dict(input_dict=dfs_dict)
         
     #-----------------------------------------------------------------------------------------------------------------------------    
-    @staticmethod
-    def get_bsln_time_interval_infos_from_summary_file(
-        summary_path , 
-        date_only    = False, 
-        date_col     = 'aep_event_dt'
-    ):
-        r"""
-        Specialized function.
-        TODO!!!!!!!!!!!!!!!!!!
-        In the future, this stuff should probably be output at run-time somewhere    
-        """
-        #-------------------------
-        assert(os.path.exists(summary_path))
-        #-------------------------
-        f = open(summary_path)
-        summary_json_data = json.load(f)
-        assert('sql_statement' in summary_json_data)
-        sql_statement = summary_json_data['sql_statement']
-        #-------------------------
-        f.close()
-        #-------------------------
-        # Find the last instance of "SELECT * FROM USG_X" to extract how many sets of 
-        # t_min,t_max,prem_nbs to expect.
-        # If not found, expect only one
-        pattern = r"SELECT \* FROM .*_(\d*)$"
-        found_all = re.findall(pattern, sql_statement)
-        if len(found_all)==0:
-            n_groups_expected = 1
-        else:
-            assert(len(found_all)==1)
-            n_groups_expected = int(found_all[0])+1
-        #-------------------------
-        try:
-            addtnl_groupby_cols=summary_json_data['build_sql_function_kwargs']['df_args']['addtnl_groupby_cols']
-        except:
-            addtnl_groupby_cols=None
-        #-------------------------
-        # So obnoxious...using flags=re.MULTILINE|re.DOTALL with .* was causing the trailing ) and \n to match in premise numbers
-        #   This also made it such that only the last occurrence of the match was returned.
-        #   What I found to work was eliminating the re.DOTALL flag and [\s\S] to match a newline or any symbol.
-        #     Typically, . matches everything BUT newline characters (unless using re.DOTALL).
-        #     The main idea is that the opposite shorthand classes inside a character class match any symbol there is in the input string.
-        # NOTE: The new pattern should find both, e.g.:
-        #       (a) un_rin.aep_premise_nb IN ('102186833','102252463','106876833','108452463')
-        #       (b) un_rin.aep_premise_nb = '072759453'
-        #       However, now need the if prem_nbs[0]=='(' block below
-        #       ALSO: (?: TIMESTAMP){0,1} needed to be included (twice) after switch to Athena
-        #             See, e.g., is_timestamp in SQLWhere class
-
-        # pattern = r"SELECT[\s\S]+?"\
-        #           r"CAST.* BETWEEN '(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})' AND '(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})'[\s\S]+?"\
-        #           r"aep_premise_nb IN \((.*)\)[\s\S]+?"    
-        #-------------------------
-        time_intrvl_pttrn = r"CAST.* BETWEEN(?: TIMESTAMP){0,1} '(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})' AND(?: TIMESTAMP){0,1} '(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})'[\s\S]+?"
-        if date_only:
-            time_intrvl_pttrn = date_col + r"\s*BETWEEN '(\d{4}-\d{2}-\d{2})' AND '(\d{4}-\d{2}-\d{2})'[\s\S]+?"
-        #-------------------------
-        pattern = r"SELECT[\s\S]+?"
-        if addtnl_groupby_cols is not None:
-            for addtnl_groupby_col in addtnl_groupby_cols:
-                pattern += r"'(.*)' AS {}[\s\S]+?".format(addtnl_groupby_col)
-        pattern += time_intrvl_pttrn + r"aep_premise_nb?\s*(?:IN|=)?\s*(\((?:.*)\)|(?:\'.*\'))[\s\S]+?"
-        #-------------------------
-        found_all = re.findall(pattern, sql_statement, flags=re.MULTILINE)
-        assert(len(found_all)>0)
-        #-------------------------
-        return_coll=[]
-        for found in found_all:
-            if addtnl_groupby_cols is None:
-                assert(len(found)==3)
-                t_min,t_max,prem_nbs = found
-            else:
-                assert(len(found)==3+len(addtnl_groupby_cols))
-                addtnl_groupby_cols_vals = found[:len(addtnl_groupby_cols)]
-                t_min,t_max,prem_nbs = found[-3:]
-
-            if prem_nbs[0]=='(':
-                assert(prem_nbs[-1]==')')
-                prem_nbs=prem_nbs[1:-1]
-            prem_nbs = prem_nbs.replace('\'', '')
-            prem_nbs = prem_nbs.split(',')
-            return_dict_i = {
-                'prem_nbs':prem_nbs, 
-                't_min':t_min, 
-                't_max':t_max
-            }
-            if addtnl_groupby_cols is not None:
-                assert(len(addtnl_groupby_cols)==len(addtnl_groupby_cols_vals))
-                for i_col,addtnl_groupby_col in enumerate(addtnl_groupby_cols):
-                    return_dict_i[addtnl_groupby_col] = addtnl_groupby_cols_vals[i_col]
-            return_coll.append(return_dict_i)
-        #-------------------------
-        return return_coll
-        
-        
-        
-    @staticmethod
-    def get_bsln_time_interval_infos_df_from_summary_file(
-        summary_path            , 
-        output_prem_nbs_col     = 'prem_nbs', 
-        output_t_min_col        = 't_min', 
-        output_t_max_col        = 't_max', 
-        make_addtnl_groupby_idx = True,
-        include_summary_path    = False, 
-        date_only               = False, 
-        date_col                = 'aep_event_dt'
-    ):
-        r"""
-        Returns a pd.DataFrame version of MECPOAn.get_bsln_time_interval_infos_from_summary_file
-        """
-        #-------------------------
-        return_df = pd.DataFrame()
-        bsln_time_infos = MECPOAn.get_bsln_time_interval_infos_from_summary_file(
-            summary_path = summary_path, 
-            date_only    = date_only, 
-            date_col     = date_col
-        )
-        expected_cols = ['prem_nbs', 't_min', 't_max']
-        for i,bsln_time_info_i in enumerate(bsln_time_infos):
-            #-------------------------
-            # To mirror what is done for outages, where the period of interest is taken before the outages,
-            #   use t_max as DT_OFF_TS_FULL
-            #   *** Technically, for both outages and non-outages, the data were collected 30 days before AND after
-            #       the event (where event is outage for outages, and event is randomly selected date for non-outages)
-            #       Therefore, to exactly mirror the outages, I suppose one should take DT_OFF_TS_FULL to be the mid-point
-            #       betweeen t_min and t_max.  However, this doesn't really matter, all that matters is there are entries
-            #       at least window_width_days = days_max_outg_td_window-days_min_outg_td_window+1 before whatever is called
-            #       DT_OFF_TS_FULL
-            #-------------------------
-            bsln_time_info_df_i = pd.DataFrame(bsln_time_info_i)
-            # Make sure expected columns are found
-            if i==0:
-                assert(len(set(expected_cols).difference(set(bsln_time_info_df_i.columns)))==0)
-                addtnl_groupby_cols = [x for x in bsln_time_info_df_i.columns if x not in expected_cols]
-                expected_cols.extend(addtnl_groupby_cols)
-            assert(len(set(expected_cols).symmetric_difference(set(bsln_time_info_df_i.columns)))==0)
-            return_df = pd.concat([return_df, bsln_time_info_df_i], ignore_index=True)
-        #-------------------------
-        # Make prem nbs into list
-        return_df=return_df.groupby(addtnl_groupby_cols+['t_min', 't_max']).agg(list)
-        return_df=return_df.reset_index()
-        #-------------------------
-        # Rename columns
-        rename_dict = {
-            'prem_nbs':output_prem_nbs_col, 
-            't_min':output_t_min_col, 
-            't_max':output_t_max_col
-        }
-        return_df = return_df.rename(columns=rename_dict)
-        #-------------------------
-        if date_only:
-            return_df[output_t_min_col] = pd.to_datetime(return_df[output_t_min_col], format='%Y-%m-%d')
-            return_df[output_t_max_col] = pd.to_datetime(return_df[output_t_max_col], format='%Y-%m-%d')
-        else:
-            return_df[output_t_min_col] = pd.to_datetime(return_df[output_t_min_col], format='%Y-%m-%d %H:%M:%S')
-            return_df[output_t_max_col] = pd.to_datetime(return_df[output_t_max_col], format='%Y-%m-%d %H:%M:%S')
-        #-------------------------
-        if make_addtnl_groupby_idx:
-            return_df=return_df.set_index(addtnl_groupby_cols)
-        if include_summary_path:
-            return_df['summary_path'] = summary_path
-        #-------------------------
-        return return_df
-    
-    
     @staticmethod
     def get_bsln_time_interval_infos_df_from_summary_files(
         summary_paths           , 
@@ -1259,8 +1101,8 @@ class MECPOAn:
         output_t_max_col        = 't_max', 
         make_addtnl_groupby_idx = True, 
         include_summary_paths   = False, 
-        date_only               = False, 
-        date_col                = 'aep_event_dt'
+        date_only               = False,         # Doesn't do anything anymore!
+        date_col                = 'aep_event_dt' # Doesn't do anything anymore!
     ):
         r"""
         Handles multiple summary files
@@ -1271,36 +1113,51 @@ class MECPOAn:
         Note: The reason for drop duplicates is for the case where a collection is split over mulitple
               files/runs (i.e., the asynchronous case)
         """
-        return_df = pd.DataFrame()
-        for summary_path in summary_paths:
-            df_i = MECPOAn.get_bsln_time_interval_infos_df_from_summary_file(
-                summary_path            = summary_path, 
-                output_prem_nbs_col     = output_prem_nbs_col, 
-                output_t_min_col        = output_t_min_col, 
-                output_t_max_col        = output_t_max_col, 
-                make_addtnl_groupby_idx = False, 
-                include_summary_path    = include_summary_paths, 
-                date_only               = date_only, 
-                date_col                = date_col
+        dfs       = []
+        gpd_cols  = None
+        for i,summary_path in enumerate(summary_paths):
+            df_i, gpd_cols_i = OutageDAQ.get_bsln_time_interval_infos_df_from_summary_file(
+                summary_path         = summary_path, 
+                alias                = 'mapping_table', 
+                include_summary_path = include_summary_paths, 
+                consolidate          = True, 
+                PN_regex             = r"prem(?:ise)?_nbs?", 
+                t_min_regex          = r"t(?:_search)?_min", 
+                t_max_regex          = r"t(?:_search)?_max", 
+                drop_gpd_for_sql     = True, 
+                return_gpd_cols      = True, 
+                verbose              = False
             )
-            return_df = pd.concat([return_df, df_i], ignore_index=True)
+            df_i = df_i.reset_index()
+            #-------------------------
+            if i==0:
+                gpd_cols = gpd_cols_i
+            #-------------------------
+            assert(set(gpd_cols).symmetric_difference(set(gpd_cols_i))==set())
+            dfs.append(df_i)
+        #-------------------------
+        return_df = Utilities_df.concat_dfs(
+            dfs                  = dfs, 
+            axis                 = 0, 
+            make_col_types_equal = False
+        )
         #-------------------------
         # It is possible that a group was split over multiple files/runs
         #   e.g., if not run using slim, then a particular outage/transformer group might have premises split
         #     across neighboring files
         # The method below will combine such entries
-        groupby_cols = [x for x in return_df.columns if x not in [output_prem_nbs_col, 'summary_path']]
         cols_shared_by_group=None
-        cols_to_collect_in_lists=[output_prem_nbs_col]
-        if 'summary_path' in return_df.columns:
-            cols_to_collect_in_lists.append('summary_path')
+        cols_to_collect_in_lists=['PN']
         # NOTE: Make custom_aggs_for_list_cols a dict instead of function so desired functionality is achieved
         #         regardless of presence of 'summary_path'
-        custom_aggs_for_list_cols={output_prem_nbs_col : lambda x: list(set(itertools.chain(*x)))}
+        custom_aggs_for_list_cols={'PN' : lambda x: list(set(itertools.chain(*x)))}
+        if 'summary_path' in return_df.columns:
+            cols_to_collect_in_lists.append('summary_path')
+            custom_aggs_for_list_cols['summary_path'] = lambda x: list(set(itertools.chain(*x)))
         #-----
         return_df = Utilities_df.consolidate_df(
             df=return_df, 
-            groupby_cols=groupby_cols, 
+            groupby_cols=gpd_cols, 
             cols_shared_by_group=cols_shared_by_group, 
             cols_to_collect_in_lists=cols_to_collect_in_lists, 
             custom_aggs_for_list_cols=custom_aggs_for_list_cols
@@ -1308,9 +1165,15 @@ class MECPOAn:
         return_df = return_df.reset_index()
         #-------------------------
         if make_addtnl_groupby_idx:
-            addtnl_groupby_cols = [x for x in return_df.columns 
-                                   if x not in [output_prem_nbs_col, output_t_min_col, output_t_max_col, 'summary_path']]
+            addtnl_groupby_cols = [x for x in gpd_cols if x not in ['t_search_min', 't_search_max']]
             return_df=return_df.set_index(addtnl_groupby_cols)
+        #-------------------------
+        return_df = return_df.rename(columns={
+            'PN'           : output_prem_nbs_col, 
+            't_search_min' : output_t_min_col, 
+            't_search_max' : output_t_max_col, 
+        })
+        #-------------------------
         return return_df
     
     

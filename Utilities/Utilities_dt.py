@@ -733,12 +733,12 @@ def convert_timezoneoffset_col_to_timedelta(df, timezoneoffset_col, inplace=Fals
     return df
 
 def strip_tz_info_and_convert_to_dt(
-    df, 
-    time_col, 
-    placement_col=None, 
-    run_quick=True, 
-    n_strip=6, 
-    inplace=True
+    df            , 
+    time_col      , 
+    placement_col = None, 
+    run_quick     = True, 
+    n_strip       = 6, 
+    inplace       = True
 ):
     r"""
     Entries in time_col should be strings of format e.g., '2020-01-01T00:00:00-05:00'

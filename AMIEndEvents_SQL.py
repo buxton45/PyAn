@@ -115,6 +115,10 @@ class AMIEndEvents_SQL(AMI_SQL):
         #-------------------------
         if cols_of_interest is None:
             cols_of_interest = TableInfos.AMIEndEvents_TI.std_columns_of_interest
+        #-------------------------
+        # Need to handle join_mp_args separately, as joining will collapse to a string
+        join_mp_args = kwargs.pop('join_mp_args', False)
+        #-------------------------
         sql = AMI_SQL.build_sql_ami(cols_of_interest=cols_of_interest, **kwargs)
         #--------------------------------------------------
         # Other WHERE statements not handled by AMI_SQL.build_sql_ami
@@ -158,6 +162,9 @@ class AMIEndEvents_SQL(AMI_SQL):
                 field_descs_dict  = field_descs_dict
             )
             sql.sql_where.addtnl_info['field_descs_dict'] = field_descs_dict
+        #--------------------------------------------------
+        if join_mp_args:
+            sql = AMI_SQL.join_sql_ami_with_mp(sql, kwargs, join_mp_args)
         #--------------------------------------------------
         return sql
         
