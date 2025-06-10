@@ -80,12 +80,12 @@ class DOVSOutages(GenAn):
         #--------------------------------------------------
         if not build_consolidated:
             super().__init__(
-                df_construct_type=df_construct_type, 
-                contstruct_df_args=contstruct_df_args, 
-                init_df_in_constructor=init_df_in_constructor, 
-                build_sql_function=self.build_sql_function, 
-                build_sql_function_kwargs=self.build_sql_function_kwargs, 
-                save_args=save_args, 
+                df_construct_type         = df_construct_type, 
+                contstruct_df_args        = contstruct_df_args, 
+                init_df_in_constructor    = init_df_in_constructor, 
+                build_sql_function        = self.build_sql_function, 
+                build_sql_function_kwargs = self.build_sql_function_kwargs, 
+                save_args                 = save_args, 
                 **kwargs
             )        
         else:
@@ -104,19 +104,19 @@ class DOVSOutages(GenAn):
             assert(init_df_in_constructor)
             #----------
             super().__init__(
-                df_construct_type=df_construct_type, 
-                contstruct_df_args=contstruct_df_args, 
-                init_df_in_constructor=False, 
-                build_sql_function=self.build_sql_function, 
-                build_sql_function_kwargs=self.build_sql_function_kwargs, 
-                save_args=save_args, 
+                df_construct_type         = df_construct_type, 
+                contstruct_df_args        = contstruct_df_args, 
+                init_df_in_constructor    = False, 
+                build_sql_function        = self.build_sql_function, 
+                build_sql_function_kwargs = self.build_sql_function_kwargs, 
+                save_args                 = save_args, 
                 **kwargs
             )
             #----------
             self.df = DOVSOutages.build_consolidated_outage_df(
-                contstruct_df_args=contstruct_df_args, 
-                build_sql_function=self.build_sql_function, 
-                build_sql_function_kwargs=self.build_sql_function_kwargs, 
+                contstruct_df_args        = contstruct_df_args, 
+                build_sql_function        = self.build_sql_function, 
+                build_sql_function_kwargs = self.build_sql_function_kwargs, 
                 **kwargs
             )
 
@@ -144,12 +144,12 @@ class DOVSOutages(GenAn):
     
     def get_default_cols_and_types_to_convert_dict(self):
         cols_and_types_to_convert_dict = {
-            'CI_NB':np.int64, 
-            'CMI_NB':np.float64, 
-            'OUTG_REC_NB':[np.int64, str], 
-            'START_YEAR':np.int64, 
-            'DT_ON_TS':datetime.datetime,
-            'DT_OFF_TS_FULL':datetime.datetime
+            'CI_NB'          : np.int64, 
+            'CMI_NB'         : np.float64, 
+            'OUTG_REC_NB'    : [np.int64, str], 
+            'START_YEAR'     : np.int64, 
+            'DT_ON_TS'       : datetime.datetime,
+            'DT_OFF_TS_FULL' : datetime.datetime
         }
         return cols_and_types_to_convert_dict
     
@@ -166,10 +166,10 @@ class DOVSOutages(GenAn):
         This only really needs to be run if the codes have been changed for some reason.
         """
         #-------------------------
-        sql = DOVSOutages_SQL.build_sql_DOVS_OUTAGE_CAUSE_TYPES_DIM()
+        sql     = DOVSOutages_SQL.build_sql_DOVS_OUTAGE_CAUSE_TYPES_DIM()
         conn_db = DOVSOutages.get_dovs_conn_db()
         #-------------------------
-        cause_types_df = pd.read_sql_query(sql.get_sql_statement(), conn_db) 
+        cause_types_df          = pd.read_sql_query(sql.get_sql_statement(), conn_db) 
         mjr_cause_cd_to_nm_dict = list(cause_types_df.groupby(by=['MJR_CAUSE_CD', 'MJR_CAUSE_NM']).groups.keys())
         mjr_cause_cd_to_nm_dict = {cd:nm for cd,nm in mjr_cause_cd_to_nm_dict}
         #-------------------------
@@ -182,15 +182,15 @@ class DOVSOutages(GenAn):
         If one suspects this has been updated/expanded in Athena/SQL, use build_mjr_cause_cd_to_nm_dict instead
         """
         mjr_cause_cd_to_nm_dict = {
-            'DIS': 'DISTRIBUTION SOURCE',
-            'DL': 'DISTRIBUTION LINE',
-            'DS': 'DISTRIBUTION STATION',
-            'G': 'GENERATION',
-            'NI': 'NO INTERRUPTION',
-            'PP': 'PARTIAL POWER',
-            'ST': 'SUBTRANSMISSION LINE',
-            'TL': 'TRANSMISSION LINE',
-            'TS': 'TRANSMISSION STATION'
+            'DIS' : 'DISTRIBUTION SOURCE',
+            'DL'  : 'DISTRIBUTION LINE',
+            'DS'  : 'DISTRIBUTION STATION',
+            'G'   : 'GENERATION',
+            'NI'  : 'NO INTERRUPTION',
+            'PP'  : 'PARTIAL POWER',
+            'ST'  : 'SUBTRANSMISSION LINE',
+            'TL'  : 'TRANSMISSION LINE',
+            'TS'  : 'TRANSMISSION STATION'
         }
         return mjr_cause_cd_to_nm_dict
 
@@ -203,10 +203,10 @@ class DOVSOutages(GenAn):
         This only really needs to be run if the codes have been changed for some reason.
         """
         #-------------------------
-        sql = DOVSOutages_SQL.build_sql_DOVS_OUTAGE_CAUSE_TYPES_DIM()
+        sql     = DOVSOutages_SQL.build_sql_DOVS_OUTAGE_CAUSE_TYPES_DIM()
         conn_db = DOVSOutages.get_dovs_conn_db()
         #-------------------------
-        cause_types_df = pd.read_sql_query(sql.get_sql_statement(), conn_db) 
+        cause_types_df          = pd.read_sql_query(sql.get_sql_statement(), conn_db) 
         mnr_cause_cd_to_nm_dict = list(cause_types_df.groupby(by=['MNR_CAUSE_CD', 'MNR_CAUSE_NM']).groups.keys())
         mnr_cause_cd_to_nm_dict = {cd:nm for cd,nm in mnr_cause_cd_to_nm_dict}
         #-------------------------
@@ -220,67 +220,67 @@ class DOVSOutages(GenAn):
         If one suspects this has been updated/expanded in Athena/SQL, use build_mnr_cause_cd_to_nm_dict instead
         """
         mnr_cause_cd_to_nm_dict = {
-            'A': 'ANIMAL - NON BIRD',
-            'AB': 'ANIMAL BUS',
+            'A'  : 'ANIMAL - NON BIRD',
+            'AB' : 'ANIMAL BUS',
             'ABI': 'ANIMAL - BIRD',
             'ABX': 'ANIMAL BUSHING XFMR',
-            'AE': 'AEP EQUIPMENT - NO CUST OUT',
-            'AF': 'ABNORMAL FEED',
+            'AE' : 'AEP EQUIPMENT - NO CUST OUT',
+            'AF' : 'ABNORMAL FEED',
             'AMI': 'No Cust Out - AMI Operation',
-            'AO': 'ANIMAL - OTHER',
-            'BE': 'BLAST/EXPLOSION(NON-AEP)',
-            'C': 'NO CUST OUT - AEP CONDUCTOR',
-            'CE': 'CUSTOMER EQUIPMENT, 1 CUSTOMER OUT',
-            'CF': 'CONTAMINATION/FLASHOVER',
-            'CO': 'CORROSION',
-            'CP': 'NO CUST OUT - CATV OR PHONE CONDUCTOR',
+            'AO' : 'ANIMAL - OTHER',
+            'BE' : 'BLAST/EXPLOSION(NON-AEP)',
+            'C'  : 'NO CUST OUT - AEP CONDUCTOR',
+            'CE' : 'CUSTOMER EQUIPMENT, 1 CUSTOMER OUT',
+            'CF' : 'CONTAMINATION/FLASHOVER',
+            'CO' : 'CORROSION',
+            'CP' : 'NO CUST OUT - CATV OR PHONE CONDUCTOR',
             'CTC': 'TRIP CHARGE',
             'DNP': 'DNP',
             'DOT': 'DUPLICATE OUTAGE TICKET',
-            'DR': 'DISCONNECT/RECONNECT',
+            'DR' : 'DISCONNECT/RECONNECT',
             'EQF': 'EQUIPMENT FAILURE',
             'ERF': 'ERROR-FIELD',
             'ERO': 'ERROR-OPERATIONS',
-            'F': 'FIRE-AEP, OR AFFECTING > 1 CUSTOMER',
-            'FC': 'FIRE - CUSTOMER, 1 CUSTOMER OUT',
-            'FO': 'FOREIGN OBJECT (NON ANIMAL)',
-            'FW': 'FACILITATION OF WORK',
-            'G': 'GENERATION',
-            'GC': 'GALLOPING CONDUCTOR',
-            'L': 'AEP - OUTDOOR/STREET LIGHTS',
-            'LS': 'LOAD SHED',
-            'MM': 'MAP MANIPULATION',
-            'O': 'OTHER',
-            'OL': 'OVERLOAD',
-            'OU': 'OTHER UTILITY CUSTOMER OUT',
-            'OV': 'OVERVOLTAGE',
-            'PQ': 'POWER QUALITY (FLICKERING, DIM, BRIGHT LIGHTS ETC>)',
-            'R': 'RELAY MIS-OPERATION',
+            'F'  : 'FIRE-AEP, OR AFFECTING > 1 CUSTOMER',
+            'FC' : 'FIRE - CUSTOMER, 1 CUSTOMER OUT',
+            'FO' : 'FOREIGN OBJECT (NON ANIMAL)',
+            'FW' : 'FACILITATION OF WORK',
+            'G'  : 'GENERATION',
+            'GC' : 'GALLOPING CONDUCTOR',
+            'L'  : 'AEP - OUTDOOR/STREET LIGHTS',
+            'LS' : 'LOAD SHED',
+            'MM' : 'MAP MANIPULATION',
+            'O'  : 'OTHER',
+            'OL' : 'OVERLOAD',
+            'OU' : 'OTHER UTILITY CUSTOMER OUT',
+            'OV' : 'OVERVOLTAGE',
+            'PQ' : 'POWER QUALITY (FLICKERING, DIM, BRIGHT LIGHTS ETC>)',
+            'R'  : 'RELAY MIS-OPERATION',
             'SCO': 'SCHEDULED COMPANY',
-            'SO': 'SCHEDULED OUTSIDE REQUEST > 1 CUSTOMER',
-            'SS': 'SWITCHING SURGE',
-            'TC': 'NO CUST OUT - TREE CONDITION',
+            'SO' : 'SCHEDULED OUTSIDE REQUEST > 1 CUSTOMER',
+            'SS' : 'SWITCHING SURGE',
+            'TC' : 'NO CUST OUT - TREE CONDITION',
             'TIN': 'TRANSMISSION INFORMATION NEEDED',
             'TIR': 'TREE INSIDE ROW',
             'TOR': 'TREE OUT OF ROW',
-            'TR': 'TREE REMOVAL (NON AEP)',
-            'U': 'UNKNOWN (NON WEATHER)',
-            'UB': 'UNBALANCE',
-            'UG': 'UG CONST. /DIG-INS (NON AEP)',
-            'UL': 'UG LOCATE',
-            'UT': 'UNNECESSARY TRIP',
-            'V': 'VANDALISM',
-            'VA': 'VEHICLE ACCIDENT (NON AEP)',
+            'TR' : 'TREE REMOVAL (NON AEP)',
+            'U'  : 'UNKNOWN (NON WEATHER)',
+            'UB' : 'UNBALANCE',
+            'UG' : 'UG CONST. /DIG-INS (NON AEP)',
+            'UL' : 'UG LOCATE',
+            'UT' : 'UNNECESSARY TRIP',
+            'V'  : 'VANDALISM',
+            'VA' : 'VEHICLE ACCIDENT (NON AEP)',
             'VIN': 'VINE',
             'WFS': 'WEATHER-FLOOD/SLIDE',
-            'WH': 'WEATHER - HURRICANE',
-            'WI': 'WEATHER - ICE (1/2 INCH OR > 6 " SNOW)',
-            'WL': 'WEATHER - LIGHTNING',
-            'WT': 'WEATHER - TORNADO',
+            'WH' : 'WEATHER - HURRICANE',
+            'WI' : 'WEATHER - ICE (1/2 INCH OR > 6 " SNOW)',
+            'WL' : 'WEATHER - LIGHTNING',
+            'WT' : 'WEATHER - TORNADO',
             'WTI': 'WEATHER TREE INSIDE ROW',
             'WTO': 'WEATHER TREE OUTSIDE ROW',
-            'WU': 'WEATHER - UNKNOWN',
-            'WW': 'WEATHER - HIGH WINDS (EXCEEDING 60 MPH)'
+            'WU' : 'WEATHER - UNKNOWN',
+            'WW' : 'WEATHER - HIGH WINDS (EXCEEDING 60 MPH)'
         }
         return mnr_cause_cd_to_nm_dict
         
@@ -288,11 +288,11 @@ class DOVSOutages(GenAn):
     @staticmethod
     def set_mjr_mnr_cause_nm_col(
         df, 
-        mjr_mnr_cause_nm_col='MJR_MNR_CAUSE_NM', 
-        set_null_to_NA=True, 
-        mjr_cause_nm_col='MJR_CAUSE_NM', 
-        mnr_cause_nm_col='MNR_CAUSE_NM', 
-        mjr_cause_nm_abbr_dict=None
+        mjr_mnr_cause_nm_col   = 'MJR_MNR_CAUSE_NM', 
+        set_null_to_NA         = True, 
+        mjr_cause_nm_col       = 'MJR_CAUSE_NM', 
+        mnr_cause_nm_col       = 'MNR_CAUSE_NM', 
+        mjr_cause_nm_abbr_dict = None
     ):
         r"""
         Combine the major and minor cause columns into a single major minor column
@@ -322,11 +322,11 @@ class DOVSOutages(GenAn):
     #****************************************************************************************************
     @staticmethod
     def build_consolidated_outage(
-        contstruct_df_args=None, 
-        build_sql_function=None, 
-        build_sql_function_kwargs=None, 
-        return_premise_nbs_col='premise_nbs', 
-        addtnl_get_premise_nbs_for_outages_kwargs=None, 
+        contstruct_df_args                        = None, 
+        build_sql_function                        = None, 
+        build_sql_function_kwargs                 = None, 
+        return_premise_nbs_col                    = 'premise_nbs', 
+        addtnl_get_premise_nbs_for_outages_kwargs = None, 
         **kwargs
     ):
         r"""
@@ -342,20 +342,20 @@ class DOVSOutages(GenAn):
           the need for running consolidate_df_outage)
         """
         #-------------------------
-        df_construct_type=DFConstructType.kRunSqlQuery
-        init_df_in_constructor=True
+        df_construct_type      = DFConstructType.kRunSqlQuery
+        init_df_in_constructor = True
         #-------------------------
         if build_sql_function is None:
             build_sql_function = DOVSOutages_SQL.build_sql_std_outage
         #-----
         if build_sql_function_kwargs is None:
-            build_sql_function_kwargs={}
+            build_sql_function_kwargs = {}
         #-----
         if build_sql_function == DOVSOutages_SQL.build_sql_std_outage:
-            build_sql_function_kwargs['include_premise']=False
-            build_sql_function_kwargs['include_DOVS_PREMISE_DIM']=False
+            build_sql_function_kwargs['include_premise']          = False
+            build_sql_function_kwargs['include_DOVS_PREMISE_DIM'] = False
         else:
-            build_sql_function_kwargs['include_DOVS_PREMISE_DIM']=False
+            build_sql_function_kwargs['include_DOVS_PREMISE_DIM'] = False
         #-------------------------
         # Turn off verbose by default
         build_sql_function_kwargs['verbose'] = build_sql_function_kwargs.get('verbose', False)
@@ -366,26 +366,28 @@ class DOVSOutages(GenAn):
         # code within here to do anything.  If build_consolidated were set to True here, THE CODE WOULD
         # ENTER INTO AN INFINITE LOOP!!!!!!!!!!
         dovs_outgs = DOVSOutages(
-            df_construct_type=df_construct_type, 
-            contstruct_df_args=contstruct_df_args, 
-            init_df_in_constructor=init_df_in_constructor,
-            build_sql_function=build_sql_function, 
-            build_sql_function_kwargs=build_sql_function_kwargs, 
-            build_consolidated=False, 
+            df_construct_type         = df_construct_type, 
+            contstruct_df_args        = contstruct_df_args, 
+            init_df_in_constructor    = init_df_in_constructor,
+            build_sql_function        = build_sql_function, 
+            build_sql_function_kwargs = build_sql_function_kwargs, 
+            build_consolidated        = False, 
             **kwargs
         )
-        dovs_outgs_df = dovs_outgs.get_df()
+        dovs_outgs_df   = dovs_outgs.get_df()
         outg_rec_nb_col = build_sql_function_kwargs.get('outg_rec_nb_col', 'OUTG_REC_NB')
         #-------------------------
         get_premise_nbs_for_outages_kwargs = dict(
-            outg_rec_nbs=dovs_outgs_df[outg_rec_nb_col].tolist(), 
-            return_type=pd.Series, 
-            verbose=build_sql_function_kwargs['verbose']
+            outg_rec_nbs = dovs_outgs_df[outg_rec_nb_col].tolist(), 
+            return_type  = pd.Series, 
+            verbose      = build_sql_function_kwargs['verbose']
         )
         #-----
         if addtnl_get_premise_nbs_for_outages_kwargs is not None:
-            get_premise_nbs_for_outages_kwargs = {**addtnl_get_premise_nbs_for_outages_kwargs, 
-                                                  **get_premise_nbs_for_outages_kwargs}
+            get_premise_nbs_for_outages_kwargs = {
+                **addtnl_get_premise_nbs_for_outages_kwargs, 
+                **get_premise_nbs_for_outages_kwargs
+            }
         #-----
         premise_nbs_series = DOVSOutages.get_premise_nbs_for_outages(
             **get_premise_nbs_for_outages_kwargs
@@ -395,7 +397,7 @@ class DOVSOutages(GenAn):
         #   e.g., should both be strings, or should both be ints, etc.
         assert(dovs_outgs_df[outg_rec_nb_col].dtype==premise_nbs_series.index.dtype)
         #-------------------------
-        dovs_outgs_df=dovs_outgs_df.set_index(outg_rec_nb_col)
+        dovs_outgs_df = dovs_outgs_df.set_index(outg_rec_nb_col)
         dovs_outgs_df = dovs_outgs_df.merge(premise_nbs_series, left_index=True, right_index=True)
         #-------------------------
         dovs_outgs.df = dovs_outgs_df
@@ -404,18 +406,18 @@ class DOVSOutages(GenAn):
 
     @staticmethod
     def build_consolidated_outage_df(
-        contstruct_df_args=None, 
-        build_sql_function=None, 
-        build_sql_function_kwargs=None, 
+        contstruct_df_args        = None, 
+        build_sql_function        = None, 
+        build_sql_function_kwargs = None, 
         **kwargs
     ):
         r"""
         See build_consolidated_outage for more information
         """
         dovs_outgs = DOVSOutages.build_consolidated_outage(
-            contstruct_df_args=contstruct_df_args, 
-            build_sql_function=build_sql_function, 
-            build_sql_function_kwargs=build_sql_function_kwargs, 
+            contstruct_df_args        = contstruct_df_args, 
+            build_sql_function        = build_sql_function, 
+            build_sql_function_kwargs = build_sql_function_kwargs, 
             **kwargs
         )
         return dovs_outgs.get_df()
@@ -540,14 +542,14 @@ class DOVSOutages(GenAn):
     #****************************************************************************************************
     @staticmethod
     def consolidate_df_outage_OLD(
-        df_outage, 
-        outg_rec_nb_col='OUTG_REC_NB', 
-        premise_nb_col='PREMISE_NB', 
-        premise_nbs_col='PREMISE_NBS', 
-        cols_to_drop=['OFF_TM', 'REST_TM'], 
-        drop_null_premise_nbs=True, 
-        set_outg_rec_nb_as_index=True,
-        drop_outg_rec_nb_if_index=False
+        df_outage                 , 
+        outg_rec_nb_col           = 'OUTG_REC_NB', 
+        premise_nb_col            = 'PREMISE_NB', 
+        premise_nbs_col           = 'PREMISE_NBS', 
+        cols_to_drop              = ['OFF_TM', 'REST_TM'], 
+        drop_null_premise_nbs     = True, 
+        set_outg_rec_nb_as_index  = True,
+        drop_outg_rec_nb_if_index = False
     ):
         # A given outage in df_outage contains multiple rows
         # These rows only differ by the premise number.
@@ -579,10 +581,10 @@ class DOVSOutages(GenAn):
         
         if set_outg_rec_nb_as_index:
             return_df.set_index(outg_rec_nb_col, drop=False, inplace=True)
-            return_df.index.name='idx'
+            return_df.index.name = 'idx'
             if drop_outg_rec_nb_if_index:
-                return_df=return_df.drop(columns=[outg_rec_nb_col])
-                return_df.index.name=outg_rec_nb_col
+                return_df = return_df.drop(columns=[outg_rec_nb_col])
+                return_df.index.name = outg_rec_nb_col
         
         return return_df
         
@@ -694,7 +696,7 @@ class DOVSOutages(GenAn):
             cols_to_collect_in_lists = [x for x in return_df.columns.tolist() if x not in groupby_cols+cols_shared_by_group]
         assert(Utilities.is_object_one_of_types(cols_to_collect_in_lists, [list, str, int]))
         if not isinstance(cols_to_collect_in_lists, list):
-            cols_to_collect_in_lists=[cols_to_collect_in_lists]
+            cols_to_collect_in_lists = [cols_to_collect_in_lists]
         if premise_nb_col not in cols_to_collect_in_lists:
             cols_to_collect_in_lists.append(premise_nb_col)
         #-------------------------
@@ -705,18 +707,18 @@ class DOVSOutages(GenAn):
             rename_cols[premise_nb_col] = premise_nbs_col
         #--------------------------------------------------
         return_df = Utilities_df.consolidate_df(
-            df=return_df, 
-            groupby_cols=groupby_cols, 
-            cols_shared_by_group=cols_shared_by_group, 
-            cols_to_collect_in_lists=cols_to_collect_in_lists, 
-            as_index=False, 
-            include_groupby_cols_in_output_cols=False, 
-            allow_duplicates_in_lists=allow_duplicates_in_lists, 
-            allow_NaNs_in_lists=allow_NaNs_in_lists, 
-            recover_uniqueness_violators=recover_uniqueness_violators, 
-            gpby_dropna=gpby_dropna, 
-            rename_cols=rename_cols, 
-            verbose=verbose
+            df                                  = return_df, 
+            groupby_cols                        = groupby_cols, 
+            cols_shared_by_group                = cols_shared_by_group, 
+            cols_to_collect_in_lists            = cols_to_collect_in_lists, 
+            as_index                            = False, 
+            include_groupby_cols_in_output_cols = False, 
+            allow_duplicates_in_lists           = allow_duplicates_in_lists, 
+            allow_NaNs_in_lists                 = allow_NaNs_in_lists, 
+            recover_uniqueness_violators        = recover_uniqueness_violators, 
+            gpby_dropna                         = gpby_dropna, 
+            rename_cols                         = rename_cols, 
+            verbose                             = verbose
         )
         #-------------------------
         if sort_PNs:
@@ -726,14 +728,18 @@ class DOVSOutages(GenAn):
             return_df.set_index(outg_rec_nb_col, drop=False, inplace=True)
             return_df.index.name='idx'
             if drop_outg_rec_nb_if_index:
-                return_df=return_df.drop(columns=[outg_rec_nb_col])
-                return_df.index.name=outg_rec_nb_col    
+                return_df = return_df.drop(columns=[outg_rec_nb_col])
+                return_df.index.name = outg_rec_nb_col    
         #-------------------------
         return return_df        
         
         
     @staticmethod
-    def get_prem_nbs_from_consolidated_df_outage(df_outage_slim, premise_nbs_col='PREMISE_NBS', unique=True):
+    def get_prem_nbs_from_consolidated_df_outage(
+        df_outage_slim  , 
+        premise_nbs_col = 'PREMISE_NBS', 
+        unique          = True
+    ):
         #TODO PROBABLY NEED TO IMPLEMENT A MORE CAREFUL PROCEDURE HERE
         # If, for instance, there are NaNs in the lists of premise numbers, these are not so easily removed
         #   as the concatenate procedure makes them 'nan' strings (at least, when the premise numbers are also
@@ -747,18 +753,18 @@ class DOVSOutages(GenAn):
         
     @staticmethod
     def read_df_outage_slim_from_csv(
-        file_path, 
-        premise_nbs_col='PREMISE_NBS', 
-        dt_off_ts_col='DT_OFF_TS', 
+        file_path                      , 
+        premise_nbs_col                = 'PREMISE_NBS', 
+        dt_off_ts_col                  = 'DT_OFF_TS', 
         cols_and_types_to_convert_dict = {
-            'CI_NB':np.int64, 
-            'CMI_NB':np.float64, 
-            'OUTG_REC_NB':np.int64, 
-            'annual_kwh':float, 
-            'annual_max_dmnd':float
+            'CI_NB'           : np.int64, 
+            'CMI_NB'          : np.float64, 
+            'OUTG_REC_NB'     : np.int64, 
+            'annual_kwh'      : float, 
+            'annual_max_dmnd' : float
         }, 
-        outg_rec_nb_col='OUTG_REC_NB', 
-        set_outg_rec_nb_as_index=True        
+        outg_rec_nb_col                = 'OUTG_REC_NB', 
+        set_outg_rec_nb_as_index       = True        
     ):
         r"""
         When stored as a CSV, PREMISE_NBS are retrieved as a string, instead of as a list
@@ -771,15 +777,17 @@ class DOVSOutages(GenAn):
         Calling pd.to_datetime fixes that
         """
         #-------------------------
-        df_outage_slim = pd.read_csv(file_path, dtype=str)
+        df_outage_slim                  = pd.read_csv(file_path, dtype=str)
         df_outage_slim[premise_nbs_col] = df_outage_slim[premise_nbs_col].apply(lambda x: literal_eval(x))
         if dt_off_ts_col:
             df_outage_slim[dt_off_ts_col]=pd.to_datetime(df_outage_slim[dt_off_ts_col])
         if cols_and_types_to_convert_dict:
             # In cols_and_types_to_convert_dict, keep only entries contained in df_outage_slim to prevent error
             #   when more conversions present in cols_and_types_to_convert_dict than in DF
-            cols_and_types_to_convert_dict = {k:v for k,v in cols_and_types_to_convert_dict.items() 
-                                              if k in df_outage_slim.columns.tolist()}
+            cols_and_types_to_convert_dict = {
+                k:v for k,v in cols_and_types_to_convert_dict.items() 
+                if k in df_outage_slim.columns.tolist()
+            }
             df_outage_slim = Utilities_df.convert_col_types(df_outage_slim, cols_and_types_to_convert_dict)
             
         if set_outg_rec_nb_as_index:
@@ -791,13 +799,13 @@ class DOVSOutages(GenAn):
     #****************************************************************************************************
     @staticmethod
     def build_mp_for_outgs(
-        df_outage, 
-        cols_of_interest, 
-        premise_nb_col='PREMISE_NB', 
-        df_construct_type=DFConstructType.kRunSqlQuery, 
-        build_sql_function=MeterPremise.build_sql_meter_premise, 
-        addtnl_build_sql_function_kwargs={}, 
-        max_n_prem_nbs=10000
+        df_outage                        , 
+        cols_of_interest                 , 
+        premise_nb_col                   = 'PREMISE_NB', 
+        df_construct_type                = DFConstructType.kRunSqlQuery, 
+        build_sql_function               = MeterPremise.build_sql_meter_premise, 
+        addtnl_build_sql_function_kwargs = {}, 
+        max_n_prem_nbs                   = 10000
     ):
         r"""
         max_n_prem_nbs
@@ -809,79 +817,81 @@ class DOVSOutages(GenAn):
         #-------------------------
         assert(premise_nb_col in df_outage)
         #-------------------------
-        premise_nbs=df_outage['PREMISE_NB'].unique().tolist()
-        build_sql_function_kwargs=dict(
-            cols_of_interest=cols_of_interest, 
-            premise_nbs=natsorted(premise_nbs)
+        premise_nbs = df_outage['PREMISE_NB'].unique().tolist()
+        build_sql_function_kwargs = dict(
+            cols_of_interest = cols_of_interest, 
+            premise_nbs      = natsorted(premise_nbs)
         )
-        build_sql_function_kwargs = {**build_sql_function_kwargs, 
-                                     **addtnl_build_sql_function_kwargs}
+        build_sql_function_kwargs = {
+            **build_sql_function_kwargs, 
+            **addtnl_build_sql_function_kwargs
+        }
         #-------------------------
         mp_for_outgs = MeterPremise(
-            df_construct_type=df_construct_type, 
-            build_sql_function=build_sql_function, 
-            build_sql_function_kwargs=build_sql_function_kwargs, 
-            init_df_in_constructor=True, 
-            max_n_prem_nbs=max_n_prem_nbs
+            df_construct_type         = df_construct_type, 
+            build_sql_function        = build_sql_function, 
+            build_sql_function_kwargs = build_sql_function_kwargs, 
+            init_df_in_constructor    = True, 
+            max_n_prem_nbs            = max_n_prem_nbs
         )
         #-------------------------
         return mp_for_outgs
 
     @staticmethod
     def build_mp_df_for_outgs(
-        df_outage, 
-        cols_of_interest, 
-        premise_nb_col='PREMISE_NB', 
-        df_construct_type=DFConstructType.kRunSqlQuery, 
-        build_sql_function=MeterPremise.build_sql_meter_premise, 
-        addtnl_build_sql_function_kwargs={}, 
-        max_n_prem_nbs=10000
+        df_outage                        , 
+        cols_of_interest                 , 
+        premise_nb_col                   = 'PREMISE_NB', 
+        df_construct_type                = DFConstructType.kRunSqlQuery, 
+        build_sql_function               = MeterPremise.build_sql_meter_premise, 
+        addtnl_build_sql_function_kwargs = {}, 
+        max_n_prem_nbs                   = 10000
     ):
         r"""
         NOTE: One may use the non-static version build_mp_df
         """
         #-------------------------
         mp_for_outgs = DOVSOutages.build_mp_for_outgs(
-            df_outage=df_outage, 
-            cols_of_interest=cols_of_interest, 
-            premise_nb_col=premise_nb_col, 
-            df_construct_type=df_construct_type, 
-            build_sql_function=build_sql_function, 
-            addtnl_build_sql_function_kwargs=addtnl_build_sql_function_kwargs, 
-            max_n_prem_nbs=max_n_prem_nbs
+            df_outage                        = df_outage, 
+            cols_of_interest                 = cols_of_interest, 
+            premise_nb_col                   = premise_nb_col, 
+            df_construct_type                = df_construct_type, 
+            build_sql_function               = build_sql_function, 
+            addtnl_build_sql_function_kwargs = addtnl_build_sql_function_kwargs, 
+            max_n_prem_nbs                   = max_n_prem_nbs
         )
         #-------------------------
         return mp_for_outgs.get_df()
         
     def build_mp_df(
-        self, 
-        cols_of_interest, 
-        premise_nb_col='PREMISE_NB', 
-        df_construct_type=DFConstructType.kRunSqlQuery, 
-        build_sql_function=MeterPremise.build_sql_meter_premise, 
-        addtnl_build_sql_function_kwargs={}
+        self                             , 
+        cols_of_interest                 , 
+        premise_nb_col                   = 'PREMISE_NB', 
+        df_construct_type                = DFConstructType.kRunSqlQuery, 
+        build_sql_function               = MeterPremise.build_sql_meter_premise, 
+        addtnl_build_sql_function_kwargs = {}
     ):
         #-------------------------
         return DOVSOutages.build_mp_df_for_outgs(
-            df_outage=self.df, 
-            cols_of_interest=cols_of_interest, 
-            premise_nb_col=premise_nb_col, 
-            df_construct_type=df_construct_type, 
-            build_sql_function=build_sql_function, 
-            addtnl_build_sql_function_kwargs=addtnl_build_sql_function_kwargs    
+            df_outage                        = self.df, 
+            cols_of_interest                 = cols_of_interest, 
+            premise_nb_col                   = premise_nb_col, 
+            df_construct_type                = df_construct_type, 
+            build_sql_function               = build_sql_function, 
+            addtnl_build_sql_function_kwargs = addtnl_build_sql_function_kwargs    
         )
                 
     @staticmethod
     def merge_df_outage_with_mp(
-        df_outage, 
-        df_mp, 
-        merge_on_outg='PREMISE_NB', 
-        merge_on_mp='prem_nb', 
-        cols_to_include_mp=None, 
-        drop_cols = ['prem_nb'], 
-        rename_cols={'mfr_devc_ser_nbr':'serial_number'}, 
-        how='left', 
-        inplace=True
+        df_outage          , 
+        df_mp              , 
+        merge_on_outg      = 'PREMISE_NB', 
+        merge_on_mp        = 'prem_nb', 
+        cols_to_include_mp = None, 
+        drop_cols          = ['prem_nb'], 
+        rename_cols        = {'mfr_devc_ser_nbr':'serial_number'}, 
+        how                = 'left', 
+        inplace            = True
     ):
         r"""
         NOTE: One may use the non-static version merge_df_with_mp
@@ -903,23 +913,23 @@ class DOVSOutages(GenAn):
         if isinstance(merge_on_outg, list):
             assert(isinstance(merge_on_mp, list) and len(merge_on_outg)==len(merge_on_mp))
             for i_merge in range(len(merge_on_outg)):
-                if df_outage[merge_on_outg[i_merge]].dtype!=df_mp_to_merge[merge_on_mp[i_merge]].dtype:
+                if df_outage[merge_on_outg[i_merge]].dtype != df_mp_to_merge[merge_on_mp[i_merge]].dtype:
                     df_mp_to_merge = Utilities_df.convert_col_type(
-                        df=df_mp_to_merge, 
-                        column=merge_on_mp[i_merge], 
-                        to_type=df_outage[merge_on_outg[i_merge]].dtype, 
-                        to_numeric_errors='coerce', 
-                        inplace=True
+                        df                = df_mp_to_merge, 
+                        column            = merge_on_mp[i_merge], 
+                        to_type           = df_outage[merge_on_outg[i_merge]].dtype, 
+                        to_numeric_errors = 'coerce', 
+                        inplace           = True
                     )
                 assert(df_outage[merge_on_outg[i_merge]].dtype==df_mp_to_merge[merge_on_mp[i_merge]].dtype)
         else:
             if df_outage[merge_on_outg].dtype!=df_mp_to_merge[merge_on_mp].dtype:
                 df_mp_to_merge = Utilities_df.convert_col_type(
-                    df=df_mp_to_merge, 
-                    column=merge_on_mp, 
-                    to_type=df_outage[merge_on_outg].dtype, 
-                    to_numeric_errors='coerce', 
-                    inplace=True
+                    df                = df_mp_to_merge, 
+                    column            = merge_on_mp, 
+                    to_type           = df_outage[merge_on_outg].dtype, 
+                    to_numeric_errors = 'coerce', 
+                    inplace           = True
                 )
             assert(df_outage[merge_on_outg].dtype==df_mp_to_merge[merge_on_mp].dtype)
         #-----
@@ -933,21 +943,21 @@ class DOVSOutages(GenAn):
         
     @staticmethod
     def build_mp_df_and_merge_with_df_outage(
-        df_outage, 
-        cols_of_interest_met_prem, 
-        build_mp_df_args = dict(
-            premise_nb_col='PREMISE_NB', 
-            df_construct_type=DFConstructType.kRunSqlQuery, 
-            build_sql_function=MeterPremise.build_sql_meter_premise, 
-            addtnl_build_sql_function_kwargs={}
+        df_outage                 , 
+        cols_of_interest_met_prem , 
+        build_mp_df_args          = dict(
+            premise_nb_col                   = 'PREMISE_NB', 
+            df_construct_type                = DFConstructType.kRunSqlQuery, 
+            build_sql_function               = MeterPremise.build_sql_meter_premise, 
+            addtnl_build_sql_function_kwargs = {}
         ), 
-        merge_on_outg='PREMISE_NB', 
-        merge_on_mp='prem_nb', 
-        cols_to_include_mp=None, 
-        drop_cols = ['prem_nb'], 
-        rename_cols={'mfr_devc_ser_nbr':'serial_number'}, 
-        how='left', 
-        inplace=True
+        merge_on_outg             = 'PREMISE_NB', 
+        merge_on_mp               = 'prem_nb', 
+        cols_to_include_mp        = None, 
+        drop_cols                 = ['prem_nb'], 
+        rename_cols               = {'mfr_devc_ser_nbr':'serial_number'}, 
+        how                       = 'left', 
+        inplace                   = True
     ):
         r"""
         NOTE: One may use the non-static version merge_df_with_mp
@@ -956,68 +966,74 @@ class DOVSOutages(GenAn):
         """
         #-------------------------
         df_mp = DOVSOutages.build_mp_df_for_outgs(
-            df_outage=df_outage, 
-            cols_of_interest=cols_of_interest_met_prem, 
+            df_outage        = df_outage, 
+            cols_of_interest = cols_of_interest_met_prem, 
             **build_mp_df_args
         )
         if cols_to_include_mp is None:
             cols_to_include_mp = cols_of_interest_met_prem
         return DOVSOutages.merge_df_outage_with_mp(
-            df_outage=df_outage, 
-            df_mp=df_mp, 
-            merge_on_outg=merge_on_outg, 
-            merge_on_mp=merge_on_mp, 
-            cols_to_include_mp=cols_to_include_mp, 
-            drop_cols = drop_cols, 
-            rename_cols=rename_cols, 
-            how=how, 
-            inplace=inplace
+            df_outage          = df_outage, 
+            df_mp              = df_mp, 
+            merge_on_outg      = merge_on_outg, 
+            merge_on_mp        = merge_on_mp, 
+            cols_to_include_mp = cols_to_include_mp, 
+            drop_cols          = drop_cols, 
+            rename_cols        = rename_cols, 
+            how                = how, 
+            inplace            = inplace
         )
 
     def merge_df_with_mp(
-        self, 
-        cols_of_interest_met_prem, 
-        build_mp_df_args = dict(
-            premise_nb_col='PREMISE_NB', 
-            df_construct_type=DFConstructType.kRunSqlQuery, 
-            build_sql_function=MeterPremise.build_sql_meter_premise, 
-            addtnl_build_sql_function_kwargs={}
+        self                      , 
+        cols_of_interest_met_prem , 
+        build_mp_df_args          = dict(
+            premise_nb_col                   = 'PREMISE_NB', 
+            df_construct_type                = DFConstructType.kRunSqlQuery, 
+            build_sql_function               = MeterPremise.build_sql_meter_premise, 
+            addtnl_build_sql_function_kwargs = {}
         ), 
-        merge_on_outg='PREMISE_NB', 
-        merge_on_mp='prem_nb', 
-        cols_to_include_mp=['mfr_devc_ser_nbr', 'prem_nb'], 
-        drop_cols = ['prem_nb'], 
-        rename_cols={'mfr_devc_ser_nbr':'serial_number'}, 
-        how='left', 
+        merge_on_outg             = 'PREMISE_NB', 
+        merge_on_mp               = 'prem_nb', 
+        cols_to_include_mp        = ['mfr_devc_ser_nbr', 'prem_nb'], 
+        drop_cols                 = ['prem_nb'], 
+        rename_cols               = {'mfr_devc_ser_nbr':'serial_number'}, 
+        how                       = 'left', 
     ):
         r"""        
         If cols_to_include_mp is None, it is set to cols_of_interest_met_prem
         """
         #-------------------------
         df_mp = self.build_mp_df(
-            cols_of_interest=cols_of_interest_met_prem, 
+            cols_of_interest = cols_of_interest_met_prem, 
             **build_mp_df_args
         )
         if cols_to_include_mp is None:
             cols_to_include_mp = cols_of_interest_met_prem
         self.df = DOVSOutages.merge_df_outage_with_mp(
-            df_outage=self.df, 
-            df_mp=df_mp, 
-            merge_on_outg=merge_on_outg, 
-            merge_on_mp=merge_on_mp, 
-            cols_to_include_mp=cols_to_include_mp, 
-            drop_cols = drop_cols, 
-            rename_cols=rename_cols, 
-            how=how, 
-            inplace=True
+            df_outage          = self.df, 
+            df_mp              = df_mp, 
+            merge_on_outg      = merge_on_outg, 
+            merge_on_mp        = merge_on_mp, 
+            cols_to_include_mp = cols_to_include_mp, 
+            drop_cols          = drop_cols, 
+            rename_cols        = rename_cols, 
+            how                = how, 
+            inplace            = True
         )
     
     #****************************************************************************************************
     @staticmethod
-    def get_top_n_outage_mjr_mnr_causes_dfs(df_outage, cols_for_drop_duplicates, 
-                                            top_outage_metrics='cmi', top_n=None, 
-                                            mjr_cause_col='MJR_CAUSE_CD', mnr_cause_col='MNR_CAUSE_CD', 
-                                            cmi_nb_col='CMI_NB', ci_nb_col='CI_NB'):
+    def get_top_n_outage_mjr_mnr_causes_dfs(
+        df_outage                , 
+        cols_for_drop_duplicates , 
+        top_outage_metrics       = 'cmi', 
+        top_n                    = None, 
+        mjr_cause_col            = 'MJR_CAUSE_CD', 
+        mnr_cause_col            = 'MNR_CAUSE_CD', 
+        cmi_nb_col               = 'CMI_NB', 
+        ci_nb_col                = 'CI_NB'
+    ):
         # metrics included in top_outage_metrics must equal 'cmi', 'ci', or 'n_outages'
         # If a single metric is included in top_outage_metrics, a single df will be returned
         # If more than one metric included in top_outage_metrics, a dict of dfs will be returned with key
@@ -1059,9 +1075,9 @@ class DOVSOutages(GenAn):
         outg_by_cause_counts_dfs_by_metric = {}
         for top_outage_metric in top_outage_metrics:
             assert(top_outage_metric not in outg_by_cause_counts_dfs_by_metric)
-            df_i = outg_by_cause_counts_df[(metric_to_cols_dict[top_outage_metric], 'sum')].sort_values(ascending=False).to_frame()
+            df_i         = outg_by_cause_counts_df[(metric_to_cols_dict[top_outage_metric], 'sum')].sort_values(ascending=False).to_frame()
             df_i.columns = df_i.columns.to_flat_index()
-            df_i.index = df_i.index.to_flat_index()
+            df_i.index   = df_i.index.to_flat_index()
             if top_n is not None:
                 assert(top_n < df_i.shape[0])
                 df_i = df_i.iloc[:top_n]
@@ -1070,9 +1086,9 @@ class DOVSOutages(GenAn):
             n_outages_col = [x for x in outg_by_cause_counts_df.columns if x[1]=='count']
             assert(len(n_outages_col)==1)
             n_outages_col = n_outages_col[0]
-            df_i = outg_by_cause_counts_df[n_outages_col].sort_values(ascending=False).to_frame()
-            df_i.columns = df_i.columns.to_flat_index()
-            df_i.index = df_i.index.to_flat_index()
+            df_i          = outg_by_cause_counts_df[n_outages_col].sort_values(ascending=False).to_frame()
+            df_i.columns  = df_i.columns.to_flat_index()
+            df_i.index    = df_i.index.to_flat_index()
             if top_n is not None:
                 assert(top_n < df_i.shape[0])
                 df_i = df_i.iloc[:top_n]
@@ -1084,15 +1100,26 @@ class DOVSOutages(GenAn):
             return outg_by_cause_counts_dfs_by_metric
 
     @staticmethod    
-    def get_top_n_outage_mjr_mnr_causes(df_outage, cols_for_drop_duplicates, 
-                                        top_outage_metrics='cmi', top_n=None, 
-                                        mjr_cause_col='MJR_CAUSE_CD', mnr_cause_col='MNR_CAUSE_CD', 
-                                        cmi_nb_col='CMI_NB', ci_nb_col='CI_NB'):
-        outg_by_cause_counts_dfs_by_metric = DOVSOutages.get_top_n_outage_mjr_mnr_causes_dfs(df_outage=df_outage, 
-                                                                                 cols_for_drop_duplicates=cols_for_drop_duplicates, 
-                                                                                 top_outage_metrics=top_outage_metrics, top_n=top_n, 
-                                                                                 mjr_cause_col=mjr_cause_col, mnr_cause_col=mnr_cause_col, 
-                                                                                 cmi_nb_col=cmi_nb_col, ci_nb_col=ci_nb_col)
+    def get_top_n_outage_mjr_mnr_causes(
+        df_outage                , 
+        cols_for_drop_duplicates , 
+        top_outage_metrics       = 'cmi', 
+        top_n                    = None, 
+        mjr_cause_col            = 'MJR_CAUSE_CD', 
+        mnr_cause_col            = 'MNR_CAUSE_CD', 
+        cmi_nb_col               = 'CMI_NB', 
+        ci_nb_col                = 'CI_NB'
+    ):
+        outg_by_cause_counts_dfs_by_metric = DOVSOutages.get_top_n_outage_mjr_mnr_causes_dfs(
+            df_outage                = df_outage, 
+            cols_for_drop_duplicates = cols_for_drop_duplicates, 
+            top_outage_metrics       = top_outage_metrics, 
+            top_n                    = top_n, 
+            mjr_cause_col            = mjr_cause_col, 
+            mnr_cause_col            = mnr_cause_col, 
+            cmi_nb_col               = cmi_nb_col, 
+            ci_nb_col                = ci_nb_col
+        )
         if isinstance(outg_by_cause_counts_dfs_by_metric, pd.DataFrame):
             return outg_by_cause_counts_dfs_by_metric.index.tolist()
         else:
@@ -1104,21 +1131,29 @@ class DOVSOutages(GenAn):
             return return_dict
 
     @staticmethod
-    def build_top_5_df_outages_subsets(top5_mjr_mnr_causes, df_outage):
-        top5_df_outages = {}
+    def build_top_5_df_outages_subsets(
+        top5_mjr_mnr_causes, 
+        df_outage
+    ):
+        top5_df_outages         = {}
         top5_df_outages_by_xfmr = {}
         for mjr_mnr_cause in top5_mjr_mnr_causes:
             assert(mjr_mnr_cause not in top5_df_outages)
             assert(mjr_mnr_cause not in top5_df_outages_by_xfmr)
             #-----
-            top5_df_outages[mjr_mnr_cause] = df_outage[(df_outage['MJR_CAUSE_CD']==mjr_mnr_cause[0]) & 
-                                                       (df_outage['MNR_CAUSE_CD']==mjr_mnr_cause[1])].copy()
+            top5_df_outages[mjr_mnr_cause] = df_outage[
+                (df_outage['MJR_CAUSE_CD']==mjr_mnr_cause[0]) & 
+                (df_outage['MNR_CAUSE_CD']==mjr_mnr_cause[1])
+            ].copy()
             top5_df_outages_by_xfmr[mjr_mnr_cause] = top5_df_outages[mjr_mnr_cause].groupby('trsf_pole_nb')[['annual_kwh', 'annual_max_dmnd']].sum()
         return (top5_df_outages, top5_df_outages_by_xfmr)
 
     
     @staticmethod    
-    def remove_trsf_pole_nb_without_numeric_digit(df, trsf_pole_nb_col='trsf_pole_nb'):
+    def remove_trsf_pole_nb_without_numeric_digit(
+        df               , 
+        trsf_pole_nb_col = 'trsf_pole_nb'
+    ):
         # eliminates, e.g. ['TRANSMISSION', 'NETWORK', ' ', 'PRIMARY', 'IDONOTKNOWXX','HJKHKJHKJ']
         # Works for a list of dfs too
         #---------------------------------------------------
@@ -1135,9 +1170,14 @@ class DOVSOutages(GenAn):
 
 
     @staticmethod
-    def get_mjr_mnr_cause_df_outage_subset(df_outage, mjr_cause, mnr_cause, 
-                                           mjr_cause_col='MJR_CAUSE_CD', mnr_cause_col='MNR_CAUSE_CD', 
-                                           return_copy=True):
+    def get_mjr_mnr_cause_df_outage_subset(
+        df_outage     , 
+        mjr_cause     , 
+        mnr_cause     , 
+        mjr_cause_col ='MJR_CAUSE_CD', 
+        mnr_cause_col = 'MNR_CAUSE_CD', 
+        return_copy   = True
+    ):
         return_df = df_outage[(df_outage[mjr_cause_col]==mjr_cause) & 
                               (df_outage[mnr_cause_col]==mnr_cause)]
         if return_copy:
@@ -1149,29 +1189,32 @@ class DOVSOutages(GenAn):
     #TODO MIGHT WANT TO DO E.G. df_outage.drop_duplicates(subset=[x for x in df_outage.columns if x in cols_of_interest_met_prem]).dropna(how='all')
     # TO KEEP MORE COLUMNS OF INTEREST (AT LEAST FOR BY METER?).  MAYBE NOT?
     @staticmethod
-    def build_df_outage_by_meter_xfmr_outage(df_outage, cols_for_drop_duplicates, 
-                                             xfmr_gpby_cols=['trsf_pole_nb'], 
-                                             xfmr_gpby_agg_dict={'annual_kwh':'sum', 'annual_max_dmnd':'sum'}, 
-                                             outg_gpby_cols=['OUTG_REC_NB'], 
-                                             outg_gpby_agg_dict={'annual_kwh':'sum', 'annual_max_dmnd':'sum'}):
+    def build_df_outage_by_meter_xfmr_outage(
+        df_outage                , 
+        cols_for_drop_duplicates , 
+        xfmr_gpby_cols           = ['trsf_pole_nb'], 
+        xfmr_gpby_agg_dict       = {'annual_kwh':'sum', 'annual_max_dmnd':'sum'}, 
+        outg_gpby_cols           = ['OUTG_REC_NB'], 
+        outg_gpby_agg_dict       = {'annual_kwh':'sum', 'annual_max_dmnd':'sum'}
+    ):
         df_outage_by_meter = df_outage[cols_for_drop_duplicates].drop_duplicates().dropna(how='all')
         df_outage_by_xfmr  = df_outage_by_meter.groupby(xfmr_gpby_cols).agg(xfmr_gpby_agg_dict)
         df_outage_by_outg  = df_outage.groupby(outg_gpby_cols).agg(outg_gpby_agg_dict)
         return {
-            'by_meter':df_outage_by_meter, 
-            'by_xfmr':df_outage_by_xfmr, 
-            'by_outg':df_outage_by_outg
+            'by_meter' : df_outage_by_meter, 
+            'by_xfmr'  : df_outage_by_xfmr, 
+            'by_outg'  : df_outage_by_outg
         }
         
     #****************************************************************************************************
     @staticmethod
     def get_premise_nbs_for_outages(
-        outg_rec_nbs, 
-        return_type=dict, 
-        col_type_outg_rec_nb=str, 
-        col_type_premise_nb=None, 
-        to_numeric_errors='coerce', 
-        verbose=False,
+        outg_rec_nbs         , 
+        return_type          = dict, 
+        col_type_outg_rec_nb = str, 
+        col_type_premise_nb  = None, 
+        to_numeric_errors    = 'coerce', 
+        verbose              = False,
         **kwargs
     ):
         r"""
@@ -1189,9 +1232,11 @@ class DOVSOutages(GenAn):
         !!!!!!!!!!!!!!!!!!!!!!!!!
         """
         #-------------------------
-        assert(return_type==dict or 
-               return_type==pd.Series or 
-               return_type==pd.DataFrame)
+        assert(
+            return_type==dict or 
+            return_type==pd.Series or 
+            return_type==pd.DataFrame
+            )
         #-------------------------
         outg_rec_nb_col = kwargs.get('outg_rec_nb_col', 'OUTG_REC_NB')
         premise_nb_col  = kwargs.get('premise_nb_col', 'PREMISE_NB')
@@ -1202,19 +1247,19 @@ class DOVSOutages(GenAn):
         # '[HY000] [Oracle][ODBC][Ora]ORA-01795: maximum number of expressions in a list is 1000'
         # So, if len(outg_rec_nbs)>1000, use batches!!!
         dovs_outgs = DOVSOutages(                 
-            df_construct_type=DFConstructType.kRunSqlQuery, 
-            contstruct_df_args=dict(read_sql_args=dict(dtype={outg_rec_nb_col:np.int64, premise_nb_col:str})), 
-            init_df_in_constructor=True, 
-            build_sql_function=DOVSOutages_SQL.build_sql_outage_premises, 
-            build_sql_function_kwargs=dict(        
-                outg_rec_nbs=outg_rec_nbs, 
-                cols_of_interest=[outg_rec_nb_col, premise_nb_col], 
-                field_to_split='outg_rec_nbs', 
-                batch_size=1000, 
-                verbose=verbose
+            df_construct_type         = DFConstructType.kRunSqlQuery, 
+            contstruct_df_args        = dict(read_sql_args=dict(dtype={outg_rec_nb_col:np.int64, premise_nb_col:str})), 
+            init_df_in_constructor    = True, 
+            build_sql_function        = DOVSOutages_SQL.build_sql_outage_premises, 
+            build_sql_function_kwargs = dict(        
+                outg_rec_nbs     = outg_rec_nbs, 
+                cols_of_interest = [outg_rec_nb_col, premise_nb_col], 
+                field_to_split   = 'outg_rec_nbs', 
+                batch_size       = 1000, 
+                verbose          = verbose
             ),
-            save_args=False, 
-            build_consolidated=False
+            save_args                 = False, 
+            build_consolidated        = False
         )
         df = dovs_outgs.df
         #-------------------------
@@ -1223,10 +1268,10 @@ class DOVSOutages(GenAn):
         if col_type_premise_nb is None:
             col_type_premise_nb = col_type_outg_rec_nb
         df = Utilities_df.convert_col_types(
-            df=df, 
-            cols_and_types_dict={outg_rec_nb_col:col_type_outg_rec_nb, premise_nb_col:col_type_premise_nb}, 
-            to_numeric_errors=to_numeric_errors, 
-            inplace=True
+            df                  = df, 
+            cols_and_types_dict = {outg_rec_nb_col:col_type_outg_rec_nb, premise_nb_col:col_type_premise_nb}, 
+            to_numeric_errors   = to_numeric_errors, 
+            inplace             = True
         )
         df = df.rename(columns={premise_nb_col:return_premise_nbs_col})
         #-------------------------
@@ -1234,7 +1279,7 @@ class DOVSOutages(GenAn):
             return df
         else:
             return_series = df.groupby(outg_rec_nb_col)[return_premise_nbs_col].unique()
-            return_series=return_series.apply(lambda x: sorted(list(x)))
+            return_series = return_series.apply(lambda x: sorted(list(x)))
             if return_type==pd.Series:
                 return return_series
             else:
@@ -1242,16 +1287,16 @@ class DOVSOutages(GenAn):
                 
     @staticmethod
     def get_premise_nbs_and_others_for_outages(
-        outg_rec_nbs, 
-        other_outg_cols=None, 
-        return_premise_nbs_col='premise_nbs', 
-        addtnl_build_sql_function_kwargs=None, 
-        col_type_outg_rec_nb=str, 
-        col_type_premise_nb=None, 
-        to_numeric_errors='coerce', 
-        dovs_outg_rec_nb_col='OUTG_REC_NB', 
-        dovs_premise_nb_col='PREMISE_NB', 
-        verbose=False
+        outg_rec_nbs                     , 
+        other_outg_cols                  = None, 
+        return_premise_nbs_col           = 'premise_nbs', 
+        addtnl_build_sql_function_kwargs = None, 
+        col_type_outg_rec_nb             = str, 
+        col_type_premise_nb              = None, 
+        to_numeric_errors                = 'coerce', 
+        dovs_outg_rec_nb_col             = 'OUTG_REC_NB', 
+        dovs_premise_nb_col              = 'PREMISE_NB', 
+        verbose                          = False
     ):
         r"""
         other_outg_cols:
@@ -1269,15 +1314,15 @@ class DOVSOutages(GenAn):
         if other_outg_cols is None:
             return_type=pd.Series
             df = DOVSOutages.get_premise_nbs_for_outages(
-                outg_rec_nbs=outg_rec_nbs, 
-                return_type=return_type, 
-                col_type_outg_rec_nb=col_type_outg_rec_nb, 
-                col_type_premise_nb=col_type_premise_nb, 
-                to_numeric_errors=to_numeric_errors, 
-                verbose=verbose,
-                return_premise_nbs_col=return_premise_nbs_col, 
-                outg_rec_nb_col=dovs_outg_rec_nb_col, 
-                premise_nb_col=dovs_premise_nb_col
+                outg_rec_nbs           = outg_rec_nbs, 
+                return_type            = return_type, 
+                col_type_outg_rec_nb   = col_type_outg_rec_nb, 
+                col_type_premise_nb    = col_type_premise_nb, 
+                to_numeric_errors      = to_numeric_errors, 
+                verbose                = verbose,
+                return_premise_nbs_col = return_premise_nbs_col, 
+                outg_rec_nb_col        = dovs_outg_rec_nb_col, 
+                premise_nb_col         = dovs_premise_nb_col
             )
             return df
         #----------------------------------------------------------------------------------------------------
@@ -1294,7 +1339,7 @@ class DOVSOutages(GenAn):
         #       are used (see DOVSOutages_SQL.get_std_cols_of_interest).  This is the easiest method to ensure what is
         #       desired is returned, since adding things like DT_OFF_TS_FULL are somewhat difficult/cumbersome otherwise.
         # The actual returned columns will be chopped down later
-        std_cols_of_interest = DOVSOutages_SQL.get_std_cols_of_interest()
+        std_cols_of_interest    = DOVSOutages_SQL.get_std_cols_of_interest()
         addtnl_cols_of_interest = [x for x in other_outg_cols 
                                    if not DOVSOutages_SQL.alias_found_in_cols_of_interest(x, std_cols_of_interest)]
         #-----
@@ -1302,28 +1347,28 @@ class DOVSOutages(GenAn):
         # '[HY000] [Oracle][ODBC][Ora]ORA-01795: maximum number of expressions in a list is 1000'
         # So, if len(outg_rec_nbs)>1000, use batches!!!
         build_sql_function_kwargs=dict(
-            cols_of_interest=None, 
-            addtnl_cols_of_interest=addtnl_cols_of_interest, 
-            outg_rec_nbs=outg_rec_nbs, 
-            field_to_split='outg_rec_nbs', 
-            batch_size=1000, 
-            verbose=verbose
+            cols_of_interest        = None, 
+            addtnl_cols_of_interest = addtnl_cols_of_interest, 
+            outg_rec_nbs            = outg_rec_nbs, 
+            field_to_split          = 'outg_rec_nbs', 
+            batch_size              = 1000, 
+            verbose                 = verbose
         )
         if addtnl_build_sql_function_kwargs is not None:
             build_sql_function_kwargs = {**build_sql_function_kwargs, **addtnl_build_sql_function_kwargs}
         #-------------------------
         df = DOVSOutages.build_consolidated_outage_df(
-            contstruct_df_args=dict(read_sql_args=dict(dtype={dovs_outg_rec_nb_col:np.int64, dovs_premise_nb_col:str})), 
-            build_sql_function=DOVSOutages_SQL.build_sql_outage, 
-            build_sql_function_kwargs=build_sql_function_kwargs, 
-            return_premise_nbs_col=return_premise_nbs_col, 
-            addtnl_get_premise_nbs_for_outages_kwargs=dict(
-                col_type_outg_rec_nb=col_type_outg_rec_nb, 
-                col_type_premise_nb=col_type_premise_nb, 
-                to_numeric_errors=to_numeric_errors, 
-                outg_rec_nb_col=dovs_outg_rec_nb_col, 
-                premise_nb_col=dovs_premise_nb_col, 
-                return_premise_nbs_col=return_premise_nbs_col
+            contstruct_df_args        = dict(read_sql_args=dict(dtype={dovs_outg_rec_nb_col:np.int64, dovs_premise_nb_col:str})), 
+            build_sql_function        = DOVSOutages_SQL.build_sql_outage, 
+            build_sql_function_kwargs = build_sql_function_kwargs, 
+            return_premise_nbs_col    = return_premise_nbs_col, 
+            addtnl_get_premise_nbs_for_outages_kwargs = dict(
+                col_type_outg_rec_nb   = col_type_outg_rec_nb, 
+                col_type_premise_nb    = col_type_premise_nb, 
+                to_numeric_errors      = to_numeric_errors, 
+                outg_rec_nb_col        = dovs_outg_rec_nb_col, 
+                premise_nb_col         = dovs_premise_nb_col, 
+                return_premise_nbs_col = return_premise_nbs_col
             )
         )
         #-------------------------
@@ -1342,14 +1387,14 @@ class DOVSOutages(GenAn):
 
     @staticmethod
     def get_serial_numbers_for_outages(
-        outg_rec_nbs, 
-        return_type=dict, 
-        col_type_outg_rec_nb=str, 
-        col_type_premise_nb=None, 
-        col_type_serial_nb=None, 
-        to_numeric_errors='coerce', 
-        return_premise_nbs_for_outages=False, 
-        mp_df=None, 
+        outg_rec_nbs                   , 
+        return_type                    = dict, 
+        col_type_outg_rec_nb           = str, 
+        col_type_premise_nb            = None, 
+        col_type_serial_nb             = None, 
+        to_numeric_errors              = 'coerce', 
+        return_premise_nbs_for_outages = False, 
+        mp_df                          = None, 
         **kwargs
     ):
         r"""
@@ -1382,9 +1427,11 @@ class DOVSOutages(GenAn):
             pd.DataFrame
         """
         #-------------------------
-        assert(return_type==dict or 
-               return_type==pd.Series or 
-               return_type==pd.DataFrame)
+        assert(
+            return_type==dict or 
+            return_type==pd.Series or 
+            return_type==pd.DataFrame
+            )
         #-------------------------
         # NOTE: outg_rec_nb_col and conn_db not explicitly used here, but are used in 
         #       DOVSOutages.get_premise_nbs_for_outages.  Kept here to remind me of their existence.
@@ -1407,11 +1454,11 @@ class DOVSOutages(GenAn):
             col_type_serial_nb = col_type_outg_rec_nb
         #-------------------------
         prem_nbs_in_outgs = DOVSOutages.get_premise_nbs_for_outages(
-            outg_rec_nbs=outg_rec_nbs, 
-            return_type=return_type, 
-            col_type_outg_rec_nb=col_type_outg_rec_nb, 
-            col_type_premise_nb=col_type_premise_nb, 
-            to_numeric_errors=to_numeric_errors, 
+            outg_rec_nbs         = outg_rec_nbs, 
+            return_type          = return_type, 
+            col_type_outg_rec_nb = col_type_outg_rec_nb, 
+            col_type_premise_nb  = col_type_premise_nb, 
+            to_numeric_errors    = to_numeric_errors, 
             **kwargs        
         )
         #-------------------------
@@ -1433,22 +1480,22 @@ class DOVSOutages(GenAn):
         #-------------------------
         if mp_df is None:
             mp = MeterPremise(
-                df_construct_type=DFConstructType.kRunSqlQuery, 
-                init_df_in_constructor=True, 
-                build_sql_function=MeterPremise.build_sql_meter_premise, 
-                build_sql_function_kwargs=dict(
-                    cols_of_interest=cols_of_interest_met_prem, 
-                    premise_nbs=all_prem_nbs
+                df_construct_type         = DFConstructType.kRunSqlQuery, 
+                init_df_in_constructor    = True, 
+                build_sql_function        = MeterPremise.build_sql_meter_premise, 
+                build_sql_function_kwargs = dict(
+                    cols_of_interest = cols_of_interest_met_prem, 
+                    premise_nbs      = all_prem_nbs
                 )
             )
             #----------
             mp_df = mp.df
         #----------
         mp_df = Utilities_df.convert_col_types(
-            df=mp_df, 
-            cols_and_types_dict={mp_serial_number_col:col_type_serial_nb, mp_premise_nb_col:col_type_premise_nb}, 
-            to_numeric_errors=to_numeric_errors, 
-            inplace=True    
+            df                  = mp_df, 
+            cols_and_types_dict = {mp_serial_number_col:col_type_serial_nb, mp_premise_nb_col:col_type_premise_nb}, 
+            to_numeric_errors   = to_numeric_errors, 
+            inplace             = True    
         )
         #----------
         mp_df = mp_df.groupby(mp_premise_nb_col)[mp_serial_number_col].unique()
@@ -1457,9 +1504,9 @@ class DOVSOutages(GenAn):
             if isinstance(prem_nbs_in_outgs, dict):
                 SNs_in_outgs = dict()
             else:
-                SNs_in_outgs = pd.Series(dtype='object')
+                SNs_in_outgs            = pd.Series(dtype='object')
                 SNs_in_outgs.index.name = prem_nbs_in_outgs.index.name
-                SNs_in_outgs.name = return_serial_nbs_col
+                SNs_in_outgs.name       = return_serial_nbs_col
             #-------------------------
             for outg_rec_nb, prem_nbs in prem_nbs_in_outgs.items():
                 SNs_i = []
@@ -1492,28 +1539,28 @@ class DOVSOutages(GenAn):
         
     @staticmethod
     def get_active_SNs_and_others_for_outages(
-        outg_rec_nbs, 
-        df_mp_curr, 
-        df_mp_hist, 
-        addtnl_other_outg_cols=None, 
-        return_premise_nbs_col='premise_nbs', 
-        return_premise_nbs_from_MP_col='premise_nbs_from_MP',
-        return_SNs_col='SNs', 
-        addtnl_build_sql_function_kwargs=None, 
-        col_type_outg_rec_nb=str, 
-        col_type_premise_nb=None, 
-        to_numeric_errors='coerce', 
-        verbose=False,
-        consolidate_PNs_batch_size=1000, 
-        df_mp_serial_number_col='mfr_devc_ser_nbr', 
-        df_mp_prem_nb_col='prem_nb', 
-        df_mp_install_time_col='inst_ts', 
-        df_mp_removal_time_col='rmvl_ts', 
-        df_mp_trsf_pole_nb_col='trsf_pole_nb', 
-        dovs_outg_rec_nb_col='OUTG_REC_NB', 
-        dovs_premise_nb_col='PREMISE_NB', 
-        dovs_t_min_col='DT_OFF_TS_FULL',
-        dovs_t_max_col='DT_ON_TS'
+        outg_rec_nbs                     , 
+        df_mp_curr                       , 
+        df_mp_hist                       , 
+        addtnl_other_outg_cols           = None, 
+        return_premise_nbs_col           = 'premise_nbs', 
+        return_premise_nbs_from_MP_col   = 'premise_nbs_from_MP',
+        return_SNs_col                   = 'SNs', 
+        addtnl_build_sql_function_kwargs = None, 
+        col_type_outg_rec_nb             = str, 
+        col_type_premise_nb              = None, 
+        to_numeric_errors                = 'coerce', 
+        verbose                          = False,
+        consolidate_PNs_batch_size       = 1000, 
+        df_mp_serial_number_col          = 'mfr_devc_ser_nbr', 
+        df_mp_prem_nb_col                = 'prem_nb', 
+        df_mp_install_time_col           = 'inst_ts', 
+        df_mp_removal_time_col           = 'rmvl_ts', 
+        df_mp_trsf_pole_nb_col           = 'trsf_pole_nb', 
+        dovs_outg_rec_nb_col             = 'OUTG_REC_NB', 
+        dovs_premise_nb_col              = 'PREMISE_NB', 
+        dovs_t_min_col                   = 'DT_OFF_TS_FULL',
+        dovs_t_max_col                   = 'DT_ON_TS'
     ):
         r"""
         NOTE: If one takes outg_rec_nbs from a general list of outages (e.g., performing a query for all outages between 
@@ -1528,53 +1575,53 @@ class DOVSOutages(GenAn):
         if addtnl_other_outg_cols is not None:
             other_outg_cols = list(set(other_outg_cols+addtnl_other_outg_cols))
         PNs_for_outgs = DOVSOutages.get_premise_nbs_and_others_for_outages(
-            outg_rec_nbs=outg_rec_nbs, 
-            other_outg_cols=other_outg_cols, 
-            return_premise_nbs_col=return_premise_nbs_col, 
-            addtnl_build_sql_function_kwargs=addtnl_build_sql_function_kwargs, 
-            col_type_outg_rec_nb=col_type_outg_rec_nb, 
-            col_type_premise_nb=col_type_premise_nb, 
-            to_numeric_errors=to_numeric_errors, 
-            dovs_outg_rec_nb_col=dovs_outg_rec_nb_col, 
-            dovs_premise_nb_col=dovs_premise_nb_col, 
-            verbose=verbose
+            outg_rec_nbs                     = outg_rec_nbs, 
+            other_outg_cols                  = other_outg_cols, 
+            return_premise_nbs_col           = return_premise_nbs_col, 
+            addtnl_build_sql_function_kwargs = addtnl_build_sql_function_kwargs, 
+            col_type_outg_rec_nb             = col_type_outg_rec_nb, 
+            col_type_premise_nb              = col_type_premise_nb, 
+            to_numeric_errors                = to_numeric_errors, 
+            dovs_outg_rec_nb_col             = dovs_outg_rec_nb_col, 
+            dovs_premise_nb_col              = dovs_premise_nb_col, 
+            verbose                          = verbose
         )
         #-------------------------
         # From PNs_for_outgs, grab the list of PNs
         # In very limited testing, a batch size of 1000 seemed to work well here
         PNs = Utilities_df.consolidate_column_of_lists(
-            df=PNs_for_outgs, 
-            col=return_premise_nbs_col, 
-            sort=True,
-            include_None=False,
-            batch_size=consolidate_PNs_batch_size, 
-            verbose=False
+            df           = PNs_for_outgs, 
+            col          = return_premise_nbs_col, 
+            sort         = True,
+            include_None = False,
+            batch_size   = consolidate_PNs_batch_size, 
+            verbose      = False
         )
         #-------------------------
         necessary_mp_cols = [df_mp_serial_number_col, df_mp_prem_nb_col, df_mp_install_time_col, df_mp_removal_time_col]
         # If df_mp_curr or df_mp_hist are not supplied, they will be built    
         if df_mp_hist is None:
             mp_hist = MeterPremise(
-                df_construct_type=DFConstructType.kRunSqlQuery, 
-                init_df_in_constructor=True, 
-                build_sql_function=MeterPremise.build_sql_meter_premise, 
+                df_construct_type      = DFConstructType.kRunSqlQuery, 
+                init_df_in_constructor = True, 
+                build_sql_function     = MeterPremise.build_sql_meter_premise, 
                 build_sql_function_kwargs=dict(
-                    cols_of_interest=necessary_mp_cols, 
-                    premise_nbs=PNs, 
-                    table_name='meter_premise_hist'
+                    cols_of_interest = necessary_mp_cols, 
+                    premise_nbs      = PNs, 
+                    table_name       = 'meter_premise_hist'
                 )
             )
             df_mp_hist = mp_hist.df
         #-----
         if df_mp_curr is None:
             mp_curr = MeterPremise(
-                df_construct_type=DFConstructType.kRunSqlQuery, 
-                init_df_in_constructor=True, 
-                build_sql_function=MeterPremise.build_sql_meter_premise, 
+                df_construct_type      = DFConstructType.kRunSqlQuery, 
+                init_df_in_constructor = True, 
+                build_sql_function     = MeterPremise.build_sql_meter_premise, 
                 build_sql_function_kwargs=dict(
-                    cols_of_interest=necessary_mp_cols+[df_mp_trsf_pole_nb_col], 
-                    premise_nbs=PNs, 
-                    table_name='meter_premise'
+                    cols_of_interest = necessary_mp_cols+[df_mp_trsf_pole_nb_col], 
+                    premise_nbs      = PNs, 
+                    table_name       = 'meter_premise'
                 )
             )
             df_mp_curr = mp_curr.df
@@ -1614,37 +1661,37 @@ class DOVSOutages(GenAn):
             # active_SNs_df_i will have indices equal to premise numbers and value equal to lists
             #   of active SNs for each PN
             active_SNs_df_i = MeterPremise.get_active_SNs_for_PNs_at_datetime_interval(
-                PNs=row_i[return_premise_nbs_col],
-                df_mp_curr=df_mp_curr, 
-                df_mp_hist=df_mp_hist, 
-                dt_0=row_i[dovs_t_min_col],
-                dt_1=row_i[dovs_t_max_col],
-                output_index=None,
-                output_groupby=[df_mp_prem_nb_col], 
-                include_prems_wo_active_SNs_when_groupby=True, 
-                assert_all_PNs_found=False
+                PNs                                      = row_i[return_premise_nbs_col],
+                df_mp_curr                               = df_mp_curr, 
+                df_mp_hist                               = df_mp_hist, 
+                dt_0                                     = row_i[dovs_t_min_col],
+                dt_1                                     = row_i[dovs_t_max_col],
+                output_index                             = None,
+                output_groupby                           = [df_mp_prem_nb_col], 
+                include_prems_wo_active_SNs_when_groupby = True, 
+                assert_all_PNs_found                     = False
             )
             active_SNs_df_i = active_SNs_df_i.reset_index()
             if active_SNs_df_i.shape[0]==0:
-                active_SNs_df_i[df_mp_prem_nb_col] = np.nan
+                active_SNs_df_i[df_mp_prem_nb_col]       = np.nan
                 active_SNs_df_i[df_mp_serial_number_col] = [[]]    
             active_SNs_df_i[dovs_outg_rec_nb_col] = outg_rec_nb_i
-            active_SNs_df_i = active_SNs_df_i.explode(df_mp_serial_number_col)
+            active_SNs_df_i                       = active_SNs_df_i.explode(df_mp_serial_number_col)
             assert(outg_rec_nb_i not in active_SNs_in_outgs_dfs_dict)
             active_SNs_in_outgs_dfs_dict[outg_rec_nb_i] = active_SNs_df_i
         #-------------------------
         active_SNs_df = pd.concat(list(active_SNs_in_outgs_dfs_dict.values()))
         #-------------------------
         active_SNs_df = Utilities_df.consolidate_df(
-            df=active_SNs_df, 
-            groupby_cols=dovs_outg_rec_nb_col, 
-            cols_shared_by_group=None, 
-            cols_to_collect_in_lists=[df_mp_serial_number_col, df_mp_prem_nb_col], 
-            include_groupby_cols_in_output_cols=False, 
-            allow_duplicates_in_lists=False, 
-            recover_uniqueness_violators=True, 
-            rename_cols=None, 
-            verbose=True
+            df                                  = active_SNs_df, 
+            groupby_cols                        = dovs_outg_rec_nb_col, 
+            cols_shared_by_group                = None, 
+            cols_to_collect_in_lists            = [df_mp_serial_number_col, df_mp_prem_nb_col], 
+            include_groupby_cols_in_output_cols = False, 
+            allow_duplicates_in_lists           = False, 
+            recover_uniqueness_violators        = True, 
+            rename_cols                         = None, 
+            verbose                             = True
         )
         #-------------------------
         # Change [nan] entries to []
@@ -1664,8 +1711,8 @@ class DOVSOutages(GenAn):
         active_SNs_df.loc[empty_mask, df_mp_prem_nb_col] = [[] for _ in range(empty_mask.sum())]
         #-------------------------
         active_SNs_df = active_SNs_df.rename(columns={
-            df_mp_prem_nb_col:return_premise_nbs_from_MP_col, 
-            df_mp_serial_number_col:return_SNs_col
+            df_mp_prem_nb_col       : return_premise_nbs_from_MP_col, 
+            df_mp_serial_number_col : return_SNs_col
         })
         active_SNs_and_others_df = pd.merge(PNs_for_outgs, active_SNs_df, left_index=True, right_index=True, how='left')
         #-------------------------
@@ -1674,9 +1721,9 @@ class DOVSOutages(GenAn):
         
     @staticmethod
     def get_mjr_mnr_causes_for_outages(
-        outg_rec_nbs, 
-        include_equip_type=True, 
-        set_outg_rec_nb_as_index=True
+        outg_rec_nbs             , 
+        include_equip_type       = True, 
+        set_outg_rec_nb_as_index = True
     ):
         r"""
         """
@@ -1690,16 +1737,16 @@ class DOVSOutages(GenAn):
             include_DOVS_EQUIPMENT_TYPES_DIM=False
         #-------------------------
         dovs_outgs = DOVSOutages(                 
-            df_construct_type=DFConstructType.kRunSqlQuery, 
-            contstruct_df_args=None, 
-            init_df_in_constructor=True, 
-            build_sql_function=DOVSOutages_SQL.build_sql_outage, 
-            build_sql_function_kwargs=dict(        
-                outg_rec_nbs = outg_rec_nbs, 
-                cols_of_interest=cols_of_interest, 
-                include_DOVS_OUTAGE_CAUSE_TYPES_DIM=True, 
-                include_DOVS_EQUIPMENT_TYPES_DIM=include_DOVS_EQUIPMENT_TYPES_DIM, 
-                field_to_split='outg_rec_nbs'
+            df_construct_type         = DFConstructType.kRunSqlQuery, 
+            contstruct_df_args        = None, 
+            init_df_in_constructor    = True, 
+            build_sql_function        = DOVSOutages_SQL.build_sql_outage, 
+            build_sql_function_kwargs = dict(        
+                outg_rec_nbs                        = outg_rec_nbs, 
+                cols_of_interest                    = cols_of_interest, 
+                include_DOVS_OUTAGE_CAUSE_TYPES_DIM = True, 
+                include_DOVS_EQUIPMENT_TYPES_DIM    = include_DOVS_EQUIPMENT_TYPES_DIM, 
+                field_to_split                      = 'outg_rec_nbs'
             ),
         )
         #-------------------------
@@ -1721,7 +1768,10 @@ class DOVSOutages(GenAn):
         
         
     @staticmethod
-    def get_outg_rec_nbs_from_df(df, idfr):
+    def get_outg_rec_nbs_from_df(
+        df, 
+        idfr
+    ):
         r"""
         Extract the outg_rec_nbs from a df.
           
@@ -1762,8 +1812,8 @@ class DOVSOutages(GenAn):
             else:
                 idfr_idx_lvl = re.findall(r'index_(\d*)', idfr)
                 assert(len(idfr_idx_lvl)==1)
-                idfr_idx_lvl=idfr_idx_lvl[0]
-                idfr_idx_lvl=int(idfr_idx_lvl)
+                idfr_idx_lvl = idfr_idx_lvl[0]
+                idfr_idx_lvl = int(idfr_idx_lvl)
         else:
             assert(len(idfr)==2)
             assert(idfr[0]=='index')
@@ -1778,7 +1828,11 @@ class DOVSOutages(GenAn):
     
     
     @staticmethod
-    def get_outg_rec_nbs_list_from_df(df, idfr, unique_only=True):
+    def get_outg_rec_nbs_list_from_df(
+        df          , 
+        idfr        , 
+        unique_only = True
+    ):
         r"""
         See get_outg_rec_nbs_from_df for details.
         This returns a list version of get_outg_rec_nbs_from_df
@@ -1793,12 +1847,12 @@ class DOVSOutages(GenAn):
             
     @staticmethod
     def get_outg_info_for_df(
-        df, 
-        outg_rec_nb_idfr, 
-        contstruct_df_args=None, 
-        build_sql_function=None, 
-        build_sql_function_kwargs=None, 
-        set_outg_rec_nb_as_index=True
+        df                        , 
+        outg_rec_nb_idfr          , 
+        contstruct_df_args        = None, 
+        build_sql_function        = None, 
+        build_sql_function_kwargs = None, 
+        set_outg_rec_nb_as_index  = True
     ):
         r"""
         To a DF containing outage data, get additional information of the outage from DOVS.
@@ -1841,29 +1895,29 @@ class DOVSOutages(GenAn):
         build_sql_function_kwargs['field_to_split'] = 'outg_rec_nbs'
         #-------------------------   
         dovs_outgs = DOVSOutages(
-            df_construct_type=df_construct_type, 
-            contstruct_df_args=contstruct_df_args, 
-            init_df_in_constructor=init_df_in_constructor,
-            build_sql_function=build_sql_function, 
-            build_sql_function_kwargs=build_sql_function_kwargs, 
-            build_consolidated=False
+            df_construct_type         = df_construct_type, 
+            contstruct_df_args        = contstruct_df_args, 
+            init_df_in_constructor    = init_df_in_constructor,
+            build_sql_function        = build_sql_function, 
+            build_sql_function_kwargs = build_sql_function_kwargs, 
+            build_consolidated        = False
         )
         dovs_outgs_df = dovs_outgs.get_df()
         if set_outg_rec_nb_as_index and dovs_outgs_df.shape[0]>0:
             outg_rec_nb_col = build_sql_function_kwargs.get('outg_rec_nb_col', 'OUTG_REC_NB')
-            dovs_outgs_df = dovs_outgs_df.set_index(outg_rec_nb_col).sort_index()
+            dovs_outgs_df   = dovs_outgs_df.set_index(outg_rec_nb_col).sort_index()
         #--------------------------------------------------
         return dovs_outgs_df
     
     
     @staticmethod
     def append_outg_info_to_df(
-        df, 
-        outg_rec_nb_idfr, 
-        contstruct_df_args=None, 
-        build_sql_function=None, 
-        build_sql_function_kwargs=None, 
-        dummy_col_levels_prefix='outg_dummy_lvl_'
+        df                        , 
+        outg_rec_nb_idfr          , 
+        contstruct_df_args        = None, 
+        build_sql_function        = None, 
+        build_sql_function_kwargs = None, 
+        dummy_col_levels_prefix   = 'outg_dummy_lvl_'
     ):
         r"""
         To a DF containing outage data, append additional information of the outage from DOVS.
@@ -1946,10 +2000,10 @@ class DOVSOutages(GenAn):
         
     @staticmethod
     def append_outg_dt_off_ts_full_to_df(
-        df, 
-        outg_rec_nb_idfr, 
-        dummy_col_levels_prefix='outg_dummy_lvl_', 
-        include_dt_on_ts=False
+        df                      , 
+        outg_rec_nb_idfr        , 
+        dummy_col_levels_prefix = 'outg_dummy_lvl_', 
+        include_dt_on_ts        = False
     ):
         r"""
         To a DF containing outage data, append DT_OFF_TS_FULL from DOVS.
@@ -1970,11 +2024,11 @@ class DOVSOutages(GenAn):
         if include_dt_on_ts:
             cols_of_interest.append('DT_ON_TS')
         #-------------------------
-        contstruct_df_args=None
-        build_sql_function = DOVSOutages_SQL.build_sql_outage
-        build_sql_function_kwargs=dict(
-            datetime_col='DT_OFF_TS_FULL', 
-            cols_of_interest=cols_of_interest
+        contstruct_df_args        = None
+        build_sql_function        = DOVSOutages_SQL.build_sql_outage
+        build_sql_function_kwargs = dict(
+            datetime_col     = 'DT_OFF_TS_FULL', 
+            cols_of_interest = cols_of_interest
         )
         #-------------------------
         return DOVSOutages.append_outg_info_to_df(
@@ -1990,12 +2044,12 @@ class DOVSOutages(GenAn):
             
     @staticmethod
     def append_to_df_mjr_mnr_causes_for_outages(
-        df, 
-        outg_rec_nb_idfr, 
-        mjr_mnr_causes_df=None, 
-        include_equip_type=True, 
-        mjr_cause_col='MJR_CAUSE_CD', 
-        mnr_cause_col='MNR_CAUSE_CD'
+        df                 , 
+        outg_rec_nb_idfr   , 
+        mjr_mnr_causes_df  = None, 
+        include_equip_type = True, 
+        mjr_cause_col      = 'MJR_CAUSE_CD', 
+        mnr_cause_col      = 'MNR_CAUSE_CD'
     ):
         r"""
         Appends the major and minor causes to the DF containing outages.
@@ -2011,9 +2065,9 @@ class DOVSOutages(GenAn):
         # Build mjr_mnr_causes_df if not supplied, and ensure all outg_rec_nbs found in mjr_mnr_causes_df.
         if mjr_mnr_causes_df is None:
             mjr_mnr_causes_df = DOVSOutages.get_mjr_mnr_causes_for_outages(
-                outg_rec_nbs=outg_rec_nbs_unq, 
-                include_equip_type=include_equip_type, 
-                set_outg_rec_nb_as_index=True
+                outg_rec_nbs             = outg_rec_nbs_unq, 
+                include_equip_type       = include_equip_type, 
+                set_outg_rec_nb_as_index = True
             )
             mjr_cause_col='MJR_CAUSE_CD'
             mnr_cause_col='MNR_CAUSE_CD'
@@ -2027,12 +2081,12 @@ class DOVSOutages(GenAn):
         
     @staticmethod
     def get_df_subset_excluding_mjr_mnr_causes(
-        df, 
-        mjr_mnr_causes_to_exclude, 
-        mjr_causes_to_exclude=None,
-        mnr_causes_to_exclude=None, 
-        mjr_cause_col='MJR_CAUSE_CD', 
-        mnr_cause_col='MNR_CAUSE_CD'
+        df                        , 
+        mjr_mnr_causes_to_exclude , 
+        mjr_causes_to_exclude     = None,
+        mnr_causes_to_exclude     = None, 
+        mjr_cause_col             = 'MJR_CAUSE_CD', 
+        mnr_cause_col             = 'MNR_CAUSE_CD'
     ):
         r"""
         Return the subset of df excluding any major and/or minor causes in mjr_mnr_causes_to_exclude, mjr_causes_to_exclude, mnr_causes_to_exclude.
@@ -2231,9 +2285,9 @@ class DOVSOutages(GenAn):
         
     @staticmethod
     def build_direct_SNs_in_outgs_df(
-        outg_rec_nbs, 
-        use_exploded_method=True, 
-        equip_typ_nms_of_interest=None
+        outg_rec_nbs              , 
+        use_exploded_method       = True, 
+        equip_typ_nms_of_interest = None
     ):
         r"""
         Can't use slim, because need to join with MeterPremise and need trsf_pole_nb for each premise in an
@@ -2249,64 +2303,64 @@ class DOVSOutages(GenAn):
         #-------------------------
         if not use_exploded_method:
             dovs_outgs = DOVSOutages(                 
-                df_construct_type=DFConstructType.kRunSqlQuery, 
-                contstruct_df_args=None, 
-                init_df_in_constructor=True, 
-                build_sql_function=DOVSOutages_SQL.build_sql_outage, 
-                build_sql_function_kwargs=dict(        
-                    outg_rec_nbs = outg_rec_nbs, 
-                    include_DOVS_EQUIPMENT_TYPES_DIM=True, 
-                    include_DOVS_PREMISE_DIM=True,
-                    field_to_split='outg_rec_nbs'
+                df_construct_type         = DFConstructType.kRunSqlQuery, 
+                contstruct_df_args        = None, 
+                init_df_in_constructor    = True, 
+                build_sql_function        = DOVSOutages_SQL.build_sql_outage, 
+                build_sql_function_kwargs = dict(        
+                    outg_rec_nbs                     = outg_rec_nbs, 
+                    include_DOVS_EQUIPMENT_TYPES_DIM = True, 
+                    include_DOVS_PREMISE_DIM         = True,
+                    field_to_split                   = 'outg_rec_nbs'
                 ),
             )
             dovs_outgs_df = dovs_outgs.df
         else:
             dovs_outgs_slim = DOVSOutages.build_consolidated_outage(
-                contstruct_df_args=None, 
-                build_sql_function=DOVSOutages_SQL.build_sql_outage, 
-                build_sql_function_kwargs=dict(        
-                    outg_rec_nbs = outg_rec_nbs, 
-                    include_DOVS_EQUIPMENT_TYPES_DIM=True, 
-                    field_to_split='outg_rec_nbs'
+                contstruct_df_args        = None, 
+                build_sql_function        = DOVSOutages_SQL.build_sql_outage, 
+                build_sql_function_kwargs = dict(        
+                    outg_rec_nbs                     = outg_rec_nbs, 
+                    include_DOVS_EQUIPMENT_TYPES_DIM = True, 
+                    field_to_split                   = 'outg_rec_nbs'
                 ),
             )
             dovs_outgs_df = dovs_outgs_slim.df
             # Make slim df un-slim
-            dovs_outgs_df=dovs_outgs_df.explode(column='premise_nbs')
-            dovs_outgs_df=dovs_outgs_df.rename(columns={'premise_nbs':'PREMISE_NB'})
-            dovs_outgs_df=dovs_outgs_df.reset_index()
+            dovs_outgs_df = dovs_outgs_df.explode(column='premise_nbs')
+            dovs_outgs_df = dovs_outgs_df.rename(columns={'premise_nbs':'PREMISE_NB'})
+            dovs_outgs_df = dovs_outgs_df.reset_index()
         #-------------------------
         assert(all([x in dovs_outgs_df.columns 
                     for x in ['OUTG_REC_NB', 'LOCATION_ID', 'EQUIP_TYP_NM', 'PREMISE_NB']]))
         #-------------------------
         direct_SNs_in_outgs = DOVSOutages.build_mp_df_and_merge_with_df_outage(
-            df_outage=dovs_outgs_df[['OUTG_REC_NB', 'LOCATION_ID', 'EQUIP_TYP_NM', 'PREMISE_NB']], 
-            cols_of_interest_met_prem=['mfr_devc_ser_nbr', 'prem_nb', 'trsf_pole_nb'], 
-            drop_cols = None, 
-            rename_cols={'mfr_devc_ser_nbr':'serial_number'}, 
-            inplace=False    
+            df_outage                 = dovs_outgs_df[['OUTG_REC_NB', 'LOCATION_ID', 'EQUIP_TYP_NM', 'PREMISE_NB']], 
+            cols_of_interest_met_prem = ['mfr_devc_ser_nbr', 'prem_nb', 'trsf_pole_nb'], 
+            drop_cols                 = None, 
+            rename_cols               = {'mfr_devc_ser_nbr':'serial_number'}, 
+            inplace                   = False    
         )
-        direct_SNs_in_outgs=direct_SNs_in_outgs[direct_SNs_in_outgs['trsf_pole_nb']==direct_SNs_in_outgs['LOCATION_ID']]
+        direct_SNs_in_outgs = direct_SNs_in_outgs[direct_SNs_in_outgs['trsf_pole_nb']==direct_SNs_in_outgs['LOCATION_ID']]
         direct_SNs_in_outgs = DOVSOutages.consolidate_df_outage(
-            df_outage=direct_SNs_in_outgs, 
-            outg_rec_nb_col='OUTG_REC_NB', 
-            addtnl_grpby_cols=None, 
-            cols_shared_by_group=['LOCATION_ID', 'EQUIP_TYP_NM'], 
-            cols_to_collect_in_lists=['PREMISE_NB', 'prem_nb', 'serial_number', 'trsf_pole_nb'], 
-            allow_duplicates_in_lists=False, 
-            allow_NaNs_in_lists=False, 
-            recover_uniqueness_violators=True, 
-            gpby_dropna=True, 
-            rename_cols=None,     
-            premise_nb_col='serial_number', 
-            premise_nbs_col='direct_serial_numbers', 
-            cols_to_drop=None, 
-            sort_PNs=True, 
-            drop_null_premise_nbs=True, 
-            set_outg_rec_nb_as_index=True,
-            drop_outg_rec_nb_if_index=True, 
-            verbose=False
+            df_outage                    = direct_SNs_in_outgs, 
+            outg_rec_nb_col              = 'OUTG_REC_NB', 
+            addtnl_grpby_cols            = None, 
+            cols_shared_by_group         = ['LOCATION_ID', 'EQUIP_TYP_NM'], 
+            cols_to_collect_in_lists     = ['PREMISE_NB', 'prem_nb', 'serial_number', 'trsf_pole_nb'], 
+            allow_duplicates_in_lists    = False, 
+            allow_NaNs_in_lists          = False, 
+            recover_uniqueness_violators = True, 
+            gpby_dropna                  = True, 
+            rename_cols                  = None,     
+            premise_nb_col               = 'serial_number', 
+            premise_nbs_col              = 'direct_serial_numbers', 
+            cols_to_drop                 = None, 
+            sort_PNs                     = True, 
+            drop_null_premise_nbs        = True, 
+            set_outg_rec_nb_as_index     = True,
+            drop_outg_rec_nb_if_index    = True, 
+            verbose                      = False
         )
         #-------------------------
         if equip_typ_nms_of_interest is not None:
@@ -2321,15 +2375,15 @@ class DOVSOutages(GenAn):
     #TODO: Utilize this throughout MeterPremise 
     @staticmethod
     def build_mp_df_curr_hist_for_outgs(
-        outg_rec_nbs, 
-        join_curr_hist=False, 
-        addtnl_mp_df_curr_cols=None, 
-        addtnl_mp_df_hist_cols=None, 
-        df_mp_serial_number_col='mfr_devc_ser_nbr', 
-        df_mp_prem_nb_col='prem_nb', 
-        df_mp_install_time_col='inst_ts', 
-        df_mp_removal_time_col='rmvl_ts', 
-        df_mp_trsf_pole_nb_col='trsf_pole_nb'
+        outg_rec_nbs            , 
+        join_curr_hist          = False, 
+        addtnl_mp_df_curr_cols  = None, 
+        addtnl_mp_df_hist_cols  = None, 
+        df_mp_serial_number_col = 'mfr_devc_ser_nbr', 
+        df_mp_prem_nb_col       = 'prem_nb', 
+        df_mp_install_time_col  = 'inst_ts', 
+        df_mp_removal_time_col  = 'rmvl_ts', 
+        df_mp_trsf_pole_nb_col  = 'trsf_pole_nb'
     ):
         r"""
         By default, necessary_mp_cols = [df_mp_serial_number_col, df_mp_prem_nb_col, df_mp_install_time_col, df_mp_removal_time_col]
@@ -2346,51 +2400,51 @@ class DOVSOutages(GenAn):
         #    method is slightly faster than the alternative (e.g., using return_type=pd.Series and calling 
         #    Utilities_df.consolidate_column_of_lists on PNs_for_outgs.to_frame())
         PNs_for_outgs = DOVSOutages.get_premise_nbs_for_outages(
-            outg_rec_nbs=outg_rec_nbs, 
-            return_type=pd.DataFrame, 
-            col_type_outg_rec_nb=str, 
-            col_type_premise_nb=None, 
-            to_numeric_errors='coerce', 
-            verbose=False, 
-            return_premise_nbs_col='premise_nb'
+            outg_rec_nbs           = outg_rec_nbs, 
+            return_type            = pd.DataFrame, 
+            col_type_outg_rec_nb   = str, 
+            col_type_premise_nb    = None, 
+            to_numeric_errors      = 'coerce', 
+            verbose                = False, 
+            return_premise_nbs_col = 'premise_nb'
         ) 
         PNs = PNs_for_outgs['premise_nb'].unique().tolist()
         #-------------------------
         return MeterPremise.build_mp_df_curr_hist_for_PNs(
-            PNs=PNs, 
-            join_curr_hist=join_curr_hist, 
-            addtnl_mp_df_curr_cols=addtnl_mp_df_curr_cols, 
-            addtnl_mp_df_hist_cols=addtnl_mp_df_hist_cols, 
-			assert_all_PNs_found=False, 
-            df_mp_serial_number_col=df_mp_serial_number_col, 
-            df_mp_prem_nb_col=df_mp_prem_nb_col, 
-            df_mp_install_time_col=df_mp_install_time_col, 
-            df_mp_removal_time_col=df_mp_removal_time_col, 
-            df_mp_trsf_pole_nb_col=df_mp_trsf_pole_nb_col
+            PNs                     = PNs, 
+            join_curr_hist          = join_curr_hist, 
+            addtnl_mp_df_curr_cols  = addtnl_mp_df_curr_cols, 
+            addtnl_mp_df_hist_cols  = addtnl_mp_df_hist_cols, 
+			assert_all_PNs_found    = False, 
+            df_mp_serial_number_col = df_mp_serial_number_col, 
+            df_mp_prem_nb_col       = df_mp_prem_nb_col, 
+            df_mp_install_time_col  = df_mp_install_time_col, 
+            df_mp_removal_time_col  = df_mp_removal_time_col, 
+            df_mp_trsf_pole_nb_col  = df_mp_trsf_pole_nb_col
         )
         
         
     @staticmethod
     def build_active_MP_for_outages(
-        outg_rec_nbs, 
-        df_mp_curr, 
-        df_mp_hist, 
-        addtnl_other_outg_cols=None, 
-        drop_inst_rmvl_cols=False, 
-        return_premise_nbs_col='premise_nbs', 
-        addtnl_build_sql_function_kwargs=None, 
-        col_type_outg_rec_nb=str, 
-        col_type_premise_nb=None, 
-        to_numeric_errors='coerce', 
-        verbose=False,
-        consolidate_PNs_batch_size=1000, 
-        df_mp_serial_number_col='mfr_devc_ser_nbr', 
-        df_mp_prem_nb_col='prem_nb', 
-        df_mp_install_time_col='inst_ts', 
-        df_mp_removal_time_col='rmvl_ts', 
-        df_mp_trsf_pole_nb_col='trsf_pole_nb', 
-        dovs_outg_rec_nb_col='OUTG_REC_NB', 
-        dovs_premise_nb_col='PREMISE_NB'
+        outg_rec_nbs                     , 
+        df_mp_curr                       , 
+        df_mp_hist                       , 
+        addtnl_other_outg_cols           = None, 
+        drop_inst_rmvl_cols              = False, 
+        return_premise_nbs_col           = 'premise_nbs', 
+        addtnl_build_sql_function_kwargs = None, 
+        col_type_outg_rec_nb             = str, 
+        col_type_premise_nb              = None, 
+        to_numeric_errors                = 'coerce', 
+        verbose                          = False,
+        consolidate_PNs_batch_size       = 1000, 
+        df_mp_serial_number_col          = 'mfr_devc_ser_nbr', 
+        df_mp_prem_nb_col                = 'prem_nb', 
+        df_mp_install_time_col           = 'inst_ts', 
+        df_mp_removal_time_col           = 'rmvl_ts', 
+        df_mp_trsf_pole_nb_col           = 'trsf_pole_nb', 
+        dovs_outg_rec_nb_col             = 'OUTG_REC_NB', 
+        dovs_premise_nb_col              = 'PREMISE_NB'
     ):
         r"""
         NOTE: If one takes outg_rec_nbs from a general list of outages (e.g., performing a query for all outages between 
@@ -2401,57 +2455,57 @@ class DOVSOutages(GenAn):
         """
         #-------------------------
         # Build PNs and others from outages
-        other_outg_cols=['DT_ON_TS', 'DT_OFF_TS_FULL']
+        other_outg_cols = ['DT_ON_TS', 'DT_OFF_TS_FULL']
         if addtnl_other_outg_cols is not None:
             other_outg_cols = list(set(other_outg_cols+addtnl_other_outg_cols))
         PNs_for_outgs = DOVSOutages.get_premise_nbs_and_others_for_outages(
-            outg_rec_nbs=outg_rec_nbs, 
-            other_outg_cols=other_outg_cols, 
-            return_premise_nbs_col=return_premise_nbs_col, 
-            addtnl_build_sql_function_kwargs=addtnl_build_sql_function_kwargs, 
-            col_type_outg_rec_nb=col_type_outg_rec_nb, 
-            col_type_premise_nb=col_type_premise_nb, 
-            to_numeric_errors=to_numeric_errors, 
-            dovs_outg_rec_nb_col=dovs_outg_rec_nb_col, 
-            dovs_premise_nb_col=dovs_premise_nb_col, 
-            verbose=verbose
+            outg_rec_nbs                     = outg_rec_nbs, 
+            other_outg_cols                  = other_outg_cols, 
+            return_premise_nbs_col           = return_premise_nbs_col, 
+            addtnl_build_sql_function_kwargs = addtnl_build_sql_function_kwargs, 
+            col_type_outg_rec_nb             = col_type_outg_rec_nb, 
+            col_type_premise_nb              = col_type_premise_nb, 
+            to_numeric_errors                = to_numeric_errors, 
+            dovs_outg_rec_nb_col             = dovs_outg_rec_nb_col, 
+            dovs_premise_nb_col              = dovs_premise_nb_col, 
+            verbose                          = verbose
         )
         #-------------------------
         # From PNs_for_outgs, grab the list of PNs
         # In very limited testing, a batch size of 1000 seemed to work well here
         PNs = Utilities_df.consolidate_column_of_lists(
-            df=PNs_for_outgs, 
-            col=return_premise_nbs_col, 
-            sort=True,
-            include_None=False,
-            batch_size=consolidate_PNs_batch_size, 
-            verbose=False
+            df           = PNs_for_outgs, 
+            col          = return_premise_nbs_col, 
+            sort         = True,
+            include_None = False,
+            batch_size   = consolidate_PNs_batch_size, 
+            verbose      = False
         )
         #-------------------------
         necessary_mp_cols = [df_mp_serial_number_col, df_mp_prem_nb_col, df_mp_install_time_col, df_mp_removal_time_col]
         # If df_mp_curr or df_mp_hist are not supplied, they will be built    
         if df_mp_hist is None:
             mp_hist = MeterPremise(
-                df_construct_type=DFConstructType.kRunSqlQuery, 
-                init_df_in_constructor=True, 
-                build_sql_function=MeterPremise.build_sql_meter_premise, 
-                build_sql_function_kwargs=dict(
-                    cols_of_interest=necessary_mp_cols, 
-                    premise_nbs=PNs, 
-                    table_name='meter_premise_hist'
+                df_construct_type         = DFConstructType.kRunSqlQuery, 
+                init_df_in_constructor    = True, 
+                build_sql_function        = MeterPremise.build_sql_meter_premise, 
+                build_sql_function_kwargs = dict(
+                    cols_of_interest = necessary_mp_cols, 
+                    premise_nbs      = PNs, 
+                    table_name       = 'meter_premise_hist'
                 )
             )
             df_mp_hist = mp_hist.df
         #-----
         if df_mp_curr is None:
             mp_curr = MeterPremise(
-                df_construct_type=DFConstructType.kRunSqlQuery, 
-                init_df_in_constructor=True, 
-                build_sql_function=MeterPremise.build_sql_meter_premise, 
-                build_sql_function_kwargs=dict(
-                    cols_of_interest=necessary_mp_cols+[df_mp_trsf_pole_nb_col], 
-                    premise_nbs=PNs, 
-                    table_name='meter_premise'
+                df_construct_type         = DFConstructType.kRunSqlQuery, 
+                init_df_in_constructor    = True, 
+                build_sql_function        = MeterPremise.build_sql_meter_premise, 
+                build_sql_function_kwargs = dict(
+                    cols_of_interest = necessary_mp_cols+[df_mp_trsf_pole_nb_col], 
+                    premise_nbs      = PNs, 
+                    table_name       = 'meter_premise'
                 )
             )
             df_mp_curr = mp_curr.df
@@ -2466,16 +2520,16 @@ class DOVSOutages(GenAn):
 
         for outg_rec_nb_i, row_i in PNs_for_outgs.iterrows():
             active_SNs_df_i = MeterPremise.get_active_SNs_for_PNs_at_datetime_interval(
-                PNs=row_i[return_premise_nbs_col],
-                df_mp_curr=df_mp_curr, 
-                df_mp_hist=df_mp_hist, 
-                dt_0=row_i['DT_OFF_TS_FULL'],
-                dt_1=row_i['DT_ON_TS'],
-                output_index=None,
-                output_groupby=None, 
-                assert_all_PNs_found=False
+                PNs                  = row_i[return_premise_nbs_col],
+                df_mp_curr           = df_mp_curr, 
+                df_mp_hist           = df_mp_hist, 
+                dt_0                 = row_i['DT_OFF_TS_FULL'],
+                dt_1                 = row_i['DT_ON_TS'],
+                output_index         = None,
+                output_groupby       = None, 
+                assert_all_PNs_found = False
             )
-            active_SNs_df_i[dovs_outg_rec_nb_col] = outg_rec_nb_i
+            active_SNs_df_i[dovs_outg_rec_nb_col]       = outg_rec_nb_i
             assert(outg_rec_nb_i not in active_SNs_in_outgs_dfs_dict)
             active_SNs_in_outgs_dfs_dict[outg_rec_nb_i] = active_SNs_df_i
         #-------------------------
@@ -2489,11 +2543,11 @@ class DOVSOutages(GenAn):
         
     @staticmethod
     def build_active_direct_SNs_in_outgs_df(
-        outg_rec_nbs, 
-        use_exploded_method=True, 
-        equip_typ_nms_of_interest=None, 
-        mp_df_curr=None,
-        mp_df_hist=None
+        outg_rec_nbs              , 
+        use_exploded_method       = True, 
+        equip_typ_nms_of_interest = None, 
+        mp_df_curr                = None,
+        mp_df_hist                = None
     ):
         r"""
         Can't use slim, because need to join with MeterPremise and need trsf_pole_nb for each premise in an
@@ -2509,69 +2563,69 @@ class DOVSOutages(GenAn):
         #-------------------------
         if not use_exploded_method:
             dovs_outgs = DOVSOutages(                 
-                df_construct_type=DFConstructType.kRunSqlQuery, 
-                contstruct_df_args=None, 
-                init_df_in_constructor=True, 
-                build_sql_function=DOVSOutages_SQL.build_sql_outage, 
-                build_sql_function_kwargs=dict(        
-                    outg_rec_nbs = outg_rec_nbs, 
-                    include_DOVS_EQUIPMENT_TYPES_DIM=True, 
-                    include_DOVS_PREMISE_DIM=True,
-                    field_to_split='outg_rec_nbs'
+                df_construct_type         = DFConstructType.kRunSqlQuery, 
+                contstruct_df_args        = None, 
+                init_df_in_constructor    = True, 
+                build_sql_function        = DOVSOutages_SQL.build_sql_outage, 
+                build_sql_function_kwargs = dict(        
+                    outg_rec_nbs                     = outg_rec_nbs, 
+                    include_DOVS_EQUIPMENT_TYPES_DIM = True, 
+                    include_DOVS_PREMISE_DIM         = True,
+                    field_to_split                   = 'outg_rec_nbs'
                 ),
             )
             dovs_outgs_df = dovs_outgs.df
         else:
             dovs_outgs_slim = DOVSOutages.build_consolidated_outage(
-                contstruct_df_args=None, 
-                build_sql_function=DOVSOutages_SQL.build_sql_outage, 
-                build_sql_function_kwargs=dict(        
-                    outg_rec_nbs = outg_rec_nbs, 
-                    include_DOVS_EQUIPMENT_TYPES_DIM=True, 
-                    field_to_split='outg_rec_nbs'
+                contstruct_df_args        = None, 
+                build_sql_function        = DOVSOutages_SQL.build_sql_outage, 
+                build_sql_function_kwargs = dict(        
+                    outg_rec_nbs                     = outg_rec_nbs, 
+                    include_DOVS_EQUIPMENT_TYPES_DIM = True, 
+                    field_to_split                   = 'outg_rec_nbs'
                 ),
             )
             dovs_outgs_df = dovs_outgs_slim.df
             # Make slim df un-slim
-            dovs_outgs_df=dovs_outgs_df.explode(column='premise_nbs')
-            dovs_outgs_df=dovs_outgs_df.rename(columns={'premise_nbs':'PREMISE_NB'})
-            dovs_outgs_df=dovs_outgs_df.reset_index()
+            dovs_outgs_df = dovs_outgs_df.explode(column='premise_nbs')
+            dovs_outgs_df = dovs_outgs_df.rename(columns={'premise_nbs':'PREMISE_NB'})
+            dovs_outgs_df = dovs_outgs_df.reset_index()
         #-------------------------
         assert(all([x in dovs_outgs_df.columns 
                     for x in ['OUTG_REC_NB', 'LOCATION_ID', 'EQUIP_TYP_NM', 'PREMISE_NB']]))
         #-------------------------
         active_MP = DOVSOutages.build_active_MP_for_outages(
-            outg_rec_nbs = dovs_outgs_df['OUTG_REC_NB'].unique().tolist(), 
-            df_mp_curr=mp_df_curr, 
-            df_mp_hist=mp_df_hist, 
-            drop_inst_rmvl_cols=True
+            outg_rec_nbs        = dovs_outgs_df['OUTG_REC_NB'].unique().tolist(), 
+            df_mp_curr          = mp_df_curr, 
+            df_mp_hist          = mp_df_hist, 
+            drop_inst_rmvl_cols = True
         )
         direct_SNs_in_outgs = pd.merge(
             dovs_outgs_df[['OUTG_REC_NB', 'LOCATION_ID', 'EQUIP_TYP_NM', 'PREMISE_NB']], 
             active_MP, 
-            how='left', 
-            left_on=['OUTG_REC_NB', 'PREMISE_NB'], 
-            right_on=['OUTG_REC_NB', 'prem_nb'])
-        direct_SNs_in_outgs=direct_SNs_in_outgs[direct_SNs_in_outgs['trsf_pole_nb']==direct_SNs_in_outgs['LOCATION_ID']]    
+            how      = 'left', 
+            left_on  = ['OUTG_REC_NB', 'PREMISE_NB'], 
+            right_on = ['OUTG_REC_NB', 'prem_nb'])
+        direct_SNs_in_outgs = direct_SNs_in_outgs[direct_SNs_in_outgs['trsf_pole_nb']==direct_SNs_in_outgs['LOCATION_ID']]    
         direct_SNs_in_outgs = DOVSOutages.consolidate_df_outage(
-            df_outage=direct_SNs_in_outgs, 
-            outg_rec_nb_col='OUTG_REC_NB', 
-            addtnl_grpby_cols=None, 
-            cols_shared_by_group=['LOCATION_ID', 'EQUIP_TYP_NM'], 
-            cols_to_collect_in_lists=['PREMISE_NB']+active_MP.columns.tolist(), 
-            allow_duplicates_in_lists=False, 
-            allow_NaNs_in_lists=False, 
-            recover_uniqueness_violators=True, 
-            gpby_dropna=True, 
-            rename_cols=None,     
-            premise_nb_col='mfr_devc_ser_nbr', 
-            premise_nbs_col='direct_serial_numbers', 
-            cols_to_drop=None, 
-            sort_PNs=True, 
-            drop_null_premise_nbs=True, 
-            set_outg_rec_nb_as_index=True,
-            drop_outg_rec_nb_if_index=True, 
-            verbose=False
+            df_outage                    = direct_SNs_in_outgs, 
+            outg_rec_nb_col              = 'OUTG_REC_NB', 
+            addtnl_grpby_cols            = None, 
+            cols_shared_by_group         = ['LOCATION_ID', 'EQUIP_TYP_NM'], 
+            cols_to_collect_in_lists     = ['PREMISE_NB']+active_MP.columns.tolist(), 
+            allow_duplicates_in_lists    = False, 
+            allow_NaNs_in_lists          = False, 
+            recover_uniqueness_violators = True, 
+            gpby_dropna                  = True, 
+            rename_cols                  = None,     
+            premise_nb_col               = 'mfr_devc_ser_nbr', 
+            premise_nbs_col              = 'direct_serial_numbers', 
+            cols_to_drop                 = None, 
+            sort_PNs                     = True, 
+            drop_null_premise_nbs        = True, 
+            set_outg_rec_nb_as_index     = True,
+            drop_outg_rec_nb_if_index    = True, 
+            verbose                      = False
         )
         #-------------------------
         if equip_typ_nms_of_interest is not None:
@@ -2587,22 +2641,22 @@ class DOVSOutages(GenAn):
     #-----------------------------------------------------------------------------------------------------------------------------
     @staticmethod
     def reduce_active_MP_for_outages(
-        df_outage, 
-        prem_nb_col, 
-        df_mp_curr, 
-        df_mp_hist, 
-        drop_inst_rmvl_cols=False, 
-        outg_rec_nb_idfr='OUTG_REC_NB', 
-        is_slim=False, 
-        drop_approx_duplicates=True, 
-        drop_approx_duplicates_args=None, 
-        dt_on_ts_col='DT_ON_TS', 
-        df_off_ts_full_col='DT_OFF_TS_FULL', 
-        df_mp_serial_number_col='mfr_devc_ser_nbr', 
-        df_mp_prem_nb_col='prem_nb', 
-        df_mp_install_time_col='inst_ts', 
-        df_mp_removal_time_col='rmvl_ts', 
-        df_mp_trsf_pole_nb_col='trsf_pole_nb'
+        df_outage                   , 
+        prem_nb_col                 , 
+        df_mp_curr                  , 
+        df_mp_hist                  , 
+        drop_inst_rmvl_cols         = False, 
+        outg_rec_nb_idfr            = 'OUTG_REC_NB', 
+        is_slim                     = False, 
+        drop_approx_duplicates      = True, 
+        drop_approx_duplicates_args = None, 
+        dt_on_ts_col                = 'DT_ON_TS', 
+        df_off_ts_full_col          = 'DT_OFF_TS_FULL', 
+        df_mp_serial_number_col     = 'mfr_devc_ser_nbr', 
+        df_mp_prem_nb_col           = 'prem_nb', 
+        df_mp_install_time_col      = 'inst_ts', 
+        df_mp_removal_time_col      = 'rmvl_ts', 
+        df_mp_trsf_pole_nb_col      = 'trsf_pole_nb'
     ):
         r"""
         Intended to be used within build_active_MP_for_outages_df and build_active_MP_for_xfmrs_in_outages_df.
@@ -2652,56 +2706,56 @@ class DOVSOutages(GenAn):
                 # NOTE: assume_one_xfmr_per_PN=True above in MeterPremise.build_mp_df_curr_hist_for_PNs,
                 #       so does not need to be set again (i.e., assume_one_xfmr_per_PN=False below)
                 active_SNs_df_i = MeterPremise.get_active_SNs_for_PNs_at_datetime_interval(
-                    PNs=PNs_i,
-                    df_mp_curr=df_mp_curr, 
-                    df_mp_hist=df_mp_hist, 
-                    dt_0=df_off_ts_full_i,
-                    dt_1=dt_on_ts_i,
-                    addtnl_mp_df_curr_cols=None, 
-                    addtnl_mp_df_hist_cols=None,
-                    assume_one_xfmr_per_PN=False, 
-                    output_index=None,
-                    output_groupby=None, 
-                    include_prems_wo_active_SNs_when_groupby=True, 
-                    assert_all_PNs_found=False, 
-                    drop_approx_duplicates=drop_approx_duplicates, 
-                    drop_approx_duplicates_args=drop_approx_duplicates_args, 
-                    df_mp_serial_number_col=df_mp_serial_number_col, 
-                    df_mp_prem_nb_col=df_mp_prem_nb_col, 
-                    df_mp_install_time_col=df_mp_install_time_col, 
-                    df_mp_removal_time_col=df_mp_removal_time_col, 
-                    df_mp_trsf_pole_nb_col=df_mp_trsf_pole_nb_col
+                    PNs                                      = PNs_i,
+                    df_mp_curr                               = df_mp_curr, 
+                    df_mp_hist                               = df_mp_hist, 
+                    dt_0                                     = df_off_ts_full_i,
+                    dt_1                                     = dt_on_ts_i,
+                    addtnl_mp_df_curr_cols                   = None, 
+                    addtnl_mp_df_hist_cols                   = None,
+                    assume_one_xfmr_per_PN                   = False, 
+                    output_index                             = None,
+                    output_groupby                           = None, 
+                    include_prems_wo_active_SNs_when_groupby = True, 
+                    assert_all_PNs_found                     = False, 
+                    drop_approx_duplicates                   = drop_approx_duplicates, 
+                    drop_approx_duplicates_args              = drop_approx_duplicates_args, 
+                    df_mp_serial_number_col                  = df_mp_serial_number_col, 
+                    df_mp_prem_nb_col                        = df_mp_prem_nb_col, 
+                    df_mp_install_time_col                   = df_mp_install_time_col, 
+                    df_mp_removal_time_col                   = df_mp_removal_time_col, 
+                    df_mp_trsf_pole_nb_col                   = df_mp_trsf_pole_nb_col
                 )
-                active_SNs_df_i[outg_rec_nb_col] = outg_rec_nb_i
+                active_SNs_df_i[outg_rec_nb_col]            = outg_rec_nb_i
                 assert(outg_rec_nb_i not in active_SNs_in_outgs_dfs_dict)
                 active_SNs_in_outgs_dfs_dict[outg_rec_nb_i] = active_SNs_df_i
         else:
             for idx_i, row_i in df_outage.iterrows():
                 # NOTE: assume_one_xfmr_per_PN=True above in MeterPremise.build_mp_df_curr_hist_for_PNs,
                 #       so does not need to be set again (i.e., assume_one_xfmr_per_PN=False below)
-                outg_rec_nb_i = row_i[outg_rec_nb_col]
+                outg_rec_nb_i   = row_i[outg_rec_nb_col]
                 active_SNs_df_i = MeterPremise.get_active_SNs_for_PNs_at_datetime_interval(
-                    PNs=row_i[prem_nb_col],
-                    df_mp_curr=df_mp_curr, 
-                    df_mp_hist=df_mp_hist, 
-                    dt_0=row_i[df_off_ts_full_col],
-                    dt_1=row_i[dt_on_ts_col],
-                    addtnl_mp_df_curr_cols=None, 
-                    addtnl_mp_df_hist_cols=None,
-                    assume_one_xfmr_per_PN=False, 
-                    output_index=None,
-                    output_groupby=None, 
-                    include_prems_wo_active_SNs_when_groupby=True, 
-                    assert_all_PNs_found=False, 
-                    drop_approx_duplicates=drop_approx_duplicates, 
-                    drop_approx_duplicates_args=drop_approx_duplicates_args, 
-                    df_mp_serial_number_col=df_mp_serial_number_col, 
-                    df_mp_prem_nb_col=df_mp_prem_nb_col, 
-                    df_mp_install_time_col=df_mp_install_time_col, 
-                    df_mp_removal_time_col=df_mp_removal_time_col, 
-                    df_mp_trsf_pole_nb_col=df_mp_trsf_pole_nb_col                
+                    PNs                                      = row_i[prem_nb_col],
+                    df_mp_curr                               = df_mp_curr, 
+                    df_mp_hist                               = df_mp_hist, 
+                    dt_0                                     = row_i[df_off_ts_full_col],
+                    dt_1                                     = row_i[dt_on_ts_col],
+                    addtnl_mp_df_curr_cols                   = None, 
+                    addtnl_mp_df_hist_cols                   = None,
+                    assume_one_xfmr_per_PN                   = False, 
+                    output_index                             = None,
+                    output_groupby                           = None, 
+                    include_prems_wo_active_SNs_when_groupby = True, 
+                    assert_all_PNs_found                     = False, 
+                    drop_approx_duplicates                   = drop_approx_duplicates, 
+                    drop_approx_duplicates_args              = drop_approx_duplicates_args, 
+                    df_mp_serial_number_col                  = df_mp_serial_number_col, 
+                    df_mp_prem_nb_col                        = df_mp_prem_nb_col, 
+                    df_mp_install_time_col                   = df_mp_install_time_col, 
+                    df_mp_removal_time_col                   = df_mp_removal_time_col, 
+                    df_mp_trsf_pole_nb_col                   = df_mp_trsf_pole_nb_col                
                 )
-                active_SNs_df_i[outg_rec_nb_col] = outg_rec_nb_i
+                active_SNs_df_i[outg_rec_nb_col]            = outg_rec_nb_i
                 assert(outg_rec_nb_i not in active_SNs_in_outgs_dfs_dict)
                 active_SNs_in_outgs_dfs_dict[outg_rec_nb_i] = active_SNs_df_i
         #-------------------------
@@ -2715,25 +2769,25 @@ class DOVSOutages(GenAn):
         
     @staticmethod
     def build_active_MP_for_outages_df(
-        df_outage, 
-        prem_nb_col, 
-        df_mp_curr=None, 
-        df_mp_hist=None, 
-        assert_all_PNs_found=True, 
-        drop_inst_rmvl_cols=False, 
-        outg_rec_nb_idfr='OUTG_REC_NB', 
-        is_slim=False, 
-        addtnl_mp_df_curr_cols=None, 
-        addtnl_mp_df_hist_cols=None, 
-        dt_on_ts_col='DT_ON_TS', 
-        df_off_ts_full_col='DT_OFF_TS_FULL', 
-        consolidate_PNs_batch_size=1000, 
-        df_mp_serial_number_col='mfr_devc_ser_nbr', 
-        df_mp_prem_nb_col='prem_nb', 
-        df_mp_install_time_col='inst_ts', 
-        df_mp_removal_time_col='rmvl_ts', 
-        df_mp_trsf_pole_nb_col='trsf_pole_nb', 
-        early_return=False
+        df_outage                  , 
+        prem_nb_col                , 
+        df_mp_curr                 = None, 
+        df_mp_hist                 = None, 
+        assert_all_PNs_found       = True, 
+        drop_inst_rmvl_cols        = False, 
+        outg_rec_nb_idfr           = 'OUTG_REC_NB', 
+        is_slim                    = False, 
+        addtnl_mp_df_curr_cols     = None, 
+        addtnl_mp_df_hist_cols     = None, 
+        dt_on_ts_col               = 'DT_ON_TS', 
+        df_off_ts_full_col         = 'DT_OFF_TS_FULL', 
+        consolidate_PNs_batch_size = 1000, 
+        df_mp_serial_number_col    = 'mfr_devc_ser_nbr', 
+        df_mp_prem_nb_col          = 'prem_nb', 
+        df_mp_install_time_col     = 'inst_ts', 
+        df_mp_removal_time_col     = 'rmvl_ts', 
+        df_mp_trsf_pole_nb_col     = 'trsf_pole_nb', 
+        early_return               = False
     ):
         r"""
         Similar to build_active_MP_for_outages
@@ -2743,20 +2797,22 @@ class DOVSOutages(GenAn):
           objects, and would likely need to be exploded)
         """
         #-------------------------
-        assert(prem_nb_col in df_outage.columns and 
-               dt_on_ts_col in df_outage.columns and 
-               df_off_ts_full_col in df_outage.columns)
+        assert(
+            prem_nb_col        in df_outage.columns and 
+            dt_on_ts_col       in df_outage.columns and 
+            df_off_ts_full_col in df_outage.columns
+        )
         #-------------------------
         if not is_slim:
             PNs = df_outage[prem_nb_col].unique().tolist()
         else:
             PNs = Utilities_df.consolidate_column_of_lists(
-                df=df_outage, 
-                col=prem_nb_col, 
-                sort=True,
-                include_None=False,
-                batch_size=consolidate_PNs_batch_size, 
-                verbose=False
+                df           = df_outage, 
+                col          = prem_nb_col, 
+                sort         = True,
+                include_None = False,
+                batch_size   = consolidate_PNs_batch_size, 
+                verbose      = False
             )
         #-----
         PNs = [x for x in PNs if pd.notna(x)]
@@ -2773,21 +2829,21 @@ class DOVSOutages(GenAn):
             drop_approx_duplicates_args=None
         #-----
         mp_df_curr_hist_dict = MeterPremise.build_mp_df_curr_hist_for_PNs(
-            PNs=PNs, 
-            mp_df_curr=df_mp_curr,
-            mp_df_hist=df_mp_hist, 
-            join_curr_hist=False, 
-            addtnl_mp_df_curr_cols=addtnl_mp_df_curr_cols, 
-            addtnl_mp_df_hist_cols=addtnl_mp_df_hist_cols, 
-            assert_all_PNs_found=assert_all_PNs_found, 
-            assume_one_xfmr_per_PN=True, 
-            drop_approx_duplicates=True, 
-            drop_approx_duplicates_args=drop_approx_duplicates_args, 
-            df_mp_serial_number_col=df_mp_serial_number_col, 
-            df_mp_prem_nb_col=df_mp_prem_nb_col, 
-            df_mp_install_time_col=df_mp_install_time_col, 
-            df_mp_removal_time_col=df_mp_removal_time_col, 
-            df_mp_trsf_pole_nb_col=df_mp_trsf_pole_nb_col
+            PNs                         = PNs, 
+            mp_df_curr                  = df_mp_curr,
+            mp_df_hist                  = df_mp_hist, 
+            join_curr_hist              = False, 
+            addtnl_mp_df_curr_cols      = addtnl_mp_df_curr_cols, 
+            addtnl_mp_df_hist_cols      = addtnl_mp_df_hist_cols, 
+            assert_all_PNs_found        = assert_all_PNs_found, 
+            assume_one_xfmr_per_PN      = True, 
+            drop_approx_duplicates      = True, 
+            drop_approx_duplicates_args = drop_approx_duplicates_args, 
+            df_mp_serial_number_col     = df_mp_serial_number_col, 
+            df_mp_prem_nb_col           = df_mp_prem_nb_col, 
+            df_mp_install_time_col      = df_mp_install_time_col, 
+            df_mp_removal_time_col      = df_mp_removal_time_col, 
+            df_mp_trsf_pole_nb_col      = df_mp_trsf_pole_nb_col
         )
         df_mp_curr = mp_df_curr_hist_dict['mp_df_curr']
         df_mp_hist = mp_df_curr_hist_dict['mp_df_hist']
@@ -2795,22 +2851,22 @@ class DOVSOutages(GenAn):
             return df_mp_curr, df_mp_hist
         #-------------------------
         active_SNs_df = DOVSOutages.reduce_active_MP_for_outages(
-            df_outage=df_outage, 
-            prem_nb_col=prem_nb_col, 
-            df_mp_curr=df_mp_curr, 
-            df_mp_hist=df_mp_hist, 
-            drop_inst_rmvl_cols=drop_inst_rmvl_cols, 
-            outg_rec_nb_idfr=outg_rec_nb_idfr, 
-            is_slim=is_slim, 
-            drop_approx_duplicates=True, 
-            drop_approx_duplicates_args=drop_approx_duplicates_args, 
-            dt_on_ts_col=dt_on_ts_col, 
-            df_off_ts_full_col=df_off_ts_full_col, 
-            df_mp_serial_number_col=df_mp_serial_number_col, 
-            df_mp_prem_nb_col=df_mp_prem_nb_col, 
-            df_mp_install_time_col=df_mp_install_time_col, 
-            df_mp_removal_time_col=df_mp_removal_time_col, 
-            df_mp_trsf_pole_nb_col=df_mp_trsf_pole_nb_col
+            df_outage                   = df_outage, 
+            prem_nb_col                 = prem_nb_col, 
+            df_mp_curr                  = df_mp_curr, 
+            df_mp_hist                  = df_mp_hist, 
+            drop_inst_rmvl_cols         = drop_inst_rmvl_cols, 
+            outg_rec_nb_idfr            = outg_rec_nb_idfr, 
+            is_slim                     = is_slim, 
+            drop_approx_duplicates      = True, 
+            drop_approx_duplicates_args = drop_approx_duplicates_args, 
+            dt_on_ts_col                = dt_on_ts_col, 
+            df_off_ts_full_col          = df_off_ts_full_col, 
+            df_mp_serial_number_col     = df_mp_serial_number_col, 
+            df_mp_prem_nb_col           = df_mp_prem_nb_col, 
+            df_mp_install_time_col      = df_mp_install_time_col, 
+            df_mp_removal_time_col      = df_mp_removal_time_col, 
+            df_mp_trsf_pole_nb_col      = df_mp_trsf_pole_nb_col
         )
         #-------------------------
         return active_SNs_df
@@ -2821,8 +2877,8 @@ class DOVSOutages(GenAn):
     #-----------------------------------------------------------------------------------------------------------------------------
     @staticmethod
     def append_zero_counts_to_dovs_outgs(
-        dovs_outgs, 
-        build_sql_outage_kwargs, 
+        dovs_outgs                  , 
+        build_sql_outage_kwargs     , 
         PN_col                      = 'PREMISE_NB', 
         count_col                   = 'COUNT(*)', 
         possible_premise_nbs_kwargs = ['premise_nbs', 'premise_nb', 'aep_premise_nbs', 'aep_premise_nb']
@@ -2901,11 +2957,11 @@ class DOVSOutages(GenAn):
 
     @staticmethod
     def append_zero_counts_to_n_outgs_per_PN_df(
-        n_outgs_per_PN_df, 
-        search_times_df, 
-        cols_n_outgs  = None, 
-        cols_srch_tms = None, 
-        zero_val      = 0
+        n_outgs_per_PN_df , 
+        search_times_df   , 
+        cols_n_outgs      = None, 
+        cols_srch_tms     = None, 
+        zero_val          = 0
     ):
         r"""
         This is a somewhat specific function.  Although it is not currently general, if needed, it could be made general.

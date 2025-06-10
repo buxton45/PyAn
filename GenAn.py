@@ -972,6 +972,10 @@ class GenAn:
             # contstruct_df_args SHOULD HAVE build_sql_function and build_sql_function_kwargs, 
             #   but doesn't necessarily need to
             conn_db = self.contstruct_df_args.pop('conn_db', self.get_conn_db())
+            if conn_db is None:
+                print('ERROR: conn_db is None!  Failure imminent!')
+                print('Either supply conn_db through contstruct_df_args OR build out get_conn_db method in child class (NOT GenAn class)')
+                assert(0)
             #-----
             self.df = GenAn.build_df_general(
                 conn_db                        = conn_db, 

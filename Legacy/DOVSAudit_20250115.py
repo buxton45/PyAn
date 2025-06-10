@@ -23,6 +23,7 @@ import copy
 import itertools
 import adjustText
 
+
 from sklearn.cluster import DBSCAN
 #---------------------------------------------------------------------
 import matplotlib as mpl
@@ -58,22 +59,18 @@ class DOVSAudit:
     Class to adjust DOVS outage times and CI/CMI
     """
     def __init__(
-        self                            , 
-        outg_rec_nb                     , 
-        opco                            = None, 
-        calculate_by_PN                 = True, 
-        combine_by_PN_likeness_thresh   = pd.Timedelta('15 minutes'), 
-        expand_outg_search_time_tight   = pd.Timedelta('1 hours'), 
-        expand_outg_search_time_loose   = pd.Timedelta('12 hours'), 
-        use_est_outg_times              = False, 
-        use_full_ede_outgs              = False, 
-        daq_search_time_window          = pd.Timedelta('24 hours'), 
-        overlaps_addtnl_dovs_sql_kwargs = dict(
-            CI_NB_min  = 0, 
-            CMI_NB_min = 0
-        ), 
-        init_dfs_to                     = pd.DataFrame(),  # Should be pd.DataFrame() or None
-        verbose_init                    = True
+        self                          , 
+        outg_rec_nb                   , 
+        calculate_by_PN               = True, 
+        combine_by_PN_likeness_thresh = pd.Timedelta('15 minutes'), 
+        expand_outg_search_time_tight = pd.Timedelta('1 hours'), 
+        expand_outg_search_time_loose = pd.Timedelta('12 hours'), 
+        use_est_outg_times            = False, 
+        use_full_ede_outgs            = False, 
+        run_outg_inclusion_assessment = True, 
+        max_pct_PNs_missing_allowed   = 0, 
+        
+        init_dfs_to                   = pd.DataFrame(),  # Should be pd.DataFrame() or None
     ):
         r"""
         outg_rec_nb:
@@ -89,53 +86,26 @@ class DOVSAudit:
             self.load(file_path = outg_rec_nb)
             return
         else:
-            self.outg_rec_nb                 = outg_rec_nb
+            self.outg_rec_nb                = outg_rec_nb
         #-------------------------
-        self.__can_analyze                   = True
+        self.__can_analyze                  = True
         #-------------------------
-        self.opco                            = opco
-        self.calculate_by_PN                 = calculate_by_PN
-        self.combine_by_PN_likeness_thresh   = combine_by_PN_likeness_thresh
+        self.calculate_by_PN                = calculate_by_PN
+        self.combine_by_PN_likeness_thresh  = combine_by_PN_likeness_thresh
         #-------------------------
-        self.expand_outg_search_time_tight   = expand_outg_search_time_tight
-        self.expand_outg_search_time_loose   = expand_outg_search_time_loose
-        self.use_est_outg_times              = use_est_outg_times
-        self.use_full_ede_outgs              = use_full_ede_outgs
-        self.daq_search_time_window          = daq_search_time_window
+        self.expand_outg_search_time_tight  = expand_outg_search_time_tight
+        self.expand_outg_search_time_loose  = expand_outg_search_time_loose
+        self.use_est_outg_times             = use_est_outg_times
+        self.use_full_ede_outgs             = use_full_ede_outgs
+        self.run_outg_inclusion_assessment  = run_outg_inclusion_assessment
+        self.max_pct_PNs_missing_allowed    = max_pct_PNs_missing_allowed
         #-------------------------
-        assert(overlaps_addtnl_dovs_sql_kwargs is None or isinstance(overlaps_addtnl_dovs_sql_kwargs, dict))
-        if overlaps_addtnl_dovs_sql_kwargs is None:
-            self.overlaps_addtnl_dovs_sql_kwargs = dict()
-        else:
-            self.overlaps_addtnl_dovs_sql_kwargs = overlaps_addtnl_dovs_sql_kwargs
-        #-------------------------
-        # Following two attributes set by run_audit
-        self.run_outg_inclusion_assessment   = None
-        self.max_pct_PNs_missing_allowed     = None
-        #-------------------------
-        self.expand_outg_est_search_time     = self.expand_outg_search_time_loose
+        self.expand_outg_est_search_time    = self.expand_outg_search_time_loose
         if self.use_est_outg_times:
             self.expand_outg_search_time = self.expand_outg_search_time_tight
         else:
             self.expand_outg_search_time = self.expand_outg_search_time_loose
-        #-------------------------
-        if verbose_init:
-            print(f"Initializing DOVSAudit object for outg_rec_nb = {self.outg_rec_nb}")
-            info_dict = dict(
-                opco                          = self.opco, 
-                calculate_by_PN               = self.calculate_by_PN, 
-                combine_by_PN_likeness_thresh = self.combine_by_PN_likeness_thresh, 
-                expand_outg_search_time_tight = self.expand_outg_search_time_tight, 
-                expand_outg_search_time_loose = self.expand_outg_search_time_loose, 
-                use_est_outg_times            = self.use_est_outg_times, 
-                use_full_ede_outgs            = self.use_full_ede_outgs, 
-                daq_search_time_window        = self.daq_search_time_window, 
-            )
-            Utilities.print_dict_align_keys(
-                dct        = info_dict, 
-                left_align = True
-            )
-
+        
         #----------------------------------------------------------------------------------------------------
         # When using self.init_dfs_to ALWAYS use copy.deepcopy(self.init_dfs_to),
         # otherwise, unintended consequences could return (self.init_dfs_to is None it
@@ -181,7 +151,7 @@ class DOVSAudit:
         self.n_PNs_w_power_srs_dovs_beg     = None
         #-------------------------
         self.warnings_flag                  = False
-        self.warnings_dict                  = dict()
+        self.warnings_dict                  = None
         self.best_est_df_entries_w_warning  = copy.deepcopy(self.init_dfs_to)
 
     #----------------------------------------------------------------------------------------------------
@@ -220,9 +190,6 @@ class DOVSAudit:
     @property
     def is_loaded_mp(self):
         return self.__is_loaded_mp
-    @property
-    def best_ests_generated(self):
-        return self.__best_ests_generated
     
     @property
     def n_SNs(self):
@@ -312,8 +279,6 @@ class DOVSAudit:
         """
         #-------------------------
         outage_nb_col = self.dovs_df_info_dict['outage_nb_col']
-        assert(self.dovs_df_i[outage_nb_col].nunique()==1)
-        #-----
         outage_nb     = self.dovs_df_i.iloc[0][outage_nb_col]
         return outage_nb
         
@@ -858,10 +823,9 @@ class DOVSAudit:
     # Methods to load and initialize DOVS data
     #****************************************************************************************************        
     def load_dovs(
-        self                     ,
-        dovs_df                  = None, 
-        assert_outg_rec_nb_found = True, 
-        dovs_df_info_dict        = None
+        self              ,
+        dovs_df           = None, 
+        dovs_df_info_dict = None
     ):
         r"""
         Load/set self.dovs_df for self.outg_rec_nb.
@@ -869,9 +833,6 @@ class DOVSAudit:
         dovs_df:
             If supplied, grab the appropriate values
             If not supplied, run SQL query to obtain needed values
-
-        assert_outg_rec_nb_found:
-            If dovs_df is supplied, this enforces that self.outg_rec_nb is found in dovs_df
         """
         #-------------------------
         dovs_df_info_dict = DOVSAudit.get_full_dovs_df_info_dict(dovs_df_info_dict=dovs_df_info_dict)
@@ -883,7 +844,7 @@ class DOVSAudit:
                 dovs_df                  = dovs_df, 
                 outg_rec_nb              = self.outg_rec_nb, 
                 outg_rec_nb_idfr         = dovs_df_info_dict['outg_rec_nb_idfr'], 
-                assert_outg_rec_nb_found = assert_outg_rec_nb_found
+                assert_outg_rec_nb_found = False
             )
         #-------------------------
         # If dovs_df_i is empty, run SQL query to obtain needed results
@@ -898,7 +859,6 @@ class DOVSAudit:
                 build_sql_function        = DOVSOutages_SQL.build_sql_outage, 
                 build_sql_function_kwargs = dict(
                     outg_rec_nbs                        = [self.outg_rec_nb], 
-                    opco                                = self.opco, 
                     include_DOVS_PREMISE_DIM            = True, 
                     include_DOVS_MASTER_GEO_DIM         = True, 
                     include_DOVS_OUTAGE_ATTRIBUTES_DIM  = True, 
@@ -1530,36 +1490,6 @@ class DOVSAudit:
         #--------------------------------------------------
         return ami_df_i
     
-
-    def load_ami_from_df(
-        self             , 
-        ami_df_i         , 
-        ami_df_info_dict = None, 
-        run_std_init     = False, 
-        slicers          = None
-    ):
-        r"""
-        """
-        #-------------------------
-        ami_df_info_dict = DOVSAudit.get_full_ami_df_info_dict(ami_df_info_dict=ami_df_info_dict)
-        #-------------------------
-        if run_std_init:
-            ami_df_i = DOVSAudit.perform_std_init_ami(
-                outg_rec_nb      = self.outg_rec_nb, 
-                ami_df_i         = ami_df_i, 
-                slicers          = slicers, 
-                ami_df_info_dict = ami_df_info_dict
-            )
-        #-------------------------
-        DOVSAudit.check_ami_df_info_dict(
-            ami_df           = ami_df_i, 
-            ami_df_info_dict = ami_df_info_dict
-        )
-        #-------------------------
-        self.ami_df_i         = ami_df_i
-        self.ami_df_info_dict = ami_df_info_dict
-        self.__is_loaded_ami  = True
-    
     
     def load_ami_from_csvs(
         self                           , 
@@ -1592,22 +1522,63 @@ class DOVSAudit:
             min_fsize_MB                   = min_fsize_MB
         )
         #-------------------------
-        self.load_ami_from_df(
-            ami_df_i         = ami_df_i, 
-            ami_df_info_dict = ami_df_info_dict, 
-            run_std_init     = run_std_init, 
-            slicers          = slicers
+        ami_df_info_dict = DOVSAudit.get_full_ami_df_info_dict(ami_df_info_dict=ami_df_info_dict)
+        #-------------------------
+        if run_std_init:
+            ami_df_i = DOVSAudit.perform_std_init_ami(
+                outg_rec_nb      = self.outg_rec_nb, 
+                ami_df_i         = ami_df_i, 
+                slicers          = slicers, 
+                ami_df_info_dict = ami_df_info_dict
+            )
+            DOVSAudit.check_ami_df_info_dict(
+                ami_df           = ami_df_i, 
+                ami_df_info_dict = ami_df_info_dict
+            )
+        #-------------------------
+        self.ami_df_i         = ami_df_i
+        self.ami_df_info_dict = ami_df_info_dict
+        self.__is_loaded_ami  = True
+        
+        
+    def load_ami_from_df(
+        self             , 
+        ami_df_i         , 
+        ami_df_info_dict = None, 
+        run_std_init     = False, 
+        slicers          = None
+    ):
+        r"""
+        """
+        #-------------------------
+        ami_df_info_dict = DOVSAudit.get_full_ami_df_info_dict(ami_df_info_dict=ami_df_info_dict)
+        #-------------------------
+        if run_std_init:
+            ami_df_i = DOVSAudit.perform_std_init_ami(
+                outg_rec_nb      = self.outg_rec_nb, 
+                ami_df_i         = ami_df_i, 
+                slicers          = slicers, 
+                ami_df_info_dict = ami_df_info_dict
+            )
+        #-------------------------
+        DOVSAudit.check_ami_df_info_dict(
+            ami_df           = ami_df_i, 
+            ami_df_info_dict = ami_df_info_dict
         )
+        #-------------------------
+        self.ami_df_i         = ami_df_i
+        self.ami_df_info_dict = ami_df_info_dict
+        self.__is_loaded_ami  = True
 
 
     def run_ami_daq(
-        self                        , 
-        slicers                     = None, 
-        build_sql_fncn              = AMINonVee_SQL.build_sql_usg, 
-        addtnl_build_sql_kwargs     = None, 
-        ami_df_info_dict            = None, 
-        run_std_init                = True, 
-        save_args                   = False
+        self                    , 
+        search_time_half_window , 
+        slicers                 = None, 
+        build_sql_fncn          = AMINonVee_SQL.build_sql_usg, 
+        addtnl_build_sql_kwargs = None, 
+        ami_df_info_dict        = None, 
+        save_args               = False
     ):
         r"""
 
@@ -1637,15 +1608,14 @@ class DOVSAudit:
         else:
             PNs = self.dovs_df_i[self.dovs_df_info_dict['PN_col']].unique().tolist()
         #-------------------------
-        # Form t_search_min_max using the DOVS outage beg./end times together with daq_search_time_window
+        # Form t_search_min_max using the DOVS outage beg./end times together with search_time_half_window
         t_search_min_max = (
-            self.dovs_outg_t_beg_end[0] - self.daq_search_time_window, 
-            self.dovs_outg_t_beg_end[1] + self.daq_search_time_window
+            self.dovs_outg_t_beg_end[0] - search_time_half_window, 
+            self.dovs_outg_t_beg_end[1] + search_time_half_window
         )
         #-------------------------
         build_sql_kwargs = copy.deepcopy(addtnl_build_sql_kwargs)
         build_sql_kwargs['premise_nbs']    = PNs
-        build_sql_kwargs['opco']           = self.opco
         build_sql_kwargs['datetime_range'] = t_search_min_max
         build_sql_kwargs['field_to_split'] = 'premise_nbs'
         build_sql_kwargs['batch_size']     = build_sql_kwargs.get('batch_size', 1000)
@@ -1673,12 +1643,21 @@ class DOVSAudit:
         ami_df_info_dict['trsf_pole_nb_col']  = self.mp_df_info_dict['trsf_pole_nb_col']
         ami_df_info_dict['technology_tx_col'] = self.mp_df_info_dict['technology_tx_col']
         #-------------------------
-        self.load_ami_from_df(
+        # Run initiation procedure
+        ami_df = DOVSAudit.perform_std_init_ami(
+            outg_rec_nb      = self.outg_rec_nb, 
             ami_df_i         = ami_df, 
-            ami_df_info_dict = ami_df_info_dict, 
-            run_std_init     = run_std_init, 
-            slicers          = slicers
+            slicers          = slicers, 
+            ami_df_info_dict = ami_df_info_dict
         )
+        DOVSAudit.check_ami_df_info_dict(
+            ami_df           = ami_df, 
+            ami_df_info_dict = ami_df_info_dict
+        )
+        #-------------------------
+        self.ami_df_i         = ami_df
+        self.ami_df_info_dict = ami_df_info_dict
+        self.__is_loaded_ami  = True
 
 
     #****************************************************************************************************
@@ -1745,44 +1724,14 @@ class DOVSAudit:
             ede_df_info_dict['SN_col'], 
             ede_df_info_dict['PN_col'], 
             ede_df_info_dict['ede_typeid_col'], 
-            ede_df_info_dict['event_type_col']
+            ede_df_info_dict['event_type_col'], 
+            ede_df_info_dict['trsf_pole_nb_col'],
         ]
-        if ede_df_info_dict['trsf_pole_nb_col'] is not None:
-            ede_cols_to_keep.append(ede_df_info_dict['trsf_pole_nb_col'])
         if outg_rec_nb_idfr_loc[1]==False:
             ede_cols_to_keep.append(outg_rec_nb_idfr_loc[0])
         ede_df_i = ede_df_i[ede_cols_to_keep]
         #-------------------------
         return ede_df_i
-    
-
-    def load_ede_from_df(
-        self             , 
-        ede_df_i         , 
-        ede_df_info_dict = None, 
-        run_std_init     = False, 
-    ):
-        r"""
-        """
-        #-------------------------
-        ede_df_info_dict = DOVSAudit.get_full_ede_df_info_dict(ede_df_info_dict=ede_df_info_dict)
-        #-------------------------
-        if ede_df_i is not None and ede_df_i.shape[0]>0:
-            if run_std_init:
-                ede_df_i = DOVSAudit.perform_std_init_ede(
-                    outg_rec_nb      = self.outg_rec_nb, 
-                    ede_df_i         = ede_df_i, 
-                    ede_df_info_dict = ede_df_info_dict
-                )
-            #-------------------------
-            DOVSAudit.check_ede_df_info_dict(
-                ede_df           = ede_df_i, 
-                ede_df_info_dict = ede_df_info_dict
-            )
-        #-------------------------
-        self.ede_df_i         = ede_df_i
-        self.ede_df_info_dict = ede_df_info_dict
-        self.__is_loaded_ede  = True    
 
         
     def load_ede_from_csvs(
@@ -1815,21 +1764,61 @@ class DOVSAudit:
             min_fsize_MB                   = min_fsize_MB
         )
         #-------------------------
-        self.load_ede_from_df(
-            ede_df_i         = ede_df_i, 
-            ede_df_info_dict = ede_df_info_dict, 
-            run_std_init     = run_std_init, 
-        )
+        ede_df_info_dict = DOVSAudit.get_full_ede_df_info_dict(ede_df_info_dict=ede_df_info_dict)
+        #-------------------------
+        if run_std_init:
+            ede_df_i = DOVSAudit.perform_std_init_ede(
+                outg_rec_nb      = self.outg_rec_nb, 
+                ede_df_i         = ede_df_i, 
+                ede_df_info_dict = ede_df_info_dict
+            )
+            DOVSAudit.check_ede_df_info_dict(
+                ede_df           = ede_df_i, 
+                ede_df_info_dict = ede_df_info_dict
+            )
+        #-------------------------
+        self.ede_df_i         = ede_df_i
+        self.ede_df_info_dict = ede_df_info_dict
+        self.__is_loaded_ede  = True
+        
+        
+    def load_ede_from_df(
+        self             , 
+        ede_df_i         , 
+        ede_df_info_dict = None, 
+        run_std_init     = False, 
+    ):
+        r"""
+        """
+        #-------------------------
+        ede_df_info_dict = DOVSAudit.get_full_ede_df_info_dict(ede_df_info_dict=ede_df_info_dict)
+        #-------------------------
+        if ede_df_i is not None and ede_df_i.shape[0]>0:
+            if run_std_init:
+                ede_df_i = DOVSAudit.perform_std_init_ede(
+                    outg_rec_nb      = self.outg_rec_nb, 
+                    ede_df_i         = ede_df_i, 
+                    ede_df_info_dict = ede_df_info_dict
+                )
+            #-------------------------
+            DOVSAudit.check_ede_df_info_dict(
+                ede_df           = ede_df_i, 
+                ede_df_info_dict = ede_df_info_dict
+            )
+        #-------------------------
+        self.ede_df_i         = ede_df_i
+        self.ede_df_info_dict = ede_df_info_dict
+        self.__is_loaded_ede  = True
         
         
     def run_ede_daq(
-        self                        , 
-        build_sql_fncn              = AMIEndEvents_SQL.build_sql_end_events, 
-        addtnl_build_sql_kwargs     = None, 
-        pdpu_only                   = True, 
-        ede_df_info_dict            = None, 
-        run_std_init                = True, 
-        save_args                   = False
+        self                    , 
+        search_time_half_window , 
+        build_sql_fncn          = AMIEndEvents_SQL.build_sql_end_events, 
+        addtnl_build_sql_kwargs = None, 
+        pdpu_only               = True, 
+        ede_df_info_dict        = None, 
+        save_args               = False
     ):
         r"""
 
@@ -1859,15 +1848,14 @@ class DOVSAudit:
         else:
             PNs = self.dovs_df_i[self.dovs_df_info_dict['PN_col']].unique().tolist()
         #-------------------------
-        # Form t_search_min_max using the DOVS outage beg./end times together with daq_search_time_window
+        # Form t_search_min_max using the DOVS outage beg./end times together with search_time_half_window
         t_search_min_max = (
-            self.dovs_outg_t_beg_end[0] - self.daq_search_time_window, 
-            self.dovs_outg_t_beg_end[1] + self.daq_search_time_window
+            self.dovs_outg_t_beg_end[0] - search_time_half_window, 
+            self.dovs_outg_t_beg_end[1] + search_time_half_window
         )
         #-------------------------
         build_sql_kwargs = copy.deepcopy(addtnl_build_sql_kwargs)
         build_sql_kwargs['premise_nbs']    = PNs
-        build_sql_kwargs['opco']           = self.opco
         build_sql_kwargs['datetime_range'] = t_search_min_max
         build_sql_kwargs['field_to_split'] = 'premise_nbs'
         build_sql_kwargs['batch_size']     = build_sql_kwargs.get('batch_size', 1000)
@@ -1904,30 +1892,37 @@ class DOVSAudit:
             ede_df_info_dict['outg_rec_nb_idfr']  = self.mp_df_info_dict['outg_rec_nb_idfr']
             ede_df_info_dict['trsf_pole_nb_col']  = self.mp_df_info_dict['trsf_pole_nb_col']
             #-------------------------
-            self.load_ede_from_df(
+            # Run initiation procedure
+            ede_df = DOVSAudit.perform_std_init_ede(
+                outg_rec_nb      = self.outg_rec_nb, 
                 ede_df_i         = ede_df, 
-                ede_df_info_dict = ede_df_info_dict, 
-                run_std_init     = run_std_init, 
+                ede_df_info_dict = ede_df_info_dict
             )
+            DOVSAudit.check_ede_df_info_dict(
+                ede_df           = ede_df, 
+                ede_df_info_dict = ede_df_info_dict
+            )
+        #-------------------------
+        self.ede_df_i         = ede_df
+        self.ede_df_info_dict = ede_df_info_dict
+        self.__is_loaded_ede  = True
 
 
     #****************************************************************************************************
     #****************************************************************************************************
     def run_ami_and_ede_daq(
         self                        , 
+        search_time_half_window     ,  
         #-----
         slicers_ami                 = None, 
         build_sql_fncn_ami          = AMINonVee_SQL.build_sql_usg, 
         addtnl_build_sql_kwargs_ami = None, 
         ami_df_info_dict            = None, 
-        run_std_init_ami            = True, 
         save_args_ami               = False, 
         #-----
         build_sql_fncn_ede          = AMIEndEvents_SQL.build_sql_end_events, 
         addtnl_build_sql_kwargs_ede = None, 
-        pdpu_only                   = True, 
         ede_df_info_dict            = None, 
-        run_std_init_ede            = True, 
         save_args_ede               = False
     ):
         r"""
@@ -1937,187 +1932,21 @@ class DOVSAudit:
         assert(self.__is_loaded_mp)
         #-------------------------
         self.run_ami_daq(
-            slicers                     = slicers_ami, 
-            build_sql_fncn              = build_sql_fncn_ami, 
-            addtnl_build_sql_kwargs     = addtnl_build_sql_kwargs_ami, 
-            ami_df_info_dict            = ami_df_info_dict, 
-            run_std_init                = run_std_init_ami, 
-            save_args                   = save_args_ami
+            search_time_half_window = search_time_half_window, 
+            slicers                 = slicers_ami, 
+            build_sql_fncn          = build_sql_fncn_ami, 
+            addtnl_build_sql_kwargs = addtnl_build_sql_kwargs_ami, 
+            ami_df_info_dict        = ami_df_info_dict, 
+            save_args               = save_args_ami
         )
         #-------------------------
         self.run_ede_daq(
-            build_sql_fncn              = build_sql_fncn_ede, 
-            addtnl_build_sql_kwargs     = addtnl_build_sql_kwargs_ede, 
-            pdpu_only                   = pdpu_only, 
-            ede_df_info_dict            = ede_df_info_dict, 
-            run_std_init                = run_std_init_ede, 
-            save_args                   = save_args_ede
+            search_time_half_window = search_time_half_window, 
+            build_sql_fncn          = build_sql_fncn_ede, 
+            addtnl_build_sql_kwargs = addtnl_build_sql_kwargs_ede, 
+            ede_df_info_dict        = ede_df_info_dict, 
+            save_args               = save_args_ede
         )    
-
-
-    #--------------------------------------------------
-    def build_basic_data(
-        self                          , 
-        slicers_ami                   = None, 
-        build_sql_fncn_ami            = AMINonVee_SQL.build_sql_usg, 
-        addtnl_build_sql_kwargs_ami   = None, 
-        run_std_init_ami              = True, 
-        save_args_ami                 = False, 
-        #-----
-        build_sql_fncn_ede            = AMIEndEvents_SQL.build_sql_end_events, 
-        addtnl_build_sql_kwargs_ede   = None, 
-        pdpu_only                     = True, 
-        run_std_init_ede              = True, 
-        save_args_ede                 = False, 
-        #-----
-        dovs_df                       = None, 
-        assert_outg_rec_nb_in_dovs_df = True, 
-        #-----
-        mp_df                         = None, 
-        mp_df_outg_rec_nb_col         = 'OUTG_REC_NB', 
-        #-----
-        drop_mp_dups_fuzziness        = pd.Timedelta('1 hour'), 
-        addtnl_mp_df_cols             = ['technology_tx'], 
-        assert_all_PNs_found          = True, 
-        consolidate_PNs_batch_size    = 1000, 
-        early_return                  = False, 
-        
-    ):
-        r"""
-        mp_df:
-            If supplied AND self.outg_rec_nb found in mp_df[mp_df_outg_rec_nb_col], 
-              then self.mp_df_i will be taken from mp_df
-        """
-        #--------------------------------------------------
-        #-------------------------
-        self.load_dovs(
-            dovs_df                  = dovs_df, 
-            assert_outg_rec_nb_found = assert_outg_rec_nb_in_dovs_df, 
-            dovs_df_info_dict        = self.dovs_df_info_dict
-        )
-        #-------------------------
-        if(
-            mp_df is not None and
-            int(self.outg_rec_nb) in mp_df[mp_df_outg_rec_nb_col].unique().tolist()
-        ):
-            print("In build_basic_data: Loading self.mp_df_i from supplied mp_df")
-            mp_df_i = mp_df[mp_df[mp_df_outg_rec_nb_col]==int(self.outg_rec_nb)]
-            if mp_df_i.shape[0]>0:
-                #-------------------------
-                # Really only want one entry per meter (here, meter being a mfr_devc_ser_nbr/prem_nb combination)
-                # ALthough drop_duplicates was used, multiple entries could still exist if, e.g., a meter has two
-                #   non-fuzzy-overlapping intervals
-                assert(all(mp_df_i[['mfr_devc_ser_nbr', 'prem_nb', mp_df_outg_rec_nb_col]].value_counts()==1))
-                #-------------------------
-                DOVSAudit.check_mp_df_info_dict(
-                    mp_df           = mp_df_i, 
-                    mp_df_info_dict = self.mp_df_info_dict
-                )
-                #-------------------------
-                self.mp_df_i        = mp_df_i
-                self.__is_loaded_mp = True
-                #-------------------------
-                print('\tSuccess')
-            else:
-                print('\tFailure...call build_mp_df instead')
-        if not self.__is_loaded_mp:
-            self.build_mp_df(
-                drop_mp_dups_fuzziness     = drop_mp_dups_fuzziness, 
-                addtnl_mp_df_curr_cols     = addtnl_mp_df_cols, 
-                addtnl_mp_df_hist_cols     = addtnl_mp_df_cols, 
-                assert_all_PNs_found       = assert_all_PNs_found, 
-                consolidate_PNs_batch_size = consolidate_PNs_batch_size, 
-                early_return               = early_return 
-            )
-        #-------------------------
-        self.run_ami_and_ede_daq(
-            slicers_ami                 = slicers_ami, 
-            build_sql_fncn_ami          = build_sql_fncn_ami, 
-            addtnl_build_sql_kwargs_ami = addtnl_build_sql_kwargs_ami, 
-            ami_df_info_dict            = self.ami_df_info_dict, 
-            run_std_init_ami            = run_std_init_ami, 
-            save_args_ami               = save_args_ami, 
-            #-----
-            build_sql_fncn_ede          = build_sql_fncn_ede, 
-            addtnl_build_sql_kwargs_ede = addtnl_build_sql_kwargs_ede, 
-            pdpu_only                   = pdpu_only, 
-            ede_df_info_dict            = self.ede_df_info_dict, 
-            run_std_init_ede            = run_std_init_ede, 
-            save_args_ede               = save_args_ede
-        )
-
-
-    #--------------------------------------------------
-    def load_basic_data_from_csvs(
-        self                               , 
-        #-----
-        paths_ami                          , 
-        paths_ede                          , 
-        slicers_ami                        = None, 
-        run_std_init_ami                   = True, 
-        run_std_init_ede                   = True, 
-        #-----
-        dovs_df                            = None, 
-        assert_outg_rec_nb_in_dovs_df      = True, 
-        #-----
-        cols_and_types_to_convert_dict_ami = None, 
-        to_numeric_errors_ami              = 'coerce', 
-        drop_na_rows_when_exception_ami    = True, 
-        drop_unnamed0_col_ami              = True, 
-        pd_read_csv_kwargs_ami             = None, 
-        make_all_columns_lowercase_ami     = False, 
-        assert_all_cols_equal_ami          = True, 
-        min_fsize_MB_ami                   = None, 
-        #-----
-        cols_and_types_to_convert_dict_ede = None, 
-        to_numeric_errors_ede              = 'coerce', 
-        drop_na_rows_when_exception_ede    = True, 
-        drop_unnamed0_col_ede              = True, 
-        pd_read_csv_kwargs_ede             = None, 
-        make_all_columns_lowercase_ede     = False, 
-        assert_all_cols_equal_ede          = True, 
-        min_fsize_MB_ede                   = None, 
-    ):
-        r"""
-        """
-        #--------------------------------------------------
-        #-------------------------
-        self.load_dovs(
-            dovs_df                  = dovs_df, 
-            assert_outg_rec_nb_found = assert_outg_rec_nb_in_dovs_df, 
-            dovs_df_info_dict        = self.dovs_df_info_dict
-        )
-        
-        #-------------------------
-        self.load_ami_from_csvs(
-            paths                          = paths_ami, 
-            slicers                        = slicers_ami, 
-            ami_df_info_dict               = self.ami_df_info_dict, 
-            run_std_init                   = run_std_init_ami, 
-            cols_and_types_to_convert_dict = cols_and_types_to_convert_dict_ami, 
-            to_numeric_errors              = to_numeric_errors_ami, 
-            drop_na_rows_when_exception    = drop_na_rows_when_exception_ami, 
-            drop_unnamed0_col              = drop_unnamed0_col_ami, 
-            pd_read_csv_kwargs             = pd_read_csv_kwargs_ami, 
-            make_all_columns_lowercase     = make_all_columns_lowercase_ami, 
-            assert_all_cols_equal          = assert_all_cols_equal_ami, 
-            min_fsize_MB                   = min_fsize_MB_ami
-        )
-        #-------------------------    
-        if paths_ede is not None:
-            self.load_ede_from_csvs(
-                paths                          = paths_ede, 
-                ede_df_info_dict               = self.ede_df_info_dict, 
-                run_std_init                   = run_std_init_ede, 
-                cols_and_types_to_convert_dict = cols_and_types_to_convert_dict_ede, 
-                to_numeric_errors              = to_numeric_errors_ede, 
-                drop_na_rows_when_exception    = drop_na_rows_when_exception_ede, 
-                drop_unnamed0_col              = drop_unnamed0_col_ede, 
-                pd_read_csv_kwargs             = pd_read_csv_kwargs_ede, 
-                make_all_columns_lowercase     = make_all_columns_lowercase_ede, 
-                assert_all_cols_equal          = assert_all_cols_equal_ede, 
-                min_fsize_MB                   = min_fsize_MB_ede
-            )
         
     
     #****************************************************************************************************
@@ -2474,6 +2303,7 @@ class DOVSAudit:
             t_search_min_max = [out_t_beg-pd.Timedelta('1hour'), out_t_end+pd.Timedelta('1hour')], 
             requirement      = 'all', 
             time_col         = ami_df_info_dict['t_int_beg_col'], 
+            value_col        = ami_df_info_dict['value_col'], 
             SN_col           = ami_df_info_dict['SN_col'], 
         )
         check_found_ami_for_all_SNs_kwargs = Utilities.supplement_dict_with_default_values(
@@ -2484,6 +2314,7 @@ class DOVSAudit:
         )
         # Make sure the user didn't accidentally set time_col, value_col, or SN_col incorrectly
         assert(check_found_ami_for_all_SNs_kwargs['time_col']==ami_df_info_dict['t_int_beg_col'])
+        assert(check_found_ami_for_all_SNs_kwargs['value_col']==ami_df_info_dict['value_col'])
         assert(check_found_ami_for_all_SNs_kwargs['SN_col']==ami_df_info_dict['SN_col'])
 
         check_found_ami_for_all_SNs_kwargs['df'] = ami_df_i
@@ -2507,9 +2338,8 @@ class DOVSAudit:
         #-------------------------
         if not self.__is_loaded_dovs:
             self.load_dovs(
-                dovs_df                  = None, 
-                assert_outg_rec_nb_found = False, 
-                dovs_df_info_dict        = None
+                dovs_df           = None, 
+                dovs_df_info_dict = None
             )
         #-------------------------
         assert(self.__is_loaded_dovs)
@@ -4271,9 +4101,8 @@ class DOVSAudit:
                 for est_key, beg_end_vals in best_est_dict_ij.items():
                     if est_key=='open_beg' or est_key=='open_end':
                         continue
-                    # Pandas is silly, which is why I have to convert None values to pd.to_datetime(np.nan) below
-                    best_est_dict_ij_split[f"{est_key}_min"] = beg_end_vals[0] if beg_end_vals[0] is not None else pd.to_datetime(np.nan)
-                    best_est_dict_ij_split[f"{est_key}_max"] = beg_end_vals[1] if beg_end_vals[1] is not None else pd.to_datetime(np.nan)
+                    best_est_dict_ij_split[f"{est_key}_min"] = beg_end_vals[0]
+                    best_est_dict_ij_split[f"{est_key}_max"] = beg_end_vals[1]
                 #-----
                 best_est_dict_ij_split['open_beg'] = best_est_dict_ij['open_beg']
                 best_est_dict_ij_split['open_end'] = best_est_dict_ij['open_end']
@@ -4838,6 +4667,7 @@ class DOVSAudit:
                 max_cols              = max_cols, 
                 return_col_order      = return_col_order, 
                 likeness_thresh       = likeness_thresh, 
+                SN_col                = SN_col, 
                 PN_col                = PN_col, 
                 i_outg_col            = i_outg_col, 
                 open_beg_col          = open_beg_col, 
@@ -5113,8 +4943,7 @@ class DOVSAudit:
         conservative_estimate                        = True, 
         audit_selection_method                       = 'ede only', 
         pct_SNs_required_for_outage_est              = 0, 
-        use_only_overall_endpoints_of_est_outg_times = False, 
-        debug                                        = False
+        use_only_overall_endpoints_of_est_outg_times = False
     ):
         r"""
         """
@@ -5147,10 +4976,9 @@ class DOVSAudit:
         best_ests_df = res_dict['all_best_ests']
         if best_ests_df is None or best_ests_df.shape[0]==0:
             assert(res_dict['CI']==0 and res_dict['CMI']==0)
-            self.best_ests_df          = best_ests_df
-            self.ci                    = 0
-            self.cmi                   = 0
-            self.__best_ests_generated = True
+            self.best_ests_df = best_ests_df
+            self.ci           = 0
+            self.cmi          = 0
             return
         #-------------------------
         best_ests_df = DOVSAudit.combine_overlapping_suboutages(
@@ -5183,8 +5011,7 @@ class DOVSAudit:
                 )
             except:
                 print(f'outg_rec_nb={self.outg_rec_nb} failed DOVSAudit.combine_PNs_in_best_ests_df\nCRASH IMMINENT!')
-                if debug:
-                    raise
+                assert(0)
         #-------------------------
         self.best_ests_df = best_ests_df
         self.ci           = self.best_ests_df['PN'].nunique()
@@ -5327,6 +5154,7 @@ class DOVSAudit:
                     - dt_off_ts_full (using outg_t_end argument)
                       -- See above if confused why dt_off_ts_full paired with outg_t_end
         """
+        #CI_NB_min
         #-------------------------
         assert(isinstance(PNs, list))
         #-------------------------
@@ -5430,7 +5258,6 @@ class DOVSAudit:
     def get_outgs_in_dovs_df_overlapping_outg_rec_nb_i(
         outg_rec_nb_i   , 
         dovs_df         , 
-        opco            = None, 
         outg_rec_nb_col = 'OUTG_REC_NB', 
         t_min_col       = 'DT_OFF_TS_FULL', 
         t_max_col       = 'DT_ON_TS'
@@ -5462,7 +5289,6 @@ class DOVSAudit:
                 build_sql_function        = DOVSOutages_SQL.build_sql_outage, 
                 build_sql_function_kwargs = dict(
                     outg_rec_nbs = [outg_rec_nb_i], 
-                    opco         = opco, 
                 )
             )
             dovs_df_i = dovs_i.df.copy()
@@ -5506,12 +5332,6 @@ class DOVSAudit:
         Both functions DOVSAudit.get_outgs_in_dovs_df_overlapping_interval_by_PN and DOVSAudit.get_outgs_in_dovs_df_overlapping_outg_rec_nb_i_by_PN 
           use these methods, so makes sense to put in function
         """
-        #-------------------------
-        if(
-            overlap_outgs_for_PNs is None or 
-            overlap_outgs_for_PNs.shape[0]==0
-        ):
-            return pd.DataFrame()
         #-------------------------
         assert(isinstance(overlap_outgs_for_PNs, pd.Series))
         overlap_outgs_for_PNs_df              = overlap_outgs_for_PNs.to_frame(name='overlap_outg_rec_nbs')
@@ -5606,7 +5426,6 @@ class DOVSAudit:
     def get_outgs_in_dovs_df_overlapping_outg_rec_nb_i_by_PN(
         outg_rec_nb_i             , 
         dovs_df                   , 
-        opco                      = None, 
         best_ests_df              = None, 
         outg_rec_nb_col           = 'OUTG_REC_NB', 
         PN_col                    = 'PREMISE_NB', 
@@ -5636,7 +5455,6 @@ class DOVSAudit:
             lambda x: DOVSAudit.get_outgs_in_dovs_df_overlapping_outg_rec_nb_i(
                 outg_rec_nb_i   = outg_rec_nb_i, 
                 dovs_df         = x, 
-                opco            = opco, 
                 outg_rec_nb_col = outg_rec_nb_col, 
                 t_min_col       = t_min_col, 
                 t_max_col       = t_max_col
@@ -5790,7 +5608,6 @@ class DOVSAudit:
         best_ests_df                , 
         outg_rec_nb                 , 
         dovs_df                     , 
-        opco                        = None, 
         get_ptntl_ovrlp_dovs_kwargs = None, 
         assert_no_overlaps          = True, 
         PN_col                      = 'PN', 
@@ -5864,7 +5681,7 @@ class DOVSAudit:
                 get_ptntl_ovrlp_dovs_kwargs = Utilities.supplement_dict_with_default_values(
                     to_supplmnt_dict    = get_ptntl_ovrlp_dovs_kwargs, 
                     default_values_dict = dflt_get_ptntl_ovrlp_dovs_kwargs, 
-                    extend_any_lists    = True, 
+                    extend_any_lists    = False, 
                     inplace             = False
                 )
             #-----
@@ -5920,7 +5737,6 @@ class DOVSAudit:
             overlap_outgs_for_PNs_df = DOVSAudit.get_outgs_in_dovs_df_overlapping_outg_rec_nb_i_by_PN(
                 outg_rec_nb_i    = outg_rec_nb, 
                 dovs_df          = dovs_df, 
-                opco             = opco, 
                 best_ests_df     = best_ests_df, 
                 outg_rec_nb_col  = outg_rec_nb_col_dovs, 
                 PN_col           = PN_col_dovs, 
@@ -5928,11 +5744,7 @@ class DOVSAudit:
                 t_max_col        = t_max_col_dovs, 
                 PN_col_best_ests = PN_col
             )
-            if(
-                assert_no_overlaps and 
-                overlap_outgs_for_PNs_df is not None and 
-                overlap_outgs_for_PNs_df.shape[0]>0
-            ):
+            if assert_no_overlaps:
                 #assert((overlap_outgs_for_PNs_df['n_overlap']>0).sum()==0)
                 assert((overlap_outgs_for_PNs_df[overlap_outgs_for_PNs_df['lost_power']==True]['n_overlap']>0).sum()==0)
             #--------------------------------------------------
@@ -6252,13 +6064,13 @@ class DOVSAudit:
         # NOTE: ptntl_ovrlp_dovs_df is built directly from DOVS database by running SQL query.
         #       Therefore, the columns are predictable, and one does NOT need to use self.dovs_df_info_dict
         ptntl_ovrlp_dovs_df = DOVSAudit.get_potential_overlapping_dovs(
-            PNs                    = self.ami_df_i[self.ami_df_info_dict['PN_col']].unique().tolist(), 
-            outg_t_beg             = np.min([dovs_outg_t_beg, self.best_ests_df['winner_min'].min()]), 
-            outg_t_end             = np.max([dovs_outg_t_end, self.best_ests_df['winner_max'].max()]), 
-            dovs_sql_fcn           = overlaps_dovs_sql_fcn, 
-            addtnl_dovs_sql_kwargs = dict(
-                opco = self.opco, 
-                **self.overlaps_addtnl_dovs_sql_kwargs
+            PNs          = self.ami_df_i[self.ami_df_info_dict['PN_col']].unique().tolist(), 
+            outg_t_beg   = np.min([dovs_outg_t_beg, self.best_ests_df['winner_min'].min()]), 
+            outg_t_end   = np.max([dovs_outg_t_end, self.best_ests_df['winner_max'].max()]), 
+            dovs_sql_fcn = overlaps_dovs_sql_fcn, 
+            addtnl_dovs_sql_kwargs=dict(
+                CI_NB_min  = 0, 
+                CMI_NB_min = 0
             )
         )
         #-------------------------
@@ -6292,7 +6104,6 @@ class DOVSAudit:
         overlap_outgs_for_PNs_df = DOVSAudit.get_outgs_in_dovs_df_overlapping_outg_rec_nb_i_by_PN(
             outg_rec_nb_i    = self.outg_rec_nb, 
             dovs_df          = ptntl_ovrlp_dovs_df_out_times, 
-            opco             = self.opco, 
             best_ests_df     = self.best_ests_df, 
             outg_rec_nb_col  = 'OUTG_REC_NB', 
             PN_col           = 'PREMISE_NB', 
@@ -6302,27 +6113,21 @@ class DOVSAudit:
         )
         self.overlap_outgs_for_PNs_df = overlap_outgs_for_PNs_df
         #--------------------------------------------------
-        if(
-            overlap_outgs_for_PNs_df is not None and 
-            overlap_outgs_for_PNs_df.shape[0]>0
-        ):
-            # Check if any PN has one or more overlapping DOVS events
-            self.n_PNs_w_overlap = (overlap_outgs_for_PNs_df['n_overlap']>0).sum()
-            #------
-            # Check if any PN which lost power has one or more overlapping DOVS events, stop analysis
-            self.n_out_PNs_w_overlap = overlap_outgs_for_PNs_df[overlap_outgs_for_PNs_df['lost_power']==True]['overlap_outg_rec_nbs'].apply(lambda x: len(x)>0).sum()
-            #------
-            if verbose and self.n_PNs_w_overlap>0:
-                print(f'\tWARNING: n_PNs_w_overlap > 0 (= {self.n_PNs_w_overlap})')
-            #------------------------------
-            if self.n_out_PNs_w_overlap>0:
-                if verbose:
-                    print(f'\tWARNING: n_out_PNs_w_overlap > 0 (= {self.n_out_PNs_w_overlap})')
-                    print(f'\t\tImpossible for outage overlaps procedure to proceed!!!!!')
-                self.__can_analyze = False
-        else:
-            self.n_PNs_w_overlap     = 0
-            self.n_out_PNs_w_overlap = 0
+        # Check if any PN has one or more overlapping DOVS events
+        self.n_PNs_w_overlap = (overlap_outgs_for_PNs_df['n_overlap']>0).sum()
+        #------
+        # Check if any PN which lost power has one or more overlapping DOVS events, stop analysis
+        self.n_out_PNs_w_overlap = overlap_outgs_for_PNs_df[overlap_outgs_for_PNs_df['lost_power']==True]['overlap_outg_rec_nbs'].apply(lambda x: len(x)>0).sum()
+        #------
+        if verbose and self.n_PNs_w_overlap>0:
+            print(f'\tWARNING: n_PNs_w_overlap > 0 (= {self.n_PNs_w_overlap})')
+        #------------------------------
+        if self.n_out_PNs_w_overlap>0:
+            if verbose:
+                print(f'\tWARNING: n_out_PNs_w_overlap > 0 (= {self.n_out_PNs_w_overlap})')
+                print(f'\t\tImpossible for outage overlaps procedure to proceed!!!!!')
+            self.__can_analyze = False
+            return
         #------------------------------
         #---------------------------------------------------------------------------
         # Procedure above ensure that the current outage, as defined by DOVS, does not overlap with any other DOVS outages.
@@ -6335,14 +6140,8 @@ class DOVSAudit:
             best_ests_df                = self.best_ests_df, 
             outg_rec_nb                 = self.outg_rec_nb, 
             dovs_df                     = ptntl_ovrlp_dovs_df_est_times, 
-            opco                        = self.opco, 
-            get_ptntl_ovrlp_dovs_kwargs = dict(
-                addtnl_dovs_sql_kwargs = dict(
-                    opco = self.opco, 
-                    **self.overlaps_addtnl_dovs_sql_kwargs
-                )
-            ), 
-            assert_no_overlaps          = False, 
+            get_ptntl_ovrlp_dovs_kwargs = None, 
+            assert_no_overlaps          = True, 
             PN_col                      = 'PN', 
             t_min_col                   = 'winner_min', 
             t_max_col                   = 'winner_max', 
@@ -6445,7 +6244,6 @@ class DOVSAudit:
         outg_intrvl        , 
         outg_rec_nbs       , 
         dovs_df            = None, 
-        opco               = None, 
         outg_rec_nb_col    = 'OUTG_REC_NB', 
         dt_off_ts_full_col = 'DT_OFF_TS_FULL', 
         dt_on_ts_col       = 'DT_ON_TS', 
@@ -6471,8 +6269,6 @@ class DOVSAudit:
         Returns:
             dovs_df with columns = [outg_rec_nb_col, dt_off_ts_full_col, dt_on_ts_col, intrvl_min, intrvl_max] and one entry per outg_rec_nb, 
               where intrvl_min,intrvl_max house the portion of outg_intrvl assigned to the given outg_rec_nb
-            OR
-            None, if the procedure fails due to overlapping DOVS events
         """
         #-------------------------
         if(
@@ -6486,8 +6282,7 @@ class DOVSAudit:
                 build_sql_function        = DOVSOutages_SQL.build_sql_outage, 
                 build_sql_function_kwargs = dict(
                     outg_rec_nbs    = outg_rec_nbs, 
-                    include_premise = False, 
-                    opco            = opco
+                    include_premise = False
                 ), 
                 build_consolidated        = False
             )
@@ -6505,13 +6300,8 @@ class DOVSAudit:
 
         #-------------------------
         # Make sure the DOVS events themselves do not overlap!
-        # The methodology relies on this fact to function properly.  A more generalized approach could be devised, but probably
-        #   the juice is not worth the squeeze.
         for i in range(dovs_df.shape[0]-1):
-            # Instead of firm assert statement as previous, if failure, return None, which will let DOVSAudit.resolve_overlapping_audits (or whoever is calling)
-            #   know that the procedure failed.
-            if pd.Interval(*dovs_df.iloc[i][[dt_off_ts_full_col, dt_on_ts_col]].values).overlaps(pd.Interval(*dovs_df.iloc[i+1][[dt_off_ts_full_col, dt_on_ts_col]].values)):
-                return None
+            assert(not pd.Interval(*dovs_df.iloc[i][[dt_off_ts_full_col, dt_on_ts_col]].values).overlaps(pd.Interval(*dovs_df.iloc[i+1][[dt_off_ts_full_col, dt_on_ts_col]].values)))
 
         #-------------------------
         # Make sure the DOVS events are properly ordered
@@ -6770,11 +6560,14 @@ class DOVSAudit:
         dt_off_ts_full_col_dovs         = 'DT_OFF_TS_FULL', 
         dt_on_ts_col_dovs               = 'DT_ON_TS', 
         overlaps_dovs_sql_fcn           = DOVSOutages_SQL.build_sql_outage, 
+        overlaps_addtnl_dovs_sql_kwargs = dict(
+            CI_NB_min  = 0, 
+            CMI_NB_min = 0
+        ), 
         overlap_disagree_cols           = ['ovrlp_disagree_typeA', 'ovrlp_disagree_typeB'], 
         unq_idfr_cols                   = ['PN', 'i_outg'], 
         open_beg_col                    = 'open_beg', 
-        open_end_col                    = 'open_end', 
-        verbose                         = True
+        open_end_col                    = 'open_end'
     ):
         r"""
         
@@ -6785,71 +6578,41 @@ class DOVSAudit:
         if self.best_ests_df is None or self.best_ests_df.shape[0]==0:
             return
         #---------------------------------------------------------------------------
+        assert(self.n_out_PNs_w_overlap>-1)
+        if self.n_out_PNs_w_overlap>0:
+            print(f'\tWARNING: n_out_PNs_w_overlap > 0 (= {self.n_out_PNs_w_overlap})')
+            print(f'\t\tImpossible for outage overlaps procedure to proceed!!!!!\n\t\tExiting DOVSAudit.resolve_overlapping_audits')
+            self.__can_analyze = False
+            return
+        #-------------------------
         update_df = DOVSAudit.set_initial_to_adjust_df(
             be_df       = self.best_ests_df_w_keep_info.copy(), 
             be_df_cols  = None, 
             addtnl_cols = None
         )
-        #-------------------------
-        assert(self.n_out_PNs_w_overlap>-1)
-        if self.n_out_PNs_w_overlap>0:
-            if verbose:
-                print(f'\tWARNING: n_out_PNs_w_overlap > 0 (= {self.n_out_PNs_w_overlap})')
-                print(f'\t\tImpossible for outage overlaps procedure to proceed!!!!!\n\t\tExiting DOVSAudit.resolve_overlapping_audits')
-            update_df[overlap_disagree_cols] = None
-            update_df[keep_col]              = True
-            update_df['resolved']            = False
-            update_df['resolved_details']    = 'Unresolved, conflicting overlapping DOVS events'
-            self.best_ests_df_w_keep_info    = update_df.copy()
-            self.__can_analyze               = False
-            #-------------------------
-            self.generate_warnings(
-                resolved_col                = 'resolved', 
-                resolved_details_col        = 'resolved_details', 
-                overlap_disagree_cols       = overlap_disagree_cols, 
-                overlap_disagree_cols_descs = [
-                    'Type A: DOVS claimed there was an overlapping outage, but we cannot find one', 
-                    'Type B: PN should potentially be included in overlapping DOVS event'
-                ]
-            )
-            #-----
-            return
-        #-------------------------
+        #----------------------------------------------------------------------------------------------------
         outg_rec_nbs = list(set(update_df[overlap_DOVS_col].sum()))+[self.outg_rec_nb]
-        #-------------------------
-        # If no overlaps, simply return
-        if outg_rec_nbs == [self.outg_rec_nb]:
-            update_df[keep_col]              = True
-            update_df['adjustment']          = None
-            update_df['resolved']            = True
-            update_df['resolved_details']    = 'Certain'
-            update_df[overlap_disagree_cols] = None
-            #-----
-            self.best_ests_df_w_keep_info    = update_df.copy()
-            #-----
-            return
         #-------------------------
         if(
             dovs_df is None or 
             set(outg_rec_nbs).difference(set(dovs_df[outg_rec_nb_col_dovs].unique().tolist())) != set()
         ):
             dflt_dovs_sql_kwargs = dict(
-                outg_rec_nbs    = outg_rec_nbs, 
-                include_premise = False, 
-                opco            = self.opco
+                outg_rec_nbs=outg_rec_nbs, 
+                include_premise=False
             )
             #-----
-            if self.overlaps_addtnl_dovs_sql_kwargs is None:
+            if overlaps_addtnl_dovs_sql_kwargs is None:
                 dovs_sql_kwargs = dflt_dovs_sql_kwargs
             else:
-                assert(isinstance(self.overlaps_addtnl_dovs_sql_kwargs, dict))
+                assert(isinstance(overlaps_addtnl_dovs_sql_kwargs, dict))
                 #-----
-                # Make sure none of the dovs_sql_kwargs handled by this function are included in self.overlaps_addtnl_dovs_sql_kwargs
-                assert(set(dflt_dovs_sql_kwargs.keys()).intersection(set(self.overlaps_addtnl_dovs_sql_kwargs.keys()))==set())
+                # Make sure none of the dovs_sql_kwargs handled by this function are included in overlaps_addtnl_dovs_sql_kwargs
+                assert(set(dflt_dovs_sql_kwargs.keys()).intersection(set(overlaps_addtnl_dovs_sql_kwargs.keys()))==set())
                 #-----
                 dovs_sql_kwargs = Utilities.supplement_dict_with_default_values(
                     to_supplmnt_dict    = dflt_dovs_sql_kwargs, 
-                    default_values_dict = self.overlaps_addtnl_dovs_sql_kwargs, 
+                    default_values_dict = overlaps_addtnl_dovs_sql_kwargs, 
                     extend_any_lists    = True, 
                     inplace             = False
                 )
@@ -6904,14 +6667,14 @@ class DOVSAudit:
             overlap_DOVS_col      = overlap_DOVS_col, 
             overlap_disagree_cols = overlap_disagree_cols
         )
-        if update_df[overlap_disagree_cols].notna().any().any() and verbose:
+        if update_df[overlap_disagree_cols].notna().any().any():
             print(f"WARNING: Disagreement between {overlap_DOVS_col} and the overlap percentage columns beginning with {ovrlp_pfx} for outg_rec_nb={outg_rec_nb_i}")
             print('\tType A: DOVS claimed there was an overlapping outage, but we cannot find one')
             print('\tType B: PN should potentially be included in overlapping DOVS event')
             for disagree_col in overlap_disagree_cols:
                 if update_df[disagree_col].notna().any():
-                    disagree_ovrlp_DOVS = list(set(update_df[update_df[disagree_col].notna()][disagree_col].sum()))
                     print(f'Type disagreement found: {disagree_col}')
+                    disagree_ovrlp_DOVS = list(set(update_df[update_df[disagree_col].notna()][disagree_col].sum()))
                     print(f'\tOutside DOVS events: {disagree_ovrlp_DOVS}')
                     if set(unq_idfr_cols).difference(set(update_df.columns.tolist()))==set():
                         disagree_entries = update_df[update_df[disagree_col].notna()][unq_idfr_cols].drop_duplicates()
@@ -7001,7 +6764,6 @@ class DOVSAudit:
                         outg_intrvl        = outg_intrvl, 
                         outg_rec_nbs       = ovrlp_outg_rec_nbs, 
                         dovs_df            = None, 
-                        opco               = self.opco, 
                         outg_rec_nb_col    = outg_rec_nb_col_dovs, 
                         dt_off_ts_full_col = dt_off_ts_full_col_dovs, 
                         dt_on_ts_col       = dt_on_ts_col_dovs, 
@@ -7009,25 +6771,19 @@ class DOVSAudit:
                         open_end_col       = open_end_col
                     )
                     #-------------------------
-                    if split_df is None:
-                        update_df.loc[idx_i, 'resolved']         = False
-                        update_df.loc[idx_i, 'resolved_details'] = 'Unresolved, possibly conflicting overlapping DOVS events'
-                        update_df.loc[idx_i, keep_col]           = True
-                        update_df.loc[idx_i, 'adjustment']       = None
-                    else:
-                        assert(self.outg_rec_nb in split_df[outg_rec_nb_col_dovs].unique().tolist())
-                        adjstmnt_i = split_df[split_df[outg_rec_nb_col_dovs]==self.outg_rec_nb]
-                        assert(adjstmnt_i.shape[0]==1)
-                        #-----
-                        update_df.loc[idx_i, 'resolved']         = True
-                        update_df.loc[idx_i, 'resolved_details'] = 'Uncertain'
-                        update_df.loc[idx_i, keep_col]           = True
-                        update_df.loc[idx_i, 'adjustment']       = 'adjust'
-                        #-----
-                        update_df.loc[idx_i, t_min_col]    = adjstmnt_i.iloc[0]['intrvl_min']
-                        update_df.loc[idx_i, t_max_col]    = adjstmnt_i.iloc[0]['intrvl_max']
-                        update_df.loc[idx_i, open_beg_col] = (update_df.loc[idx_i, open_beg_col] or adjstmnt_i.iloc[0][open_beg_col])
-                        update_df.loc[idx_i, open_end_col] = (update_df.loc[idx_i, open_end_col] or adjstmnt_i.iloc[0][open_end_col])
+                    assert(self.outg_rec_nb in split_df[outg_rec_nb_col_dovs].unique().tolist())
+                    adjstmnt_i = split_df[split_df[outg_rec_nb_col_dovs]==self.outg_rec_nb]
+                    assert(adjstmnt_i.shape[0]==1)
+                    #-----
+                    update_df.loc[idx_i, 'resolved']         = True
+                    update_df.loc[idx_i, 'resolved_details'] = 'Uncertain'
+                    update_df.loc[idx_i, keep_col]           = True
+                    update_df.loc[idx_i, 'adjustment']       = 'adjust'
+                    #-----
+                    update_df.loc[idx_i, t_min_col]    = adjstmnt_i.iloc[0]['intrvl_min']
+                    update_df.loc[idx_i, t_max_col]    = adjstmnt_i.iloc[0]['intrvl_max']
+                    update_df.loc[idx_i, open_beg_col] = (update_df.loc[idx_i, open_beg_col] or adjstmnt_i.iloc[0][open_beg_col])
+                    update_df.loc[idx_i, open_end_col] = (update_df.loc[idx_i, open_end_col] or adjstmnt_i.iloc[0][open_end_col])
         #-------------------------
         update_df = update_df.drop(columns=ovrlp_pct_cols)
         self.best_ests_df_w_keep_info = update_df.copy()
@@ -7062,6 +6818,10 @@ class DOVSAudit:
         outg_rec_nb_col_dovs            = 'OUTG_REC_NB', 
         dt_off_ts_full_col_dovs         = 'DT_OFF_TS_FULL', 
         dt_on_ts_col_dovs               = 'DT_ON_TS', 
+        overlaps_addtnl_dovs_sql_kwargs = dict(
+            CI_NB_min  = 0, 
+            CMI_NB_min = 0
+        ), 
         overlap_disagree_cols           = ['ovrlp_disagree_typeA', 'ovrlp_disagree_typeB'], 
         unq_idfr_cols                   = ['PN', 'i_outg'], 
         open_beg_col                    = 'open_beg', 
@@ -7075,10 +6835,12 @@ class DOVSAudit:
         if self.best_ests_df is None or self.best_ests_df.shape[0]==0:
             return
         #--------------------------------------------------
-        self.identify_overlaps(
-            overlaps_dovs_sql_fcn = overlaps_dovs_sql_fcn, 
-            verbose               = False
-        )
+        self.identify_overlaps(overlaps_dovs_sql_fcn = overlaps_dovs_sql_fcn)
+        assert(self.n_out_PNs_w_overlap>-1)
+        if self.n_out_PNs_w_overlap>0:
+            print(f'\t\tImpossible for outage overlaps procedure to proceed!!!!!\n\t\tExiting DOVSAudit.identify_overlaps_and_resolve')
+            self.__can_analyze = False
+            return
         #--------------------------------------------------
         self.resolve_overlapping_audits(
             dovs_df                         = dovs_df, 
@@ -7090,11 +6852,11 @@ class DOVSAudit:
             dt_off_ts_full_col_dovs         = dt_off_ts_full_col_dovs, 
             dt_on_ts_col_dovs               = dt_on_ts_col_dovs, 
             overlaps_dovs_sql_fcn           = overlaps_dovs_sql_fcn, 
+            overlaps_addtnl_dovs_sql_kwargs = overlaps_addtnl_dovs_sql_kwargs, 
             overlap_disagree_cols           = overlap_disagree_cols, 
             unq_idfr_cols                   = unq_idfr_cols, 
             open_beg_col                    = open_beg_col, 
-            open_end_col                    = open_end_col, 
-            verbose                         = True
+            open_end_col                    = open_end_col
         )      
         #-------------------------
         # In ami_df_i, mark any entries which were essentially removed via the identify_dovs_overlaps_from_best_ests
@@ -7131,7 +6893,6 @@ class DOVSAudit:
                     build_sql_function        = DOVSOutages_SQL.build_sql_outage, 
                     build_sql_function_kwargs = dict(
                         outg_rec_nbs    = ptntl_ovrlp_outg_rec_nbs, 
-                        opco            = self.opco, 
                         include_premise = True
                     ), 
                     build_consolidated        = True
@@ -7145,6 +6906,1033 @@ class DOVSAudit:
         return other_dovs_events_df
         
 
+
+
+    #****************************************************************************************************
+    # OLD Methods to try to rectify any overlaps with other DOVS events
+    # !!!!!!!!! TO BE DELETED !!!!!!!!!!!
+    #****************************************************************************************************
+	# *************************!!!!!!!!!!!!!!!!!!!!!!!!!
+	# Likely remove if resolve_overlapping_audits_OLD is removed!
+	# *************************!!!!!!!!!!!!!!!!!!!!!!!!!  
+    @staticmethod
+    def assign_a_b(
+        ovrlps_srs        , 
+        pct_overlap_a_col = 'pct_overlap_a', 
+        pct_overlap_b_col = 'pct_overlap_b' 
+    ):
+        r"""
+        Helper function for DOVSAudit.handle_audits_with_same_two_intervals_for_PN
+        """
+        #-------------------------
+        if ovrlps_srs[pct_overlap_a_col] > ovrlps_srs[pct_overlap_b_col]:
+            return 'a'
+        elif ovrlps_srs[pct_overlap_a_col] < ovrlps_srs[pct_overlap_b_col]:
+            return 'b'
+        else:
+            return np.nan
+
+
+	# *************************!!!!!!!!!!!!!!!!!!!!!!!!!
+	# Likely remove if resolve_overlapping_audits_OLD is removed!
+	# *************************!!!!!!!!!!!!!!!!!!!!!!!!!  
+    @staticmethod
+    def did_audits_find_same_interval_for_PN(
+        be_df_a   , 
+        be_df_b   , 
+        t_min_col = 'winner_min', 
+        t_max_col = 'winner_max'    
+    ):
+        r"""
+        Determine whether or not two audits found the same, single, outage interval
+        """
+        #-------------------------
+        if(
+            be_df_a.shape[0] == 1 and 
+            be_df_b.shape[0] == 1 and
+            be_df_a[[t_min_col, t_max_col]].reset_index(drop=True).equals(
+                be_df_b[[t_min_col, t_max_col]].reset_index(drop=True)
+            )
+        ):
+            return True
+        return False
+
+
+	# *************************!!!!!!!!!!!!!!!!!!!!!!!!!
+	# Likely remove if resolve_overlapping_audits_OLD is removed!
+	# *************************!!!!!!!!!!!!!!!!!!!!!!!!!  
+    @staticmethod
+    def did_audits_find_same_two_intervals_for_PN(
+        be_df_a   , 
+        be_df_b   , 
+        t_min_col = 'winner_min', 
+        t_max_col = 'winner_max'    
+    ):
+        r"""
+        Determine whether or not two audits found the same two outage interval.
+        When there is an overlap between two audits, this is likely a common.
+        """
+        #-------------------------
+        # NOTE: symmetric_difference doesn't like a list of lists or list of numpy.ndarray objects,
+        #         which is why I need to convert elements to tuples instead of lists/arrays below
+        if(
+            be_df_a.shape[0] == 2 and 
+            be_df_b.shape[0] == 2 and
+            (set([tuple(x) for x in be_df_a[[t_min_col, t_max_col]].values]).symmetric_difference(
+                set([tuple(x) for x in be_df_b[[t_min_col, t_max_col]].values])
+            )==set())
+        ):
+            return True
+        return False
+
+
+	# *************************!!!!!!!!!!!!!!!!!!!!!!!!!
+	# Likely remove if resolve_overlapping_audits_OLD is removed!
+	# *************************!!!!!!!!!!!!!!!!!!!!!!!!!  
+    @staticmethod
+    def handle_audits_with_same_interval_for_PN(
+        be_df_a               , 
+        be_df_b               , 
+        dovs_outg_t_beg_end_a , 
+        dovs_outg_t_beg_end_b , 
+        unq_idfr_cols         = ['PN', 'i_outg'], 
+        t_min_col             = 'winner_min', 
+        t_max_col             = 'winner_max', 
+        open_beg_col          = 'open_beg', 
+        open_end_col          = 'open_end'
+    ):
+        r"""
+        """
+        #-------------------------
+        assert(
+            DOVSAudit.did_audits_find_same_interval_for_PN(
+                be_df_a   = be_df_a, 
+                be_df_b   = be_df_b, 
+                t_min_col = t_min_col, 
+                t_max_col = t_max_col
+            )
+        )
+        #-------------------------
+        outg_intrvl = be_df_a.iloc[0][[t_min_col, t_max_col]].tolist()
+        ovrlps_dovs_a = pd.Interval(*outg_intrvl).overlaps(pd.Interval(*dovs_outg_t_beg_end_a))
+        ovrlps_dovs_b = pd.Interval(*outg_intrvl).overlaps(pd.Interval(*dovs_outg_t_beg_end_b))
+        #-------------------------
+        be_df_cols = unq_idfr_cols + list(set([t_min_col, t_max_col, open_beg_col, open_end_col]).difference(set(unq_idfr_cols)))
+        assert(set(be_df_cols).difference(set(be_df_a.columns.tolist()))==set())
+        assert(set(be_df_cols).difference(set(be_df_b.columns.tolist()))==set())
+        #-----
+        resolved_i = False
+        resolved_i_details = 'Unresolved'
+        #-----
+        to_adjust_a = DOVSAudit.set_initial_to_adjust_df(
+            be_df = be_df_a, 
+            be_df_cols = be_df_cols
+        )
+        to_adjust_b = DOVSAudit.set_initial_to_adjust_df(
+            be_df = be_df_b, 
+            be_df_cols = be_df_cols
+        )
+        #---------------------------------------------------------------------------
+        # If doesn't overlap with either DOVS events, then choose closest?
+        # How should I quantify closest?
+        if ovrlps_dovs_a+ovrlps_dovs_b==0:
+            closeness_a = DOVSAudit.quantify_closeness_of_intervals(
+                intrvl_1  = be_df_a[[t_min_col, t_max_col]].values[0], 
+                intrvl_2  = dovs_outg_t_beg_end_a, 
+                euclidean = True
+            )
+            #-----
+            closeness_b = DOVSAudit.quantify_closeness_of_intervals(
+                intrvl_1  = be_df_b[[t_min_col, t_max_col]].values[0], 
+                intrvl_2  = dovs_outg_t_beg_end_b, 
+                euclidean = True
+            )
+            #-------------------------
+            resolved_i = True
+            resolved_i_details = 'Uncertain'
+            if closeness_a<=closeness_b:
+                to_adjust_b['adjustment'] = 'remove'
+            else:
+                to_adjust_a['adjustment'] = 'remove'
+        #---------------------------------------------------------------------------
+        # If only overlaps with one of the DOVS events, easily resolved
+        elif ovrlps_dovs_a+ovrlps_dovs_b==1:
+            resolved_i = True
+            resolved_i_details = 'Certain'
+            if ovrlps_dovs_a:
+                to_adjust_b['adjustment'] = 'remove'
+            else:
+                to_adjust_a['adjustment'] = 'remove'
+        #---------------------------------------------------------------------------
+        # Case: Outage period split across two DOVS events 
+        #  e.g., outg_rec_nb = 13551139 and 13551140 for PN=040587963
+        #   Criteria:
+        #     1. Overlaps both DOVS events
+        #     2. DOVS events don't overlap each other
+        #     3. First DOVS event ends and second DOVS event begins within outage period
+        #-------------------------
+        else:
+            assert(ovrlps_dovs_a+ovrlps_dovs_b==2)
+            #-------------------------
+            # Determine which DOVS event occurred first
+            if dovs_outg_t_beg_end_a[0] < dovs_outg_t_beg_end_b[0]:
+                frst_dovs = dovs_outg_t_beg_end_a
+                scnd_dovs = dovs_outg_t_beg_end_b
+            else:
+                frst_dovs = dovs_outg_t_beg_end_b
+                scnd_dovs = dovs_outg_t_beg_end_a
+            assert(frst_dovs[1] < scnd_dovs[0])
+            #-------------------------
+            # At this point, we know both DOVS events overlap with the found outage period, and they don't
+            #   overlap with each other.
+            # Therefore, it seems trivial that the first DOVS event should end and second should begin
+            #   within the found outage period, but I'm not 100%
+            if(
+                frst_dovs[1] > outg_intrvl[0] and frst_dovs[1] < outg_intrvl[1] and 
+                scnd_dovs[0] > outg_intrvl[0] and scnd_dovs[0] < outg_intrvl[1] 
+            ):
+                # At this point, we know the situation: Outage period split across two DOVS events 
+                #   e.g., outg_rec_nb = 13551139 and 13551140 for PN=040587963
+                #-----
+                # The time between the first and second outages will be split; the first half given to first and
+                #   second half given to second
+                unaccounted_intrvl = [
+                    frst_dovs[1], 
+                    scnd_dovs[0]
+                ]
+                #-----
+                # Timestamps, so can't simply take average of unaccounted_intrvl[0] and unaccounted_intrvl[1]
+                #   But, calculation below gives same result as average of two
+                midpoint = unaccounted_intrvl[0] + 0.5*(unaccounted_intrvl[1]-unaccounted_intrvl[0])
+                #-----
+                frst_intrvl = [outg_intrvl[0], midpoint]
+                scnd_intrvl = [midpoint, outg_intrvl[1]]
+                #-------------------------
+                to_adjust_a = be_df_a[be_df_cols].reset_index(drop=True)
+                to_adjust_b = be_df_b[be_df_cols].reset_index(drop=True)
+                #-----
+                if frst_dovs==dovs_outg_t_beg_end_a:
+                    assert(scnd_dovs==dovs_outg_t_beg_end_b)
+                    to_adjust_a[[t_min_col, t_max_col]] = frst_intrvl
+                    to_adjust_a[open_end_col] = True
+                    #-----
+                    to_adjust_b[[t_min_col, t_max_col]] = scnd_intrvl
+                    to_adjust_b[open_beg_col] = True
+                elif frst_dovs==dovs_outg_t_beg_end_b:
+                    assert(scnd_dovs==dovs_outg_t_beg_end_a)
+                    to_adjust_a[[t_min_col, t_max_col]] = scnd_intrvl
+                    to_adjust_a[open_beg_col] = True
+                    #-----
+                    to_adjust_b[[t_min_col, t_max_col]] = frst_intrvl
+                    to_adjust_b[open_end_col] = True
+                else:
+                    assert(0)
+                #-----
+                resolved_i = True
+                resolved_i_details = 'Uncertain'
+                #-----
+                to_adjust_a['adjustment'] = 'adjust'
+                to_adjust_b['adjustment'] = 'adjust'
+            else:
+                resolved_i = False
+                resolved_i_details = 'Unresolved'
+        #---------------------------------------------------------------------------
+        to_adjust_a['resolved']         = resolved_i
+        to_adjust_a['resolved_details'] = resolved_i_details
+        #-----
+        to_adjust_b['resolved']         = resolved_i
+        to_adjust_b['resolved_details'] = resolved_i_details
+        #-------------------------
+        return dict(
+            resolved_i         = resolved_i, 
+            resolved_i_details = resolved_i_details, 
+            to_adjust_a        = to_adjust_a, 
+            to_adjust_b        = to_adjust_b
+        )
+
+
+	# *************************!!!!!!!!!!!!!!!!!!!!!!!!!
+	# Likely remove if resolve_overlapping_audits_OLD is removed!
+	# *************************!!!!!!!!!!!!!!!!!!!!!!!!!  
+    @staticmethod
+    def handle_audits_with_same_two_intervals_for_PN(
+        be_df_a               , 
+        be_df_b               , 
+        dovs_outg_t_beg_end_a , 
+        dovs_outg_t_beg_end_b , 
+        unq_idfr_cols         = ['PN', 'i_outg'], 
+        t_min_col             = 'winner_min', 
+        t_max_col             = 'winner_max', 
+        keep_col              = 'keep', 
+        open_beg_col          = 'open_beg', 
+        open_end_col          = 'open_end'
+    ):
+        r"""
+        Simplest (and likely the most common) situation: 
+          audit_a and audit_b both find the same two sub-outages for PN_i, one of which clearly belongs
+            to audit_a and the other of which clearly belongs to audit_b.
+          This situation results in resolved_i_details = 'Certain' below
+        """
+        #-------------------------
+        assert(
+            DOVSAudit.did_audits_find_same_two_intervals_for_PN(
+                be_df_a = be_df_a, 
+                be_df_b = be_df_b, 
+                t_min_col = t_min_col, 
+                t_max_col = t_max_col   
+            )
+        )
+        #-------------------------
+        be_df_cols = unq_idfr_cols + list(set([t_min_col, t_max_col, open_beg_col, open_end_col]).difference(set(unq_idfr_cols)))
+        assert(set(be_df_cols).difference(set(be_df_a.columns.tolist()))==set())
+        assert(set(be_df_cols).difference(set(be_df_b.columns.tolist()))==set())
+        #-----
+        return_cols = be_df_cols + ['adjustment', 'resolved', 'resolved_details']
+        #-----
+        resolved_i = False
+        resolved_i_details = 'Unresolved'
+        #-----
+        to_adjust_a = DOVSAudit.set_initial_to_adjust_df(
+            be_df       = be_df_a, 
+            be_df_cols  = be_df_cols, 
+            addtnl_cols = [keep_col]
+        )
+        to_adjust_b = DOVSAudit.set_initial_to_adjust_df(
+            be_df       = be_df_b, 
+            be_df_cols  = be_df_cols, 
+            addtnl_cols = [keep_col]
+        )
+        #-------------------------
+        # The data in tmp_ovrlp_dovs_col will make life a lot easier if the program below goes past the first if statement
+        tmp_ovrlp_dovs_col = Utilities.generate_random_string()
+        assert(tmp_ovrlp_dovs_col not in to_adjust_a.columns.tolist() and 
+               tmp_ovrlp_dovs_col not in to_adjust_b.columns.tolist())
+        to_adjust_a[tmp_ovrlp_dovs_col] = to_adjust_a.apply(
+            lambda x: pd.Interval(x[t_min_col], x[t_max_col]).overlaps(
+                pd.Interval(dovs_outg_t_beg_end_a[0], dovs_outg_t_beg_end_a[1])
+            ), 
+            axis=1
+        )
+        #-----
+        to_adjust_b[tmp_ovrlp_dovs_col] = to_adjust_b.apply(
+            lambda x: pd.Interval(x[t_min_col], x[t_max_col]).overlaps(
+                pd.Interval(dovs_outg_t_beg_end_b[0], dovs_outg_t_beg_end_b[1])
+            ), 
+            axis=1
+        )    
+        #-------------------------
+        # If each to_adjust_a and to_adjust_b has one entry with keep==True and one with keep==False, 
+        #   and these differ from each other, then ownership can be resolved simply (the entry with keep==True
+        #   will be kept for each)
+        if(
+            to_adjust_a[keep_col].sum() == 1 and
+            to_adjust_b[keep_col].sum() == 1 and 
+            not to_adjust_a[to_adjust_a[keep_col]==True][[t_min_col, t_max_col]].reset_index(drop=True).equals(
+                to_adjust_b[to_adjust_b[keep_col]==True][[t_min_col, t_max_col]].reset_index(drop=True)
+            )
+        ):
+            to_adjust_a.loc[to_adjust_a[keep_col]==False, 'adjustment'] = 'remove'
+            to_adjust_b.loc[to_adjust_b[keep_col]==False, 'adjustment'] = 'remove'
+            #-----
+            assert((to_adjust_a['adjustment']=='remove').sum()==1)
+            assert((to_adjust_b['adjustment']=='remove').sum()==1)
+            #-----
+            resolved_i = True
+            resolved_i_details = 'Certain'
+        #-------------------------
+        # If only one entry in to_adjust_a overlaps with dovs_outg_t_beg_end_a and 
+        #    only one entry in to_adjust_b overlaps with dovs_outg_t_beg_end_b
+        # AND these differ from each other, then ownership can be resolved simply
+        elif(
+            to_adjust_a[tmp_ovrlp_dovs_col].sum() == 1 and
+            to_adjust_b[tmp_ovrlp_dovs_col].sum() == 1 and 
+            not to_adjust_a[to_adjust_a[tmp_ovrlp_dovs_col]==True][[t_min_col, t_max_col]].reset_index(drop=True).equals(
+                to_adjust_b[to_adjust_b[tmp_ovrlp_dovs_col]==True][[t_min_col, t_max_col]].reset_index(drop=True)
+            )
+        ):
+            to_adjust_a.loc[to_adjust_a[tmp_ovrlp_dovs_col]==False, 'adjustment'] = 'remove'
+            to_adjust_b.loc[to_adjust_b[tmp_ovrlp_dovs_col]==False, 'adjustment'] = 'remove'
+            #-----
+            assert((to_adjust_a['adjustment']=='remove').sum()==1)
+            assert((to_adjust_b['adjustment']=='remove').sum()==1)
+            #-----
+            resolved_i = True
+            resolved_i_details = 'Certain'
+        #-------------------------
+        else:
+            # Find the amount of overlap each sub-outage has with its parent DOVS event, and decide from there whether
+            #   a most probably parent for each can be determined
+            #-------------------------
+            ovrlps_df = to_adjust_a[[t_min_col, t_max_col]].copy()
+            #-----
+            ovrlps_df['pct_overlap_a'] = ovrlps_df.apply(
+                lambda x: Utilities.get_overlap_interval_len(
+                    intrvl_1 = [x[t_min_col], x[t_max_col]], 
+                    intrvl_2 = dovs_outg_t_beg_end_a, 
+                    norm_by=2
+                ), 
+                axis=1
+            )
+            #-----
+            ovrlps_df['pct_overlap_b'] = ovrlps_df.apply(
+                lambda x: Utilities.get_overlap_interval_len(
+                    intrvl_1 = [x[t_min_col], x[t_max_col]], 
+                    intrvl_2 = dovs_outg_t_beg_end_b, 
+                    norm_by=2
+                ), 
+                axis=1
+            )
+            #-----
+            ovrlps_df['belongs_to_outg'] = ovrlps_df.apply(
+                lambda x: DOVSAudit.assign_a_b(
+                    ovrlps_srs        = x, 
+                    pct_overlap_a_col = 'pct_overlap_a', 
+                    pct_overlap_b_col = 'pct_overlap_b' 
+                ), 
+                axis=1
+            )
+            #-------------------------
+            if ovrlps_df['belongs_to_outg'].isna().sum()>0:
+                resolved_i = False
+                resolved_i_details = 'Failed'
+            else:
+                to_a = ovrlps_df[ovrlps_df['belongs_to_outg']=='a']
+                to_b = ovrlps_df[ovrlps_df['belongs_to_outg']=='b']
+                #-------------------------
+                # Make index columns, from 0 to df.shape[0]-1, so rows can be easily identified
+                tmp_idx_col = Utilities.generate_random_string()
+                assert(tmp_idx_col not in to_adjust_a.columns.tolist())
+                assert(tmp_idx_col not in to_adjust_b.columns.tolist())
+                to_adjust_a[tmp_idx_col] = range(to_adjust_a.shape[0])
+                to_adjust_b[tmp_idx_col] = range(to_adjust_b.shape[0])
+                #-------------------------
+                # Determine which entries in to_adjust_a will stay with audit_a by merging to_adjust_a with to_a
+                # Similarly for audit_b
+                to_a = pd.merge(
+                    to_adjust_a, 
+                    to_a, 
+                    left_on  = [t_min_col, t_max_col], 
+                    right_on = [t_min_col, t_max_col], 
+                    how = 'inner'
+                )
+                #-----
+                to_b = pd.merge(
+                    to_adjust_b.reset_index(drop=True), 
+                    to_b, 
+                    left_on  = [t_min_col, t_max_col], 
+                    right_on = [t_min_col, t_max_col], 
+                    how = 'inner'
+                )
+                #-------------------------
+                # Determine which indices need to be removed from audit_a using to_a[tmp_idx_col]
+                # Similarly for audit_b
+                idxs_to_adjust_a = [i for i in range(to_adjust_a.shape[0]) if i not in to_a[tmp_idx_col].tolist()]
+                idxs_to_adjust_b = [i for i in range(to_adjust_b.shape[0]) if i not in to_b[tmp_idx_col].tolist()]
+                #-------------------------
+                # Form to_adjust_a and to_adjust_b
+                to_adjust_a.iloc[idxs_to_adjust_a, Utilities_df.find_single_col_in_multiindex_cols(df=to_adjust_a, col='adjustment')] = 'remove'
+                to_adjust_b.iloc[idxs_to_adjust_b, Utilities_df.find_single_col_in_multiindex_cols(df=to_adjust_b, col='adjustment')] = 'remove'
+                #-----
+                assert((to_adjust_a['adjustment']=='remove').sum()==1)
+                assert((to_adjust_b['adjustment']=='remove').sum()==1)
+                #-----
+                resolved_i = True
+                resolved_i_details = 'Uncertain'
+                #-------------------------
+                # Cleanup
+                to_adjust_a = to_adjust_a.drop(columns=[tmp_idx_col])
+                to_adjust_b = to_adjust_b.drop(columns=[tmp_idx_col])
+        #-------------------------
+        # Need to remove tmp_ovrlp_dovs_col and keep_col from t_adjust_a and to_adjust_b
+        to_adjust_a = to_adjust_a.drop(columns=[tmp_ovrlp_dovs_col, keep_col])
+        to_adjust_b = to_adjust_b.drop(columns=[tmp_ovrlp_dovs_col, keep_col])
+        #-------------------------
+        to_adjust_a['resolved']         = resolved_i
+        to_adjust_a['resolved_details'] = resolved_i_details
+        #-----
+        to_adjust_b['resolved']         = resolved_i
+        to_adjust_b['resolved_details'] = resolved_i_details
+        #-------------------------
+        return dict(
+            resolved_i         = resolved_i, 
+            resolved_i_details = resolved_i_details, 
+            to_adjust_a        = to_adjust_a, 
+            to_adjust_b        = to_adjust_b
+        )
+
+
+	# *************************!!!!!!!!!!!!!!!!!!!!!!!!!
+	# Likely remove if resolve_overlapping_audits_OLD is removed!
+	# *************************!!!!!!!!!!!!!!!!!!!!!!!!!  
+    @staticmethod
+    def implement_adjustment_for_PN(
+        audit         , 
+        to_adjust_df  ,
+        unq_idfr_cols = ['PN', 'i_outg'], 
+        t_min_col     = 'winner_min', 
+        t_max_col     = 'winner_max', 
+        keep_col      = 'keep', 
+        open_beg_col  = 'open_beg', 
+        open_end_col  = 'open_end'
+    ):
+        r"""
+        Method to implement the needed adjustments in audit found by DOVSAudit.resolve_overlapping_audits_for_PN
+        """
+        #-------------------------
+        if 'resolved' not in audit.best_ests_df_w_keep_info.columns.tolist():
+            audit.best_ests_df_w_keep_info['resolved'] = np.nan 
+        if 'resolved_details' not in audit.best_ests_df_w_keep_info.columns.tolist():
+            audit.best_ests_df_w_keep_info['resolved_details'] = ''
+        #-------------------------
+        # Each PN can have multiple entries which need adjusted, so need to iterate
+        for adjust_j in range(to_adjust_df.shape[0]):
+            slicer_j = DFSlicer()
+            to_adjust_j = to_adjust_df.iloc[adjust_j]
+            for col in unq_idfr_cols:
+                slicer_j.add_single_slicer(dict(
+                    column              = col, 
+                    value               = to_adjust_j[col], 
+                    comparison_operator = '=='
+                ))
+            #-------------------------
+            slcr_bool_j = slicer_j.get_slicing_booleans(audit.best_ests_df_w_keep_info)
+            # Handling one entry at a time, so slcr_bool_j should sum to 1
+            assert(slcr_bool_j.sum()==1)
+            #-------------------------
+            audit.best_ests_df_w_keep_info.loc[slcr_bool_j, 'resolved'] = to_adjust_j['resolved']
+            audit.best_ests_df_w_keep_info.loc[slcr_bool_j, 'resolved_details'] = to_adjust_j['resolved_details']
+            #TODO!!!!!!!!!!!!!!!!!!!!
+            # # I don't want this adjustment to over-write the results from any previous (e.g., if event overlaps with multiple others)
+            # if pd.isna(audit.best_ests_df_w_keep_info.loc[slcr_bool_j, 'resolved']):
+                # audit.best_ests_df_w_keep_info.loc[slcr_bool_j, 'resolved'] = to_adjust_j['resolved']
+            # else:
+                # audit.best_ests_df_w_keep_info.loc[slcr_bool_j, 'resolved'] = audit.best_ests_df_w_keep_info.loc[slcr_bool_j, 'resolved'] and to_adjust_j['resolved']
+            # #-----
+            # if audit.best_ests_df_w_keep_info.loc[slcr_bool_j, 'resolved_details']=='':
+                # audit.best_ests_df_w_keep_info.loc[slcr_bool_j, 'resolved_details'] = to_adjust_j['resolved_details']
+            # else:
+                # audit.best_ests_df_w_keep_info.loc[slcr_bool_j, 'resolved_details'] = audit.best_ests_df_w_keep_info.loc[slcr_bool_j, 'resolved_details'] + '; ' + to_adjust_j['resolved_details']
+            #-------------------------
+            if to_adjust_j['adjustment']=='adjust':
+                audit.best_ests_df_w_keep_info.loc[slcr_bool_j, keep_col]     = True
+                audit.best_ests_df_w_keep_info.loc[slcr_bool_j, t_min_col]    = to_adjust_j[t_min_col]
+                audit.best_ests_df_w_keep_info.loc[slcr_bool_j, t_max_col]    = to_adjust_j[t_max_col]
+                audit.best_ests_df_w_keep_info.loc[slcr_bool_j, open_beg_col] = to_adjust_j[open_beg_col]
+                audit.best_ests_df_w_keep_info.loc[slcr_bool_j, open_end_col] = to_adjust_j[open_end_col]
+            elif to_adjust_j['adjustment']=='remove':
+                # Not really needed, since PNs_to_resolve all have keep==False
+                # However, explicitly set to False in case I open up procedure to all PNs, not just those
+                #   flagged as not keeping
+                audit.best_ests_df_w_keep_info.loc[slcr_bool_j, keep_col] = False
+            elif to_adjust_j['adjustment'] is None or to_adjust_j['adjustment']=='':
+                continue
+            else:
+                print('Unexpected adjustment value!')
+                assert(0)    
+
+
+	# *************************!!!!!!!!!!!!!!!!!!!!!!!!!
+	# Likely remove if resolve_overlapping_audits_OLD is removed!
+	# *************************!!!!!!!!!!!!!!!!!!!!!!!!!  
+    @staticmethod
+    def implement_adjustments_for_audit(
+        audit_a          ,
+        audit_b          , 
+        adjustment_dicts , 
+        unq_idfr_cols    = ['PN', 'i_outg'], 
+        t_min_col        = 'winner_min', 
+        t_max_col        = 'winner_max', 
+        keep_col         = 'keep', 
+        open_beg_col     = 'open_beg', 
+        open_end_col     = 'open_end'
+    ):
+        r"""
+        Method to implement a collection of adjustments in audit.
+
+        audit_a, audit_b:
+            Whichever is supplied will be adjusted
+                i.e., if both supplied, both adjusted
+                      if only one supplied, only one adjusted
+
+        adjustment_dicts:
+            A dictionary with:
+                keys:   typically equal to PNs, but the value doesn't really matter
+                values: dict objects with keys = ['resolved_i', 'resolved_i_details', 'to_adjust_a', 'to_adjust_b']
+        """
+        #-------------------------
+        # audit_a or audit_b (or both) must be supplied
+        assert(audit_a is not None or audit_b is not None)
+        #-------------------------
+        # In adjustment_dicts, the keys are typically PNs (but doesn't really matter) and 
+        #   values are dict objects with keys = ['resolved_i', 'resolved_i_details', 'to_adjust_a', 'to_adjust_b']
+        for k,adjstmnt_dict in adjustment_dicts.items():
+            if audit_a is not None:
+                if 'resolved' not in audit_a.best_ests_df_w_keep_info.columns.tolist():
+                    audit_a.best_ests_df_w_keep_info['resolved'] = np.nan 
+                if 'resolved_details' not in audit_a.best_ests_df_w_keep_info.columns.tolist():
+                    audit_a.best_ests_df_w_keep_info['resolved_details'] = ''
+                #-----
+                DOVSAudit.implement_adjustment_for_PN(
+                    audit         = audit_a, 
+                    to_adjust_df  = adjstmnt_dict['to_adjust_a'],
+                    unq_idfr_cols = unq_idfr_cols, 
+                    t_min_col     = t_min_col, 
+                    t_max_col     = t_max_col, 
+                    keep_col      = keep_col, 
+                    open_beg_col  = open_beg_col, 
+                    open_end_col  = open_end_col
+                )
+            #-----
+            if audit_b is not None:
+                if 'resolved' not in audit_b.best_ests_df_w_keep_info.columns.tolist():
+                    audit_b.best_ests_df_w_keep_info['resolved'] = np.nan 
+                if 'resolved_details' not in audit_b.best_ests_df_w_keep_info.columns.tolist():
+                    audit_b.best_ests_df_w_keep_info['resolved_details'] = ''
+                #-----
+                DOVSAudit.implement_adjustment_for_PN(
+                    audit         = audit_b, 
+                    to_adjust_df  = adjstmnt_dict['to_adjust_b'],
+                    unq_idfr_cols = unq_idfr_cols, 
+                    t_min_col     = t_min_col, 
+                    t_max_col     = t_max_col, 
+                    keep_col      = keep_col, 
+                    open_beg_col  = open_beg_col, 
+                    open_end_col  = open_end_col
+                )
+
+
+	# *************************!!!!!!!!!!!!!!!!!!!!!!!!!
+	# Likely remove if resolve_overlapping_audits_OLD is removed!
+	# *************************!!!!!!!!!!!!!!!!!!!!!!!!!  
+    @staticmethod
+    def resolve_overlapping_audits_for_PN(
+        audit_a               , 
+        audit_b               , 
+        PN_i                  , 
+        implement_resolutions = True, 
+        unq_idfr_cols         = ['PN', 'i_outg'], 
+        PN_col                = 'PN', 
+        t_min_col             = 'winner_min', 
+        t_max_col             = 'winner_max', 
+        keep_col              = 'keep', 
+        overlap_DOVS_col      = 'overlap_DOVS', 
+        open_beg_col          = 'open_beg', 
+        open_end_col          = 'open_end'
+    ):
+        r"""
+        implement_resolutions:
+            If True AND resolutions are needed, then audit_a and audit_b will be adjusted accordingly
+        """
+        #-------------------------
+        # Make sure best_ests_df_w_keep_info exists for each
+        #  Below will fail if object is None or empty DF
+        assert(audit_a.best_ests_df_w_keep_info.shape[0]>0)
+        assert(audit_b.best_ests_df_w_keep_info.shape[0]>0)
+        #-------------------------
+        be_df_cols = unq_idfr_cols + list(set([t_min_col, t_max_col, open_beg_col, open_end_col]).difference(set(unq_idfr_cols)))
+        assert(set(be_df_cols).difference(set(audit_a.best_ests_df_w_keep_info.columns.tolist()))==set())
+        assert(set(be_df_cols).difference(set(audit_b.best_ests_df_w_keep_info.columns.tolist()))==set())
+        #-----
+        return_cols = be_df_cols + ['adjustment', 'resolved', 'resolved_details']
+        #----------------------------------------------------------------------------------------------------
+        outg_rec_nb_a         = audit_a.outg_rec_nb
+        dovs_outg_t_beg_end_a = audit_a.dovs_outg_t_beg_end
+        #-----
+        outg_rec_nb_b         = audit_b.outg_rec_nb
+        dovs_outg_t_beg_end_b = audit_b.dovs_outg_t_beg_end
+        #--------------------------------------------------        
+        # Grab the best_ests_df_w_keep_info object from each audit
+        be_df_a = audit_a.best_ests_df_w_keep_info[audit_a.best_ests_df_w_keep_info[PN_col]==PN_i].copy()
+        be_df_b = audit_b.best_ests_df_w_keep_info[audit_b.best_ests_df_w_keep_info[PN_col]==PN_i].copy()
+        #--------------------------------------------------
+        resolved_i = False
+        resolved_i_details = ''
+        #-----
+        to_adjust_a = DOVSAudit.set_initial_to_adjust_df(
+            be_df       = be_df_a, 
+            be_df_cols  = be_df_cols, 
+            addtnl_cols = [keep_col]
+        )
+        to_adjust_b = DOVSAudit.set_initial_to_adjust_df(
+            be_df       = be_df_b, 
+            be_df_cols  = be_df_cols, 
+            addtnl_cols = [keep_col]
+        )
+        
+        #----------------------------------------------------------------------------------------------------
+        # If one of the audits does not contain PN_i, or the audits don't overlap for the given PN, so no 
+        #   intervention needed
+        if(
+            be_df_a.shape[0] == 0 or 
+            be_df_b.shape[0] == 0 or 
+            outg_rec_nb_b not in list(set(audit_a.best_ests_df_w_keep_info[overlap_DOVS_col].sum())) or
+            outg_rec_nb_a not in list(set(audit_b.best_ests_df_w_keep_info[overlap_DOVS_col].sum()))
+
+        ):
+            resolved_i = True
+            resolved_i_details = 'No intervention needed'
+            #-----
+            to_adjust_a['resolved']         = resolved_i
+            to_adjust_a['resolved_details'] = resolved_i_details
+            #-----
+            to_adjust_b['resolved']         = resolved_i
+            to_adjust_b['resolved_details'] = resolved_i_details
+            #-----
+            res_dict_i = dict(
+                resolved_i         = resolved_i, 
+                resolved_i_details = resolved_i_details, 
+                to_adjust_a        = to_adjust_a, 
+                to_adjust_b        = to_adjust_b
+            )
+        #----------------------------------------------------------------------------------------------------
+        # If the two DOVS events overlap, there's no way to resolve
+        elif pd.Interval(*dovs_outg_t_beg_end_a).overlaps(pd.Interval(*dovs_outg_t_beg_end_b)):
+            resolved_i = False
+            resolved_i_details = 'DOVS events overlap, impossible to resolve!'
+            print(f'{resolved_i_details}\nCANNOT RESOLVE!')
+            #-----
+            to_adjust_a['resolved']         = resolved_i
+            to_adjust_a['resolved_details'] = resolved_i_details
+            #-----
+            to_adjust_b['resolved']         = resolved_i
+            to_adjust_b['resolved_details'] = resolved_i_details
+            #-----
+            res_dict_i = dict(
+                resolved_i         = resolved_i, 
+                resolved_i_details = resolved_i_details, 
+                to_adjust_a        = to_adjust_a, 
+                to_adjust_b        = to_adjust_b
+            )
+        #----------------------------------------------------------------------------------------------------
+        # Case: Both find the same, single, outage
+        elif DOVSAudit.did_audits_find_same_interval_for_PN(
+            be_df_a   = be_df_a, 
+            be_df_b   = be_df_b, 
+            t_min_col = t_min_col, 
+            t_max_col = t_max_col
+        ):
+            res_dict_i = DOVSAudit.handle_audits_with_same_interval_for_PN(
+                be_df_a               = be_df_a, 
+                be_df_b               = be_df_b, 
+                dovs_outg_t_beg_end_a = dovs_outg_t_beg_end_a, 
+                dovs_outg_t_beg_end_b = dovs_outg_t_beg_end_b, 
+                PN_i                  = PN_i, 
+                unq_idfr_cols         = unq_idfr_cols, 
+                PN_col                = PN_col, 
+                t_min_col             = t_min_col, 
+                t_max_col             = t_max_col, 
+                open_beg_col          = open_beg_col, 
+                open_end_col          = open_end_col
+            )
+        #----------------------------------------------------------------------------------------------------
+        # Simplest (and likely the most common) situation: 
+        #   audit_a and audit_b both find the same two sub-outages for PN_i, one of which clearly belongs
+        #   to audit_a and the other of which clearly belongs to audit_b
+        elif(
+            DOVSAudit.did_audits_find_same_two_intervals_for_PN(
+                be_df_a   = be_df_a, 
+                be_df_b   = be_df_b, 
+                t_min_col = t_min_col, 
+                t_max_col = t_max_col   
+            )
+        ):
+            res_dict_i = DOVSAudit.handle_audits_with_same_two_intervals_for_PN(
+                be_df_a               = be_df_a, 
+                be_df_b               = be_df_b, 
+                dovs_outg_t_beg_end_a = dovs_outg_t_beg_end_a, 
+                dovs_outg_t_beg_end_b = dovs_outg_t_beg_end_b, 
+                PN_i                  = PN_i, 
+                unq_idfr_cols         = unq_idfr_cols, 
+                PN_col                = PN_col, 
+                t_min_col             = t_min_col, 
+                t_max_col             = t_max_col, 
+                keep_col              = keep_col, 
+                open_beg_col          = open_beg_col, 
+                open_end_col          = open_end_col
+            )
+        #----------------------------------------------------------------------------------------------------
+        else:
+            resolved_i = False
+            resolved_i_details = 'Unresolved by current methods'
+            #-----
+            to_adjust_a['resolved']         = resolved_i
+            to_adjust_a['resolved_details'] = resolved_i_details
+            #-----
+            to_adjust_b['resolved']         = resolved_i
+            to_adjust_b['resolved_details'] = resolved_i_details
+            #-----
+            res_dict_i = dict(
+                resolved_i         = resolved_i, 
+                resolved_i_details = resolved_i_details, 
+                to_adjust_a        = to_adjust_a, 
+                to_adjust_b        = to_adjust_b
+            )
+        #----------------------------------------------------------------------------------------------------
+        if implement_resolutions:
+            DOVSAudit.implement_adjustment_for_PN(
+                audit         = audit_a, 
+                to_adjust_df  = res_dict_i['to_adjust_a'],
+                unq_idfr_cols = unq_idfr_cols, 
+                t_min_col     = t_min_col, 
+                t_max_col     = t_max_col, 
+                keep_col      = keep_col, 
+                open_beg_col  = open_beg_col, 
+                open_end_col  = open_end_col
+            )
+            #-----
+            DOVSAudit.implement_adjustment_for_PN(
+                audit         = audit_b, 
+                to_adjust_df  = res_dict_i['to_adjust_b'],
+                unq_idfr_cols = unq_idfr_cols, 
+                t_min_col     = t_min_col, 
+                t_max_col     = t_max_col, 
+                keep_col      = keep_col, 
+                open_beg_col  = open_beg_col, 
+                open_end_col  = open_end_col
+            )
+        #----------------------------------------------------------------------------------------------------
+        return res_dict_i
+        
+
+	# *************************!!!!!!!!!!!!!!!!!!!!!!!!!
+	# Likely remove if resolve_overlapping_audits_OLD is removed!
+	# *************************!!!!!!!!!!!!!!!!!!!!!!!!!        
+    @staticmethod
+    def handle_dovs_events_overlapping(
+        audit_a       , 
+        audit_b       , 
+        unq_idfr_cols = ['PN', 'i_outg'], 
+        PN_col        = 'PN', 
+        t_min_col     = 'winner_min', 
+        t_max_col     = 'winner_max', 
+        keep_col      = 'keep', 
+        open_beg_col  = 'open_beg', 
+        open_end_col  = 'open_end'
+    ):
+        r"""
+        """
+        #--------------------------------------------------
+        if not pd.Interval(*audit_a.dovs_outg_t_beg_end).overlaps(pd.Interval(*audit_b.dovs_outg_t_beg_end)):
+            return
+        #--------------------------------------------------
+        assert(PN_col in unq_idfr_cols)
+        #-------------------------
+        assert(audit_a.best_ests_df_w_keep_info.groupby(unq_idfr_cols).ngroups==audit_a.best_ests_df_w_keep_info.shape[0])
+        assert(audit_b.best_ests_df_w_keep_info.groupby(unq_idfr_cols).ngroups==audit_b.best_ests_df_w_keep_info.shape[0])
+        #-------------------------
+        be_df_cols = unq_idfr_cols + list(set([t_min_col, t_max_col, open_beg_col, open_end_col]).difference(set(unq_idfr_cols)))
+        assert(set(be_df_cols).difference(set(audit_a.best_ests_df_w_keep_info.columns.tolist()))==set())
+        assert(set(be_df_cols).difference(set(audit_b.best_ests_df_w_keep_info.columns.tolist()))==set()) 
+        #-----
+        return_cols = be_df_cols + ['adjustment', 'resolved', 'resolved_details'] 
+        #--------------------------------------------------
+        ovrlp_PNs = list(set(audit_a.best_ests_df_w_keep_info[PN_col].unique().tolist()).intersection(set(audit_b.best_ests_df_w_keep_info[PN_col].unique().tolist())))
+        resolved_i = False
+        resolved_i_details = 'DOVS events overlap, impossible to resolve!'  
+        #-------------------------
+        to_adjust_full_a = audit_a.best_ests_df_w_keep_info[audit_a.best_ests_df_w_keep_info[PN_col].isin(ovrlp_PNs)][be_df_cols].copy()
+        to_adjust_full_a['adjustment']       = ''
+        to_adjust_full_a['resolved']         = resolved_i
+        to_adjust_full_a['resolved_details'] = resolved_i_details
+        #-----
+        to_adjust_full_b = audit_b.best_ests_df_w_keep_info[audit_b.best_ests_df_w_keep_info[PN_col].isin(ovrlp_PNs)][be_df_cols].copy()
+        to_adjust_full_b['adjustment']       = ''
+        to_adjust_full_b['resolved']         = resolved_i
+        to_adjust_full_b['resolved_details'] = resolved_i_details
+        #-------------------------
+        # The other methods expect a dict (of dict objects), not the full adjustment DFs
+        #   However, I think one could simply feed, e.g., to_adjust_full_a and audit_a into DOVSAudit.implement_adjustment_for_PN
+        #     to achieve the desired end result
+        # In any case, to be consistent with methods elsewhere, convert to adjustment_dicts
+        adjustment_dicts = dict()
+        for PN_i in ovrlp_PNs:
+            assert(PN_i not in adjustment_dicts.keys())
+            res_dict_i = dict(
+                resolved_i         = resolved_i, 
+                resolved_i_details = resolved_i_details, 
+                to_adjust_a        = to_adjust_full_a[to_adjust_full_a[PN_col]==PN_i].reset_index(drop=True), 
+                to_adjust_b        = to_adjust_full_b[to_adjust_full_b[PN_col]==PN_i].reset_index(drop=True)
+            )
+        #-------------------------
+        DOVSAudit.implement_adjustments_for_audit(
+            audit_a          = audit_a,
+            audit_b          = audit_b, 
+            adjustment_dicts = adjustment_dicts, 
+            unq_idfr_cols    = unq_idfr_cols, 
+            t_min_col        = t_min_col, 
+            t_max_col        = t_max_col, 
+            keep_col         = keep_col, 
+            open_beg_col     = open_beg_col, 
+            open_end_col     = open_end_col
+        )
+        #-------------------------
+        return adjustment_dicts
+
+
+    # *************************!!!!!!!!!!!!!!!!!!!!!!!!!
+    # If removing this OLD version, likely remove also:
+    #     assign_a_b
+    #     did_audits_find_same_interval_for_PN
+    #     did_audits_find_same_two_intervals_for_PN
+    #     handle_audits_with_same_interval_for_PN
+    #     handle_audits_with_same_two_intervals_for_PN
+    #     implement_adjustment_for_PN
+    #     implement_adjustments_for_audit
+    #     resolve_overlapping_audits_for_PN
+    #     handle_dovs_events_overlapping
+    #     resolve_overlapping_audits_OLD_v2
+    # *************************!!!!!!!!!!!!!!!!!!!!!!!!!
+    @staticmethod
+    def resolve_overlapping_audits_OLD(
+        audit_a          , 
+        audit_b          , 
+        PNs_to_resolve   = None, 
+        unq_idfr_cols    = ['PN', 'i_outg'], 
+        PN_col           = 'PN', 
+        t_min_col        = 'winner_min', 
+        t_max_col        = 'winner_max', 
+        keep_col         = 'keep', 
+        overlap_DOVS_col = 'overlap_DOVS', 
+        open_beg_col     = 'open_beg', 
+        open_end_col     = 'open_end'
+    ):
+        r"""
+        Adjustments made on-the-fly for each PN.
+        Should give the same results as DOVSAudit.resolve_overlapping_audits_v2.
+        The question is which version is more efficient?
+
+        PNs_to_resolve:
+            If None, taken to be any PNs in audit_a.best_ests_df_w_keep_info with keep==False 
+        """
+        #--------------------------------------------------
+        if pd.Interval(*audit_a.dovs_outg_t_beg_end).overlaps(pd.Interval(*audit_b.dovs_outg_t_beg_end)):
+            adjustment_dicts = DOVSAudit.handle_dovs_events_overlapping(
+                audit_a          = audit_a, 
+                audit_b          = audit_b, 
+                PNs_to_resolve   = PNs_to_resolve, 
+                unq_idfr_cols    = unq_idfr_cols, 
+                PN_col           = PN_col, 
+                t_min_col        = t_min_col, 
+                t_max_col        = t_max_col, 
+                keep_col         = keep_col, 
+                overlap_DOVS_col = overlap_DOVS_col, 
+                open_beg_col     = open_beg_col, 
+                open_end_col     = open_end_col
+            )
+            return adjustment_dicts
+        #--------------------------------------------------
+        if PNs_to_resolve is None:
+            PNs_to_resolve = audit_a.best_ests_df_w_keep_info[audit_a.best_ests_df_w_keep_info[keep_col]==False][PN_col].unique().tolist()
+        #-------------------------
+        adjustment_dicts = dict()
+        for PN_i in PNs_to_resolve:
+            assert(PN_i not in adjustment_dicts.keys())
+            res_dict_i = DOVSAudit.resolve_overlapping_audits_for_PN(
+                audit_a               = audit_a, 
+                audit_b               = audit_b, 
+                PN_i                  = PN_i, 
+                implement_resolutions = True, 
+                unq_idfr_cols         = unq_idfr_cols, 
+                PN_col                = PN_col, 
+                t_min_col             = t_min_col, 
+                t_max_col             = t_max_col, 
+                keep_col              = keep_col, 
+                open_beg_col          = open_beg_col, 
+                open_end_col          = open_end_col
+            )
+            adjustment_dicts[PN_i] = res_dict_i
+        #-------------------------
+        return adjustment_dicts
+
+
+    # *************************!!!!!!!!!!!!!!!!!!!!!!!!!
+    # If removing this OLD version, likely remove also:
+    #     assign_a_b
+    #     did_audits_find_same_interval_for_PN
+    #     did_audits_find_same_two_intervals_for_PN
+    #     handle_audits_with_same_interval_for_PN
+    #     handle_audits_with_same_two_intervals_for_PN
+    #     implement_adjustment_for_PN
+    #     implement_adjustments_for_audit
+    #     resolve_overlapping_audits_for_PN
+    #     handle_dovs_events_overlapping
+    #     resolve_overlapping_audits
+    # *************************!!!!!!!!!!!!!!!!!!!!!!!!!
+    @staticmethod
+    def resolve_overlapping_audits_OLD_v2(
+        audit_a          , 
+        audit_b          , 
+        PNs_to_resolve   = None, 
+        unq_idfr_cols    = ['PN', 'i_outg'], 
+        PN_col           = 'PN', 
+        t_min_col        = 'winner_min', 
+        t_max_col        = 'winner_max', 
+        keep_col         = 'keep', 
+        overlap_DOVS_col = 'overlap_DOVS', 
+        open_beg_col     = 'open_beg', 
+        open_end_col     = 'open_end'
+    ):
+        r"""
+        Necessary adjustments collected for each PN, then implemented for all at end.
+        Should give the same results as DOVSAudit.resolve_overlapping_audits.
+        The question is which version is more efficient?
+
+        PNs_to_resolve:
+            If None, taken to be any PNs in audit_a.best_ests_df_w_keep_info with keep==False 
+        """
+        #--------------------------------------------------
+        if pd.Interval(*audit_a.dovs_outg_t_beg_end).overlaps(pd.Interval(*audit_b.dovs_outg_t_beg_end)):
+            adjustment_dicts = DOVSAudit.handle_dovs_events_overlapping(
+                audit_a          = audit_a, 
+                audit_b          = audit_b, 
+                PNs_to_resolve   = PNs_to_resolve, 
+                unq_idfr_cols    = unq_idfr_cols, 
+                PN_col           = PN_col, 
+                t_min_col        = t_min_col, 
+                t_max_col        = t_max_col, 
+                keep_col         = keep_col, 
+                overlap_DOVS_col = overlap_DOVS_col, 
+                open_beg_col     = open_beg_col, 
+                open_end_col     = open_end_col
+            )
+            return adjustment_dicts
+        #--------------------------------------------------
+        if PNs_to_resolve is None:
+            PNs_to_resolve = audit_a.best_ests_df_w_keep_info[audit_a.best_ests_df_w_keep_info[keep_col]==False][PN_col].unique().tolist()
+        #-------------------------
+        adjustment_dicts = dict()
+        for PN_i in PNs_to_resolve:
+            assert(PN_i not in adjustment_dicts.keys())
+            res_dict_i = DOVSAudit.resolve_overlapping_audits_for_PN(
+                audit_a               = audit_a, 
+                audit_b               = audit_b, 
+                PN_i                  = PN_i, 
+                implement_resolutions = False, 
+                unq_idfr_cols         = unq_idfr_cols, 
+                PN_col                = PN_col, 
+                t_min_col             = t_min_col, 
+                t_max_col             = t_max_col, 
+                keep_col              = keep_col, 
+                open_beg_col          = open_beg_col, 
+                open_end_col          = open_end_col
+            )
+            adjustment_dicts[PN_i] = res_dict_i
+        #-------------------------
+        DOVSAudit.implement_adjustments_for_audit(
+            audit_a          = audit_a,
+            audit_b          = audit_b, 
+            adjustment_dicts = adjustment_dicts, 
+            unq_idfr_cols    = unq_idfr_cols, 
+            t_min_col        = t_min_col, 
+            t_max_col        = t_max_col, 
+            keep_col         = keep_col, 
+            open_beg_col     = open_beg_col, 
+            open_end_col     = open_end_col
+        )
+        #-------------------------
+        return adjustment_dicts
+    
+
     #****************************************************************************************************
     #****************************************************************************************************
     def build_best_ests_df_dovs_beg(
@@ -7155,11 +7943,8 @@ class DOVSAudit:
         #-------------------------
         assert(self.__best_ests_generated)
         #-------------------------
-        if self.best_ests_df is None or self.best_ests_df.shape[0]==0:
-            if self.best_ests_df is None:
-                self.best_ests_df_dovs_beg = self.best_ests_df
-            else:
-                self.best_ests_df_dovs_beg = self.best_ests_df.copy()
+        if self.best_ests_df.shape[0]==0:
+            self.best_ests_df_dovs_beg = self.best_ests_df.copy()
             #-----
             self.ci_dovs_beg           = self.ci
             self.cmi_dovs_beg          = self.cmi
@@ -7193,10 +7978,10 @@ class DOVSAudit:
         Returns a dict with keys: ['means_df', 'best_ests_df_w_db_lbl', 'n_PNs_w_power_srs']
         """
         #--------------------------------------------------
-        if best_ests_df is None or best_ests_df.shape[0]==0:
+        if best_ests_df.shape[0]==0:
             return dict(
                 means_df              = pd.DataFrame(), 
-                best_ests_df_w_db_lbl = best_ests_df, 
+                best_ests_df_w_db_lbl = pd.DataFrame(), 
                 n_PNs_w_power_srs     = pd.Series()
             )
         #--------------------------------------------------
@@ -7221,9 +8006,7 @@ class DOVSAudit:
             t_min_col     = 'winner_min', 
             t_max_col     = 'winner_max', 
             i_outg_col    = 'i_outg', 
-            PN_col_ami_df = PN_col_ami_df, 
-            open_beg_col  = 'open_beg', 
-            open_end_col  = 'open_end'
+            PN_col_ami_df = PN_col_ami_df
         )
         #--------------------------------------------------
         return dict(
@@ -7247,12 +8030,11 @@ class DOVSAudit:
             PN_col_ami_df = self.ami_df_info_dict['PN_col']
         )
         #-----
-        if self.best_ests_df is not None and self.best_ests_df.shape[0]>0:
-            # Sanity check
-            cols_to_comp = self.best_ests_df.columns
-            # NOTE: The groups in db_label are arbitrary, so might not match (group numbers might not, groups will!)
-            cols_to_comp = [x for x in cols_to_comp if x!='db_label']
-            assert(self.best_ests_df[cols_to_comp].equals(tmp_dct['best_ests_df_w_db_lbl'][cols_to_comp]))
+        # Sanity check
+        cols_to_comp = self.best_ests_df.columns
+        # NOTE: The groups in db_label are arbitrary, so might not match (group numbers might not, groups will!)
+        cols_to_comp = [x for x in cols_to_comp if x!='db_label']
+        assert(self.best_ests_df[cols_to_comp].equals(tmp_dct['best_ests_df_w_db_lbl'][cols_to_comp]))
         #-----
         self.best_ests_means_df = tmp_dct['means_df']
         self.best_ests_df       = tmp_dct['best_ests_df_w_db_lbl']
@@ -7281,66 +8063,6 @@ class DOVSAudit:
         self.best_ests_df_dovs_beg       = tmp_dct['best_ests_df_w_db_lbl']
         self.n_PNs_w_power_srs_dovs_beg  = tmp_dct['n_PNs_w_power_srs']
         #----------------------------------------------------------------------------------------------------
-
-
-    #--------------------------------------------------
-    def run_audit(
-        self, 
-        run_outg_inclusion_assessment = True, 
-        max_pct_PNs_missing_allowed   = 0, 
-        debug                         = False
-    ):
-        r"""
-        If audit completes, "Pass" is returned.
-        If not, then fail reason is returned
-        """
-        #--------------------------------------------------
-        self.run_outg_inclusion_assessment  = run_outg_inclusion_assessment
-        self.max_pct_PNs_missing_allowed    = max_pct_PNs_missing_allowed
-        #-------------------------
-        if self.ami_df_i.shape[0]==0:
-            return "ami_df_i.shape[0]==0"
-        #-------------------------
-        if run_outg_inclusion_assessment:
-            to_include_i = self.self_assess_outage_inclusion_requirements(
-                max_pct_PNs_missing_allowed        = max_pct_PNs_missing_allowed, 
-                check_found_ami_for_all_SNs_kwargs = None
-            )
-            if not to_include_i:
-                return "Inclusion Requirements"
-        
-        #--------------------------------------------------
-        self.build_best_ests_df(
-            conservative_estimate                        = True, 
-            audit_selection_method                       = 'ede only', 
-            pct_SNs_required_for_outage_est              = 0, 
-            use_only_overall_endpoints_of_est_outg_times = False, 
-            debug                                        = debug
-        )
-        if not self.__best_ests_generated:
-            return "Could not generate best estimate"
-        #--------------------------------------------------
-        self.identify_overlaps_and_resolve(
-            overlaps_dovs_sql_fcn           = DOVSOutages_SQL.build_sql_outage, 
-            dovs_df                         = None, 
-            t_min_col                       = 'winner_min', 
-            t_max_col                       = 'winner_max', 
-            keep_col                        = 'keep', 
-            overlap_DOVS_col                = 'overlap_DOVS', 
-            outg_rec_nb_col_dovs            = 'OUTG_REC_NB', 
-            dt_off_ts_full_col_dovs         = 'DT_OFF_TS_FULL', 
-            dt_on_ts_col_dovs               = 'DT_ON_TS', 
-            overlap_disagree_cols           = ['ovrlp_disagree_typeA', 'ovrlp_disagree_typeB'], 
-            unq_idfr_cols                   = ['PN', 'i_outg'], 
-            open_beg_col                    = 'open_beg', 
-            open_end_col                    = 'open_end'
-        )
-        #--------------------------------------------------
-        self.finalize_analysis()
-        #--------------------------------------------------
-        if not self.can_analyze:
-            return "not can_analyze (likely overlapping DOVS)"
-        return "Pass"
     
         
     #****************************************************************************************************
@@ -7831,7 +8553,7 @@ class DOVSAudit:
     #****************************************************************************************************
     def generate_warnings(
         self                        , 
-        resolved_col                = 'resolved', 
+        resolved_col                ='resolved', 
         resolved_details_col        = 'resolved_details', 
         overlap_disagree_cols       = ['ovrlp_disagree_typeA', 'ovrlp_disagree_typeB'], 
         overlap_disagree_cols_descs = [
@@ -7858,10 +8580,7 @@ class DOVSAudit:
         #----------------------------------------------------------------------------------------------------
         # Any entries left unresolved
         desc = 'Unresolved'
-        bool_srs = (
-            (self.best_ests_df_w_keep_info[resolved_col]==False) |
-            (self.best_ests_df_w_keep_info[resolved_details_col]=='Unresolved')
-        )
+        bool_srs = self.best_ests_df_w_keep_info[resolved_details_col]=='Unresolved'
         assert(desc not in warnings_dict.keys())
         warnings_dict[desc] = self.best_ests_df_w_keep_info.loc[bool_srs].copy()
         cumulative_bool     = cumulative_bool | bool_srs
@@ -7899,7 +8618,7 @@ class DOVSAudit:
     ):
         r"""
         """
-        #------------------------- 
+        #-------------------------
         if not any([warn_df_i.shape[0]>0 for warn_df_i in self.warnings_dict.values()]):
             assert(self.best_est_df_entries_w_warning is None or self.best_est_df_entries_w_warning.shape[0]==0)
             return ''
@@ -8078,14 +8797,14 @@ class DOVSAudit:
         """
         #--------------------------------------------------
         if(
-            means_df              is None or
-            best_ests_df_w_db_lbl is None
+            means_df              is None or means_df.shape[0]==0 or
+            best_ests_df_w_db_lbl is None or best_ests_df_w_db_lbl.shape[0]==0
         ):
             return pd.DataFrame()
         #-------------------------
         # Don't want to alter means_df, best_ests_df_w_db_lbl outside of function
-        means_df              = means_df.copy()
-        best_ests_df_w_db_lbl = best_ests_df_w_db_lbl.copy()
+        means_df=means_df.copy()
+        best_ests_df_w_db_lbl=best_ests_df_w_db_lbl.copy()
 
         #--------------------------------------------------
         # Get DOVS info
@@ -8127,22 +8846,8 @@ class DOVSAudit:
         opco_id         = dovs_df_i['OPERATING_UNIT_ID']
 
         #--------------------------------------------------
-        if means_df.shape[0]==0:
-            return_df = pd.DataFrame(
-                data=dict(
-                    outg_i_beg = pd.to_datetime(np.nan), 
-                    outg_i_end = pd.to_datetime(np.nan), 
-                    CI_i       = CI_tot,
-                    CMI_i      = CMI_tot
-                ), 
-                index=pd.MultiIndex.from_tuples(
-                    [(outage_nb, outg_rec_nb, 'Full Outage')], 
-                    names=['OUTAGE_NB','OUTG_REC_NB', 'Outage Subset']
-                )
-            )
-        #--------------------------------------------------
-        elif means_df.shape[0]==1:
-            # If only a single sub-outage, only return 'Full Outage' entry
+        # If only a single sub-outage, only return 'Full Outage' entry
+        if means_df.shape[0]==1:
             return_df = pd.DataFrame(
                 data=dict(
                     outg_i_beg = means_df.iloc[0][winner_min_col], 
@@ -8158,6 +8863,7 @@ class DOVSAudit:
             # Remove fractional seconds
             return_df['outg_i_beg']=return_df['outg_i_beg'].dt.strftime('%Y-%m-%d %H:%M:%S')
             return_df['outg_i_end']=return_df['outg_i_end'].dt.strftime('%Y-%m-%d %H:%M:%S')
+
         #--------------------------------------------------
         else:  
             #-------------------------
@@ -8329,13 +9035,10 @@ class DOVSAudit:
         #--------------------------------------------------
         return_df[f'first_above_thresh ({n_PNs_w_power_threshold})'] = None
         return_df[f'last_above_thresh ({n_PNs_w_power_threshold})']  = None
-        if n_PNs_w_power_srs is not None and n_PNs_w_power_srs.shape[0]>0:
-            frst_abv, last_abv = DOVSAudit.get_first_last_above_threshold(
-                n_PNs_w_power_srs = n_PNs_w_power_srs, 
-                threshold         = n_PNs_w_power_threshold
-            )
-        else:
-            frst_abv, last_abv = pd.to_datetime(np.nan), pd.to_datetime(np.nan)
+        frst_abv, last_abv = DOVSAudit.get_first_last_above_threshold(
+            n_PNs_w_power_srs = n_PNs_w_power_srs, 
+            threshold         = n_PNs_w_power_threshold
+        )
         #-----
         return_df.iloc[
             0, 
@@ -8399,38 +9102,6 @@ class DOVSAudit:
         )
         #-------------------------
         return detailed_summary_df_i
-    
-
-    def get_detailed_summary_df_and_dovs_beg(
-        self                    , 
-        delta_t_off_cut         = pd.Timedelta('5min'), 
-        delta_t_on_cut          = pd.Timedelta('5min'), 
-        delta_ci_cut            = 3, 
-        delta_cmi_cut           = None, 
-        n_PNs_w_power_threshold = 95, 
-    ):
-        r"""
-        """
-        #-------------------------
-        detailed_summary_df_i = self.get_detailed_summary_df(
-            dovs_beg                = False, 
-            delta_t_off_cut         = delta_t_off_cut, 
-            delta_t_on_cut          = delta_t_on_cut, 
-            delta_ci_cut            = delta_ci_cut, 
-            delta_cmi_cut           = delta_cmi_cut, 
-            n_PNs_w_power_threshold = n_PNs_w_power_threshold, 
-        )
-        #-----
-        detailed_summary_df_dovs_beg_i = self.get_detailed_summary_df(
-            dovs_beg                = True, 
-            delta_t_off_cut         = delta_t_off_cut, 
-            delta_t_on_cut          = delta_t_on_cut, 
-            delta_ci_cut            = delta_ci_cut, 
-            delta_cmi_cut           = delta_cmi_cut, 
-            n_PNs_w_power_threshold = n_PNs_w_power_threshold, 
-        )
-        #-------------------------
-        return detailed_summary_df_i, detailed_summary_df_dovs_beg_i
         
         
     def get_ci_cmi_summary(
@@ -8443,8 +9114,7 @@ class DOVSAudit:
         assert(return_type in [pd.DataFrame, pd.Series, dict])
         #-------------------------
         return_dict = dict(
-            OUTG_REC_NB      = self.outg_rec_nb, 
-            OUTAGE_NB        = self.outage_nb, 
+            outg_rec_nb      = self.outg_rec_nb, 
             ci_dovs          = self.ci_dovs,   
             ci_ami           = self.ci, 
             ci_ami_dovs_beg  = self.ci_dovs_beg, 
@@ -8460,6 +9130,405 @@ class DOVSAudit:
             return pd.Series(return_dict).to_frame().T
         else:
             assert(0)
+        
+
+    @staticmethod
+    def sort_detailed_summary_dfs_helper(
+        x                         , 
+        how                       = 'abs_delta_ci', 
+        #-----
+        outg_subset_col           = 'Outage Subset', 
+        full_outg_desc            = 'Full Outage', 
+        #-----
+        ami_ci_col                = 'CI_i', 
+        ami_cmi_col               = 'CMI_i', 
+        ami_t_off_col             = 'outg_i_beg', 
+        ami_t_on_col              = 'outg_i_end', 
+        #-----
+        dovs_ci_col               = 'CI_NB', 
+        dovs_cmi_col              = 'CMI_NB', 
+        dovs_t_off_col            = 'DT_OFF_TS_FULL', 
+        dovs_t_on_col             = 'DT_ON_TS', 
+        dovs_outg_rec_nb_idfr_loc = 'OUTG_REC_NB', 
+        dovs_outage_nb_idfr_loc   = 'OUTAGE_NB'
+    ):
+        r"""
+        """
+        #--------------------------------------------------
+        x_full = x[x[outg_subset_col]==full_outg_desc]
+        assert(x_full.shape[0]==1)
+        x_full = x_full.iloc[0]
+        #--------------------------------------------------
+        if dovs_outg_rec_nb_idfr_loc[1]:
+            outg_rec_nb = x_full.name[dovs_outg_rec_nb_idfr_loc[0]]
+        else:
+            outg_rec_nb = x_full[dovs_outg_rec_nb_idfr_loc[0]]
+        #-------------------------
+        if dovs_outage_nb_idfr_loc[1]:
+            outage_nb = x_full.name[dovs_outage_nb_idfr_loc[0]]
+        else:
+            outage_nb = x_full[dovs_outage_nb_idfr_loc[0]]
+        #--------------------------------------------------
+        if how == 'abs_delta_ci':
+            return abs(x_full[dovs_ci_col] - x_full[ami_ci_col]), x_full[dovs_ci_col], outg_rec_nb
+        #--------------------------------------------------
+        elif how == 'abs_delta_cmi':
+            return abs(x_full[dovs_cmi_col] - x_full[ami_cmi_col]), x_full[dovs_cmi_col], outg_rec_nb
+        #--------------------------------------------------
+        elif how == 'abs_delta_ci_cmi':
+            return (abs(x_full[dovs_ci_col] - x_full[ami_ci_col]), abs(x_full[dovs_cmi_col] - x_full[ami_cmi_col])), x_full[dovs_ci_col], x_full[dovs_cmi_col], outg_rec_nb
+        #--------------------------------------------------
+        elif how == 'abs_delta_cmi_ci':
+            return (abs(x_full[dovs_cmi_col] - x_full[ami_cmi_col]), abs(x_full[dovs_ci_col] - x_full[ami_ci_col])), x_full[dovs_cmi_col], x_full[dovs_ci_col], outg_rec_nb
+        #--------------------------------------------------
+        else:
+            assert(0)
+    
+    @staticmethod
+    def sort_detailed_summary_dfs(
+        detailed_summary_dfs , 
+        how                  = 'abs_delta_ci', 
+        #-----
+        outg_subset_col      = 'Outage Subset', 
+        full_outg_desc       = 'Full Outage', 
+        #-----
+        ami_ci_col           = 'CI_i', 
+        ami_cmi_col          = 'CMI_i', 
+        ami_t_off_col        = 'outg_i_beg', 
+        ami_t_on_col         = 'outg_i_end', 
+        #-----
+        dovs_ci_col          = 'CI_NB', 
+        dovs_cmi_col         = 'CMI_NB', 
+        dovs_t_off_col       = 'DT_OFF_TS_FULL', 
+        dovs_t_on_col        = 'DT_ON_TS', 
+        dovs_outg_rec_nb_col = 'OUTG_REC_NB', 
+        dovs_outage_nb_col   = 'OUTAGE_NB' 
+    ):
+        r"""
+        """
+        #--------------------------------------------------
+        assert(Utilities.are_all_list_elements_of_type(detailed_summary_dfs, pd.DataFrame))
+        if len(detailed_summary_dfs)==0:
+            return detailed_summary_dfs
+        #-------------------------
+        accptbl_hows = [
+            'abs_delta_ci', 
+            'abs_delta_cmi', 
+            'abs_delta_ci_cmi', 
+            'abs_delta_cmi_ci'
+        ]
+        #-----
+        assert(how in accptbl_hows)
+        #--------------------------------------------------
+        # Procedure assumes all fields of interest (see agruments to function) are found in the columns of the pd.DataFrame objects
+        # HOWEVER, in many cases, OUTAGE_NB and OUTAGE_REC_NB will be found in the index.
+        # This is fine, sort_detailed_summary_dfs_helper simply needs to be informed of this.
+        # ALSO, all pd.DataFrame objects in all_detailed_summary_dfs must have the same structure (i.e., same columns and index names)
+        #   NOTE: This is stricter than it really needs to be
+        #--------------------------------------------------
+        # Look for outg_rec(outage)_nb_idfr_loc in columns and index
+        #-------------------------
+        detailed_summary_df_i = detailed_summary_dfs[0]
+        #-------------------------
+        outg_rec_nb_idfr_loc = None
+        #-----
+        try:
+            outg_rec_nb_idfr_loc  = Utilities_df.get_idfr_loc(detailed_summary_df_i, dovs_outg_rec_nb_col)
+        except:
+            outg_rec_nb_idfr_loc  = Utilities_df.get_idfr_loc(detailed_summary_df_i, ('index', dovs_outg_rec_nb_col))
+        #-------------------------
+        outage_nb_idfr_loc = None
+        #-----
+        try:
+            outage_nb_idfr_loc  = Utilities_df.get_idfr_loc(detailed_summary_df_i, dovs_outage_nb_col)
+        except:
+            outage_nb_idfr_loc  = Utilities_df.get_idfr_loc(detailed_summary_df_i, ('index', dovs_outage_nb_col))
+        #--------------------------------------------------
+        if outg_rec_nb_idfr_loc[1]:
+            for df_i in detailed_summary_dfs:
+                assert(dovs_outg_rec_nb_col in df_i.index.names)
+        else:
+            for df_i in detailed_summary_dfs:
+                assert(dovs_outg_rec_nb_col in df_i.columns.tolist())
+        #-------------------------
+        if outage_nb_idfr_loc[1]:
+            for df_i in detailed_summary_dfs:
+                assert(dovs_outage_nb_col in df_i.index.names)
+        else:
+            for df_i in detailed_summary_dfs:
+                assert(dovs_outage_nb_col in df_i.columns.tolist())
+        #--------------------------------------------------
+        sorted_dfs = natsorted(
+            detailed_summary_dfs, 
+            reverse = True, 
+            key     = lambda x: DOVSAudit.sort_detailed_summary_dfs_helper(
+                x                         = x, 
+                how                       = how, 
+                outg_subset_col           = outg_subset_col, 
+                full_outg_desc            = full_outg_desc, 
+                #-----
+                ami_ci_col                = ami_ci_col, 
+                ami_cmi_col               = ami_cmi_col, 
+                ami_t_off_col             = ami_t_off_col, 
+                ami_t_on_col              = ami_t_on_col, 
+                #-----
+                dovs_ci_col               = dovs_ci_col, 
+                dovs_cmi_col              = dovs_cmi_col, 
+                dovs_t_off_col            = dovs_t_off_col, 
+                dovs_t_on_col             = dovs_t_on_col, 
+                dovs_outg_rec_nb_idfr_loc = outg_rec_nb_idfr_loc, 
+                dovs_outage_nb_idfr_loc   = outage_nb_idfr_loc
+            )
+        )
+        #-------------------------
+        return sorted_dfs 
+    
+
+
+    @staticmethod
+    def sort_detailed_summary_dfs_flex_helper(
+        x                    , 
+        how                  = 'abs_delta_ci', 
+        #-----
+        outg_subset_col      = 'Outage Subset', 
+        full_outg_desc       = 'Full Outage', 
+        #-----
+        ami_ci_col           = 'CI_i', 
+        ami_cmi_col          = 'CMI_i', 
+        ami_t_off_col        = 'outg_i_beg', 
+        ami_t_on_col         = 'outg_i_end', 
+        #-----
+        dovs_ci_col          = 'CI_NB', 
+        dovs_cmi_col         = 'CMI_NB', 
+        dovs_t_off_col       = 'DT_OFF_TS_FULL', 
+        dovs_t_on_col        = 'DT_ON_TS', 
+        dovs_outg_rec_nb_col = 'OUTG_REC_NB', 
+        dovs_outage_nb_col   = 'OUTAGE_NB'
+    ):
+        r"""
+        """
+        #--------------------------------------------------
+        assert(isinstance(x, pd.DataFrame))
+        #--------------------------------------------------
+        # Look for outg_rec(outage)_nb_idfr_loc in columns and index
+        #-------------------------
+        outg_rec_nb_idfr_loc = None
+        #-----
+        try:
+            outg_rec_nb_idfr_loc  = Utilities_df.get_idfr_loc(x, dovs_outg_rec_nb_col)
+        except:
+            outg_rec_nb_idfr_loc  = Utilities_df.get_idfr_loc(x, ('index', dovs_outg_rec_nb_col))
+        #-------------------------
+        outage_nb_idfr_loc = None
+        #-----
+        try:
+            outage_nb_idfr_loc  = Utilities_df.get_idfr_loc(x, dovs_outage_nb_col)
+        except:
+            outage_nb_idfr_loc  = Utilities_df.get_idfr_loc(x, ('index', dovs_outage_nb_col))    
+        #--------------------------------------------------
+        x_full = x[x[outg_subset_col]==full_outg_desc]
+        assert(x_full.shape[0]==1)
+        x_full = x_full.iloc[0]
+        #--------------------------------------------------
+        if outg_rec_nb_idfr_loc[1]:
+            outg_rec_nb = x_full.name[outg_rec_nb_idfr_loc[0]]
+        else:
+            outg_rec_nb = x_full[outg_rec_nb_idfr_loc[0]]
+        #-------------------------
+        if outage_nb_idfr_loc[1]:
+            outage_nb = x_full.name[outage_nb_idfr_loc[0]]
+        else:
+            outage_nb = x_full[outage_nb_idfr_loc[0]]
+        #--------------------------------------------------
+        if how == 'abs_delta_ci':
+            return abs(x_full[dovs_ci_col] - x_full[ami_ci_col]), x_full[dovs_ci_col], outg_rec_nb
+        #--------------------------------------------------
+        elif how == 'abs_delta_cmi':
+            return abs(x_full[dovs_cmi_col] - x_full[ami_cmi_col]), x_full[dovs_cmi_col], outg_rec_nb
+        #--------------------------------------------------
+        elif how == 'abs_delta_ci_cmi':
+            return (abs(x_full[dovs_ci_col] - x_full[ami_ci_col]), abs(x_full[dovs_cmi_col] - x_full[ami_cmi_col])), x_full[dovs_ci_col], x_full[dovs_cmi_col], outg_rec_nb
+        #--------------------------------------------------
+        elif how == 'abs_delta_cmi_ci':
+            return (abs(x_full[dovs_cmi_col] - x_full[ami_cmi_col]), abs(x_full[dovs_ci_col] - x_full[ami_ci_col])), x_full[dovs_cmi_col], x_full[dovs_ci_col], outg_rec_nb
+        #--------------------------------------------------
+        else:
+            assert(0)
+    
+    @staticmethod
+    def sort_detailed_summary_dfs_flex(
+        detailed_summary_dfs , 
+        how                  = 'abs_delta_ci', 
+        #-----
+        outg_subset_col      = 'Outage Subset', 
+        full_outg_desc       = 'Full Outage', 
+        #-----
+        ami_ci_col           = 'CI_i', 
+        ami_cmi_col          = 'CMI_i', 
+        ami_t_off_col        = 'outg_i_beg', 
+        ami_t_on_col         = 'outg_i_end', 
+        #-----
+        dovs_ci_col          = 'CI_NB', 
+        dovs_cmi_col         = 'CMI_NB', 
+        dovs_t_off_col       = 'DT_OFF_TS_FULL', 
+        dovs_t_on_col        = 'DT_ON_TS', 
+        dovs_outg_rec_nb_col = 'OUTG_REC_NB', 
+        dovs_outage_nb_col   = 'OUTAGE_NB' 
+    ):
+        r"""
+        More flexible, but slower processing, compared to sort_detailed_summary_dfs
+        """
+        #--------------------------------------------------
+        assert(Utilities.are_all_list_elements_of_type(detailed_summary_dfs, pd.DataFrame))
+        #-------------------------
+        accptbl_hows = [
+            'abs_delta_ci', 
+            'abs_delta_cmi', 
+            'abs_delta_ci_cmi', 
+            'abs_delta_cmi_ci'
+        ]
+        #-----
+        assert(how in accptbl_hows)
+        #-------------------------
+        sorted_dfs = natsorted(
+            detailed_summary_dfs, 
+            reverse = True, 
+            key     = lambda x: DOVSAudit.sort_detailed_summary_dfs_flex_helper(
+                x                    = x, 
+                how                  = how, 
+                outg_subset_col      = outg_subset_col, 
+                full_outg_desc       = full_outg_desc, 
+                #-----
+                ami_ci_col           = ami_ci_col, 
+                ami_cmi_col          = ami_cmi_col, 
+                ami_t_off_col        = ami_t_off_col, 
+                ami_t_on_col         = ami_t_on_col, 
+                #-----
+                dovs_ci_col          = dovs_ci_col, 
+                dovs_cmi_col         = dovs_cmi_col, 
+                dovs_t_off_col       = dovs_t_off_col, 
+                dovs_t_on_col        = dovs_t_on_col, 
+                dovs_outg_rec_nb_col = dovs_outg_rec_nb_col, 
+                dovs_outage_nb_col   = dovs_outage_nb_col
+            )
+        )
+        #-------------------------
+        return sorted_dfs 
+    
+
+    @staticmethod
+    def sort_detailed_summary_df(
+        detailed_summary_df, 
+        how                  = 'abs_delta_ci', 
+        #-----
+        outg_subset_col      = 'Outage Subset', 
+        full_outg_desc       = 'Full Outage', 
+        #-----
+        ami_ci_col           = 'CI_i', 
+        ami_cmi_col          = 'CMI_i', 
+        ami_t_off_col        = 'outg_i_beg', 
+        ami_t_on_col         = 'outg_i_end', 
+        #-----
+        dovs_ci_col          = 'CI_NB', 
+        dovs_cmi_col         = 'CMI_NB', 
+        dovs_t_off_col       = 'DT_OFF_TS_FULL', 
+        dovs_t_on_col        = 'DT_ON_TS', 
+        dovs_outg_rec_nb_col = 'OUTG_REC_NB', 
+        dovs_outage_nb_col   = 'OUTAGE_NB'
+    ):
+        r"""
+        Apparently there is no simple way to perform a groupby operation and sort the groups according to some prescription.
+        For that reason, this is a bit clunkier than one would expect.
+    
+        Procedure is simplest when all fields of interest (see agruments to function) are found in the columns of the pd.DataFrame objects
+        HOWEVER, in many cases, OUTAGE_NB and OUTAGE_REC_NB will be found in the index.
+        To avoid all headeaches, I will call .reset_index() at the beginning and recover it at the end.
+        """
+        #--------------------------------------------------
+        assert(isinstance(detailed_summary_df, pd.DataFrame))
+        assert(outg_subset_col in detailed_summary_df.columns.tolist())
+        assert(full_outg_desc in detailed_summary_df[outg_subset_col].unique().tolist())
+        #-------------------------
+        accptbl_hows = [
+            'abs_delta_ci', 
+            'abs_delta_cmi', 
+            'abs_delta_ci_cmi', 
+            'abs_delta_cmi_ci'
+        ]
+        #-----
+        assert(how in accptbl_hows)
+        #--------------------------------------------------
+        # As mentioned in the above documentation, life is easier if I call .reset_index and restore the index later
+        (detailed_summary_df, idx_names_new, idx_names_org) = Utilities_df.name_all_index_levels(df = detailed_summary_df)
+        detailed_summary_df = detailed_summary_df.reset_index(drop=False)
+        #-------------------------
+        nec_cols = [
+            outg_subset_col, 
+            #-----
+            ami_ci_col, 
+            ami_cmi_col, 
+            ami_t_off_col, 
+            ami_t_on_col, 
+            #-----
+            dovs_ci_col, 
+            dovs_cmi_col, 
+            dovs_t_off_col, 
+            dovs_t_on_col, 
+            dovs_outg_rec_nb_col, 
+            dovs_outage_nb_col
+        ]
+        assert(set(nec_cols+idx_names_new).difference(set(detailed_summary_df.columns.tolist()))==set())
+        #--------------------------------------------------
+        # The sorting proceeds according to the overall outage information (i.e., any sub-outages are ignored)
+        full_outgs_df = detailed_summary_df[detailed_summary_df[outg_subset_col]==full_outg_desc].copy()
+        #-----
+        # Make sure there is only a single row per outage
+        assert(full_outgs_df.groupby([dovs_outg_rec_nb_col, dovs_outage_nb_col]).ngroups==full_outgs_df.shape[0])
+        #-------------------------
+        # Generate some random column names to be used in the sorting operation
+        tmp_delta_ci_col  = Utilities.generate_random_string(str_len=10, letters='letters_only')
+        tmp_delta_cmi_col = Utilities.generate_random_string(str_len=10, letters='letters_only')
+        #-----
+        tmp_ordr_col = Utilities.generate_random_string(str_len=10, letters='letters_only')
+        #-------------------------
+        full_outgs_df[tmp_delta_ci_col]  = abs(full_outgs_df[dovs_ci_col]  - full_outgs_df[ami_ci_col])
+        full_outgs_df[tmp_delta_cmi_col] = abs(full_outgs_df[dovs_cmi_col] - full_outgs_df[ami_cmi_col])
+        #--------------------------------------------------
+        if how == 'abs_delta_ci':
+            full_outgs_df = full_outgs_df.sort_values(by=[tmp_delta_ci_col, dovs_ci_col, dovs_outg_rec_nb_col], ascending=False)
+        #-------------------------
+        elif how == 'abs_delta_cmi':
+            full_outgs_df = full_outgs_df.sort_values(by=[tmp_delta_cmi_col, dovs_cmi_col, dovs_outg_rec_nb_col], ascending=False)
+        #-------------------------
+        elif how == 'abs_delta_ci_cmi':
+            full_outgs_df = full_outgs_df.sort_values(by=[tmp_delta_ci_col, tmp_delta_cmi_col, dovs_ci_col, dovs_cmi_col, dovs_outg_rec_nb_col], ascending=False)
+        #-------------------------
+        elif how == 'abs_delta_cmi_ci':
+            full_outgs_df = full_outgs_df.sort_values(by=[tmp_delta_cmi_col, tmp_delta_ci_col, dovs_cmi_col, dovs_ci_col, dovs_outg_rec_nb_col], ascending=False)
+        #-------------------------
+        else:
+            assert(0)
+        #--------------------------------------------------
+        full_outgs_df[tmp_ordr_col] = range(0, full_outgs_df.shape[0])
+        full_outgs_df = full_outgs_df[[dovs_outg_rec_nb_col, dovs_outage_nb_col, tmp_ordr_col]]
+        #--------------------------------------------------
+        srtd_df = pd.merge(
+            detailed_summary_df, 
+            full_outgs_df, 
+            how      = 'inner', 
+            left_on  = [dovs_outg_rec_nb_col, dovs_outage_nb_col], 
+            right_on = [dovs_outg_rec_nb_col, dovs_outage_nb_col], 
+        )
+        assert(srtd_df.shape[0]==detailed_summary_df.shape[0])
+        #-----
+        srtd_df = srtd_df.sort_values(by=[tmp_ordr_col, outg_subset_col], ignore_index=True, ascending=True, key=natsort_keygen())
+        srtd_df = srtd_df.drop(columns=[tmp_ordr_col])
+        #--------------------------------------------------
+        # Restore the original index
+        srtd_df = srtd_df.set_index(idx_names_new)
+        srtd_df.index.names = idx_names_org
+        #--------------------------------------------------
+        return srtd_df
 
         
     #****************************************************************************************************
@@ -8938,7 +10007,7 @@ class DOVSAudit:
                         **shared_plot_kwargs
                     )
             axs[i_subplot].legend().set_visible(False)
-            if means_df is not None and means_df.shape[0]>0:
+            if means_df is not None:
                 DOVSAudit.add_all_best_ests_to_axis(
                     ax                       = axs[i_subplot], 
                     all_best_ests            = means_df, 
@@ -9149,17 +10218,17 @@ class DOVSAudit:
         fig.text(left_text_x, 0.390-shift_text_down, f'CI    = {ci_ami}', fontsize=ci_info_fontsize)
         fig.text(left_text_x, 0.370-shift_text_down, f'CMI = {np.round(cmi_ami, decimals=2)}', fontsize=ci_info_fontsize)
         #-----
-        delta_ci_str = r'$\Delta$' + f'CI    = {ci_dovs-ci_ami}'
-        if ci_dovs > 0:
-            delta_ci_str += f' ({np.round(100*(ci_dovs-ci_ami)/ci_dovs, decimals=2)}%)'
-        fig.text(left_text_x, 0.350-shift_text_down, delta_ci_str, fontsize=ci_info_fontsize)
-        #-----
-        delta_cmi_str = r'$\Delta$' + f'CMI = {np.round(cmi_dovs-cmi_ami, decimals=2)}'
-        if cmi_dovs > 0:
-            delta_cmi_str += f' ({np.round(100*(cmi_dovs-cmi_ami)/cmi_dovs, decimals=2)}%)'
-        fig.text(left_text_x, 0.330-shift_text_down, delta_cmi_str, fontsize=ci_info_fontsize)
-        #-----
-        if means_df is not None and means_df.shape[0]>0:
+        fig.text(
+            left_text_x, 0.350-shift_text_down, 
+            r'$\Delta$' + f'CI    = {ci_dovs-ci_ami} ({np.round(100*(ci_dovs-ci_ami)/ci_dovs, decimals=2)}%)', 
+            fontsize=ci_info_fontsize
+        )
+        fig.text(
+            left_text_x, 0.330-shift_text_down, 
+            r'$\Delta$' + f'CMI = {np.round(cmi_dovs-cmi_ami, decimals=2)} ({np.round(100*(cmi_dovs-cmi_ami)/cmi_dovs, decimals=2)}%)', 
+            fontsize=ci_info_fontsize
+        )
+        if means_df is not None:
             fig.text(left_text_x, 0.310-shift_text_down, f'min(Beg.) = {means_df["winner_min"].min().strftime("%m/%d %H:%M:%S")}', fontsize=ci_info_fontsize)
             fig.text(left_text_x, 0.290-shift_text_down, f'max(End) = {means_df["winner_max"].max().strftime("%m/%d %H:%M:%S")}', fontsize=ci_info_fontsize)
 
@@ -9171,16 +10240,16 @@ class DOVSAudit:
             fig.text(left_text_x, 0.210-shift_text_down, f'CI    = {results_2_dict["ci_ami"]}', fontsize=ci_info_fontsize)
             fig.text(left_text_x, 0.190-shift_text_down, f'CMI = {np.round(results_2_dict["cmi_ami"], decimals=2)}', fontsize=ci_info_fontsize)
             #-----
-            delta_ci_str = r'$\Delta$' + f'CI    = {ci_dovs-results_2_dict["ci_ami"]}'
-            if ci_dovs > 0:
-                delta_ci_str += f' ({np.round(100*(ci_dovs-results_2_dict["ci_ami"])/ci_dovs, decimals=2)}%)'
-            fig.text(left_text_x, 0.170-shift_text_down, delta_ci_str, fontsize=ci_info_fontsize)
-            #-----
-            delta_cmi_str = r'$\Delta$' + f'CMI = {np.round(cmi_dovs-results_2_dict["cmi_ami"], decimals=2)}'
-            if cmi_dovs > 0:
-                delta_cmi_str += f' ({np.round(100*(cmi_dovs-results_2_dict["cmi_ami"])/cmi_dovs, decimals=2)}%)'
-            fig.text(left_text_x, 0.150-shift_text_down, delta_cmi_str, fontsize=ci_info_fontsize)
-            #-----
+            fig.text(
+                left_text_x, 0.170-shift_text_down, 
+                r'$\Delta$' + f'CI    = {ci_dovs-results_2_dict["ci_ami"]} ({np.round(100*(ci_dovs-results_2_dict["ci_ami"])/ci_dovs, decimals=2)}%)', 
+                fontsize=ci_info_fontsize
+            )
+            fig.text(
+                left_text_x, 0.150-shift_text_down, 
+                r'$\Delta$' + f'CMI = {np.round(cmi_dovs-results_2_dict["cmi_ami"], decimals=2)} ({np.round(100*(cmi_dovs-results_2_dict["cmi_ami"])/cmi_dovs, decimals=2)}%)', 
+                fontsize=ci_info_fontsize
+            )
             if results_2_dict["means_df"] is not None and results_2_dict["means_df"].shape[0]>0:
                 fig.text(left_text_x, 0.130-shift_text_down, f'min(Beg.) = {results_2_dict["means_df"]["winner_min"].min().strftime("%m/%d %H:%M:%S")}', fontsize=ci_info_fontsize)
                 fig.text(left_text_x, 0.110-shift_text_down, f'max(End) = {results_2_dict["means_df"]["winner_max"].max().strftime("%m/%d %H:%M:%S")}', fontsize=ci_info_fontsize)
@@ -9256,7 +10325,7 @@ class DOVSAudit:
             left_text_x                = 0.915  
         )
         
-        if n_PNs_w_power_srs is not None and n_PNs_w_power_srs.shape[0]>0:
+        if n_PNs_w_power_srs is not None:
             fig, axs[3] = DOVSAudit.static_plot_n_PNs_w_power_srs(
                 n_PNs_w_power_srs = n_PNs_w_power_srs, 
                 simp_freq         = '1min', 
@@ -9339,7 +10408,7 @@ class DOVSAudit:
             left_text_x                = 0.915  
         )
         
-        if n_PNs_w_power_srs is not None and n_PNs_w_power_srs.shape[0]>0:
+        if n_PNs_w_power_srs is not None:
             fig, axs[3] = DOVSAudit.static_plot_n_PNs_w_power_srs(
                 n_PNs_w_power_srs = n_PNs_w_power_srs, 
                 simp_freq         = '1min', 
@@ -9565,6 +10634,7 @@ class DOVSAudit:
         
     def plot_zoomed_endpts(
         self        , 
+        expand_time = pd.Timedelta('15 minutes'), 
         fig_num     = 0
     ):
         r"""
@@ -9581,7 +10651,369 @@ class DOVSAudit:
             dovs_outg_t_beg       = self.dovs_outg_t_beg_end[0], 
             dovs_outg_t_end       = self.dovs_outg_t_beg_end[1], 
             outg_rec_nb           = self.outg_rec_nb, 
+            expand_time           = expand_time, 
             mean_keys_to_include  = ['winner', 'conservative', 'zero_times']
         )
         #-------------------------
         return (fig,axs)
+    
+
+    #****************************************************************************************************
+    # Summary Plotting
+    #****************************************************************************************************
+    @staticmethod
+    def build_summary_df_subset_slicer(
+        col     ,
+        slicer  = None, 
+        min_val = None,
+        max_val = None    
+    ):
+        r"""
+        Purpose of this function is essentially to make it easier to input a list of
+        columns to get_summary_df_subset
+        """
+        #-------------------------
+        if slicer is None:
+            slicer = DFSlicer()
+        else:
+            assert(isinstance(slicer, DFSlicer))
+        #-------------------------
+        if min_val is None and max_val is None:
+            return slicer
+        #-------------------------
+        if min_val:
+            slicer.add_single_slicer(        
+                dict(
+                    column              = col, 
+                    value               = min_val, 
+                    comparison_operator = '>='
+                )
+            )
+        if max_val:
+            slicer.add_single_slicer(        
+                dict(
+                    column              = col, 
+                    value               = max_val, 
+                    comparison_operator = '<='
+                )
+            )
+        #-------------------------
+        return slicer
+    
+    @staticmethod
+    def get_summary_df_subset(
+        df            ,
+        cols          ,
+        min_val       = None,
+        max_val       = None,
+        label_int_col = None
+    ):
+        r"""
+        cols should either be a single column in df or a list of columns in df
+        """
+        #-------------------------
+        if min_val is None and max_val is None:
+            return df
+        #-------------------------
+        if not isinstance(cols, list):
+            assert(cols in df.columns.tolist())
+            cols = [cols]
+        #-----
+        for col in cols:
+            assert(col in df.columns.tolist())
+        #-------------------------
+        slicer = DFSlicer()
+        for col in cols:
+            slicer = DOVSAudit.build_summary_df_subset_slicer(
+                col     = col,
+                slicer  = slicer, 
+                min_val = min_val,
+                max_val = max_val    
+            )
+        #-------------------------
+        return_df = slicer.perform_slicing(df.copy())
+        #-------------------------
+        if label_int_col is not None:
+            return_df[label_int_col] = range(return_df.shape[0])
+        #-------------------------
+        return return_df
+    
+
+    @staticmethod
+    def make_summary_df_cols_pretty(
+        df          ,
+        rename_cols = None
+    ):
+        r"""
+        If rename_cols is None, use the standard rename_cols, std_rename_cols
+        """
+        #-------------------------
+        std_rename_cols = {
+            'ci_dovs' : 'CI DOVS',
+            'ci_ami' : 'CI AMI',
+            'ci_ami_dovs_beg' : 'CI AMI w/ DOVS Beg.', 
+            #-----
+            'cmi_dovs' : 'CMI DOVS',
+            'cmi_ami' : 'CMI AMI',
+            'ci_ami_dovs_beg' : 'CMI AMI w/ DOVS Beg.', 
+            #-----
+            'delta_ci_dovs_ami' : 'Delta CI DOVS vs AMI', 
+            'delta_ci_dovs_ami_dovs_beg' : 'Delta CI DOVS vs AMI w/ DOVS Beg.', 
+            #-----
+            'delta_cmi_dovs_ami' : 'Delta CMI DOVS vs AMI', 
+            'delta_cmi_dovs_ami_dovs_beg' : 'Delta CMI DOVS vs AMI w/ DOVS Beg.',
+        }    
+        #-------------------------
+        if rename_cols is None:
+            rename_cols = std_rename_cols
+        #-------------------------
+        rename_cols = {k:v for k,v in rename_cols.items() if k in df.columns.tolist()}
+        df = df.rename(columns=rename_cols)
+        return df
+    
+
+    @staticmethod
+    def identify_delta_cols_in_summary_df(df):
+        r"""
+        Basically, just return columns containing 'delta' (case insensitive).  
+        """
+        #-------------------------
+        delta_cols = [x for x in df.columns.tolist() if 'delta' in x.lower()]
+        return delta_cols
+    
+    @staticmethod
+    def get_delta_cols_from_summary_df(df):
+        r"""
+        """
+        #-------------------------
+        return df[DOVSAudit.identify_delta_cols_in_summary_df(df)]
+    
+
+    @staticmethod
+    def identify_cmi_cols_in_summary_df(df):
+        r"""
+        Basically, just return columns containing 'cmi' (case insensitive).  
+        """
+        #-------------------------
+        cmi_cols = [x for x in df.columns.tolist() if 'cmi' in x.lower()]
+        return cmi_cols
+    
+    @staticmethod
+    def get_cmi_cols_from_summary_df(df):
+        r"""
+        """
+        #-------------------------
+        return df[DOVSAudit.identify_cmi_cols_in_summary_df(df)]
+    
+
+    @staticmethod
+    def identify_ci_cols_in_summary_df(df):
+        r"""
+        Basically, just return columns containing 'ci' (case insensitive).  
+        """
+        #-------------------------
+        ci_cols = [x for x in df.columns.tolist() if 'ci' in x.lower()]
+        return ci_cols
+    
+    @staticmethod
+    def get_ci_cols_from_summary_df(df):
+        r"""
+        """
+        #-------------------------
+        return df[DOVSAudit.identify_ci_cols_in_summary_df(df)]
+    
+
+    @staticmethod
+    def build_final_summary_results(
+        summary_df              , 
+        limits_coll             , 
+        calc_col                , 
+        dovs_col                , 
+        subset_col              , 
+        metric                  , 
+        are_limits_pct          , 
+        assert_cols_seem_approp = True
+    ):
+        r"""
+        e.g.:
+                final_df_cmi = DOVSAudit.build_final_summary_results(
+                    summary_df=summary_df, 
+                    limits_coll = [
+                        [None, None], 
+                        [-10000, 10000], 
+                        [-1000, 1000], 
+                        [-100, 100], 
+                        [-10, 10], 
+                    ], 
+                    calc_col = 'Delta CMI DOVS vs AMI', 
+                    dovs_col = 'CMI DOVS', 
+                    subset_col = None, 
+                    metric = 'CMI', 
+                    are_limits_pct = False
+                )
+        """
+        #-------------------------
+        assert(metric.upper() in ['CI', 'CMI'])
+        metric=metric.upper()
+        #-------------------------
+        if subset_col is None:
+            subset_col = calc_col
+        #-------------------------
+        if metric not in calc_col.upper():
+            print(f"Warning: metric={metric} not found in calc_col={calc_col}")
+            if assert_cols_seem_approp:
+                assert(0)
+        #-----
+        if metric not in dovs_col.upper():
+            print(f"Warning: metric={metric} not found in dovs_col={dovs_col}")
+            if assert_cols_seem_approp:
+                assert(0)    
+        #-----
+        if metric not in subset_col.upper():
+            print(f"Warning: metric={metric} not found in subset_col={subset_col}")
+            if assert_cols_seem_approp:
+                assert(0)    
+        #-------------------------
+        min_delta_col = 'Min Delta'
+        max_delta_col = 'Max Delta'
+        delta_col     = f'Delta {metric}'
+        if are_limits_pct:
+            min_delta_col = 'Min Delta (%)'
+            max_delta_col = 'Max Delta (%)'
+        #-----
+        return_df = pd.DataFrame(columns=[
+            min_delta_col, 
+            max_delta_col, 
+            dovs_col,  
+            delta_col
+        ])
+        #-------------------------
+        for i,limits_i in enumerate(limits_coll):
+            summary_df_i = DOVSAudit.get_summary_df_subset(
+                df      = summary_df,
+                cols    = subset_col,
+                min_val = limits_i[0],
+                max_val = limits_i[1]
+            )
+            #------------------------------------
+            return_df = pd.concat([
+                return_df, 
+                pd.DataFrame(
+                    {
+                        min_delta_col: f"{limits_i[0]}", 
+                        max_delta_col: f"{limits_i[1]}", 
+                        dovs_col:      f"{summary_df_i[dovs_col].sum()}",  
+                        delta_col:     f"{np.round(summary_df_i[calc_col].sum(), decimals=2)} ({np.round(100*summary_df_i[calc_col].sum()/summary_df_i[dovs_col].sum(), decimals=2)}%)",  
+                    }, 
+                    index=[return_df.shape[0]]
+                )
+            ])
+        #-------------------------
+        return return_df
+    
+
+    @staticmethod
+    def replace_delta_with_greek(
+        txt              , 
+        case_insensitive = False
+    ):
+        r"""
+        For plotting purposes, this function will replace 'Delta' with '$\Delta$' (and 'delta' with '$\delta$').
+        If case_insensitive==True, any Delta ('Delta', 'DELta', 'delta', etc.) will be replaced with '$\Delta$'
+        """
+        if not case_insensitive:
+            txt = txt.replace('Delta', '$\Delta$')
+            txt = txt.replace('delta', '$\delta$')
+        else:
+            # Cannot simply replace in-place in a while loop as I am replacing 'Delta', with '$\Delta$', so the 
+            #   while loop will be infinite!!!!
+            # Therefore, first find all occurrenced of 'Delta', then replace
+            found_itr = re.finditer(r'Delta', txt, flags=re.IGNORECASE)
+            #-----
+            found_idxs=[]
+            for found in found_itr:
+                found_idxs.append([found.start(), found.end()])
+            #-----
+            # NOTE: Must replace from the right, so the indices of those to-be-replaced remain correct after
+            #       others are replaced
+            found_idxs = natsorted(found_idxs, reverse=True)
+            #-----
+            if len(found_idxs)>0:
+                for found_idxs_i in found_idxs:
+                    txt_0 = txt[:found_idxs_i[0]]
+                    txt_1 = '$\Delta$'
+                    txt_2 = txt[found_idxs_i[1]:]
+                    #-----
+                    txt=txt_0+txt_1+txt_2
+        return txt
+    
+
+    @staticmethod
+    def draw_delta_vs_outg_rec_int(
+        ax                      , 
+        summary_df              , 
+        limits                  , 
+        calc_col                , 
+        dovs_col                , 
+        subset_col              , 
+        metric                  , 
+        are_limits_pct          , 
+        outg_rec_int_col        = 'outg_rec_int', 
+        assert_cols_seem_approp = True
+    ):
+        r"""
+        """
+        #-------------------------
+        assert(metric.upper() in ['CI', 'CMI'])
+        metric=metric.upper()
+        #-------------------------
+        if subset_col is None:
+            subset_col = calc_col
+        #-------------------------
+        if metric not in calc_col.upper():
+            print(f"Warning: metric={metric} not found in calc_col={calc_col}")
+            if assert_cols_seem_approp:
+                assert(0)
+        #-----
+        if metric not in dovs_col.upper():
+            print(f"Warning: metric={metric} not found in dovs_col={dovs_col}")
+            if assert_cols_seem_approp:
+                assert(0)    
+        #-----
+        if metric not in subset_col.upper():
+            print(f"Warning: metric={metric} not found in subset_col={subset_col}")
+            if assert_cols_seem_approp:
+                assert(0)
+        #--------------------------------------------------
+        summary_df_i = DOVSAudit.get_summary_df_subset(
+            df            = summary_df,
+            cols          = subset_col,
+            min_val       = limits[0],
+            max_val       = limits[1], 
+            label_int_col = outg_rec_int_col
+        )
+        sns.lineplot(ax=ax, x=outg_rec_int_col, y=calc_col, data=summary_df_i)
+        if are_limits_pct:
+            ax.set_title(f"Min/Max $\Delta$ (%) = [{limits[0]}, {limits[1]}]", fontsize=20)
+        else:
+            ax.set_title(f"Min/Max $\Delta$ = [{limits[0]}, {limits[1]}]", fontsize=20)
+        #-------------------------
+        Plot_General.set_general_plotting_args(
+            ax          = ax, 
+            tick_args   = [
+                dict(axis='x', labelrotation=0, labelsize=14.0, direction='out'), 
+                dict(axis='y', labelrotation=0, labelsize=14.0, direction='out')
+            ], 
+            xlabel_args = dict(xlabel='Outage', fontsize=16), 
+            ylabel_args = dict(ylabel=DOVSAudit.replace_delta_with_greek(ax.get_ylabel()), fontsize=16)
+        )
+    
+    
+        if are_limits_pct:
+            ax.text(1.05, 0.70, f"Min/Max $\Delta$ (%) = [{limits[0]}, {limits[1]}]", ha='left', va='center', transform=ax.transAxes, fontsize='xx-large', fontdict={'family':'monospace'})
+        else:
+            ax.text(1.05, 0.70, f"Min/Max $\Delta$ = [{limits[0]}, {limits[1]}]", ha='left', va='center', transform=ax.transAxes, fontsize='xx-large', fontdict={'family':'monospace'})
+        ax.text(1.05, 0.50, f"Sums", ha='left', va='center', transform=ax.transAxes, fontsize='xx-large', fontdict={'family':'monospace'})
+        ax.text(1.05, 0.40, f"{dovs_col} = {np.round(summary_df_i[dovs_col].sum(), decimals=2)}", ha='left', va='center', transform=ax.transAxes, fontsize='xx-large', fontdict={'family':'monospace'})
+        ax.text(1.05, 0.30, f"$\Delta$AMI = {np.round(summary_df_i[calc_col].sum(), decimals=2)} ({np.round(100*summary_df_i[calc_col].sum()/summary_df_i[dovs_col].sum(), decimals=2)}%)", 
+                ha='left', va='center', transform=ax.transAxes, fontsize='xx-large', fontdict={'family':'monospace'})
